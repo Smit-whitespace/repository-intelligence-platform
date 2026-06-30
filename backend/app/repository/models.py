@@ -21,6 +21,14 @@ class RepositoryEntry(BaseModel):
 
     modified_at: datetime | None = None
 
+    language: str | None = None
+
+    sha256: str | None = None
+
+    is_text_file: bool | None = None
+
+    mime_type: str | None = None
+
 
 class RepositorySummary(BaseModel):
     """Repository summary."""
@@ -38,3 +46,30 @@ class RepositoryIndex(BaseModel):
     summary: RepositorySummary
 
     entries: list[RepositoryEntry]
+
+class RepositoryManifest(BaseModel):
+    """Repository manifest."""
+
+    files: list[RepositoryEntry]
+
+    directories: list[RepositoryEntry]
+
+class RepositoryDocument(BaseModel):
+    """Loaded repository document."""
+
+    entry: RepositoryEntry
+
+    content: str
+
+    line_count: int
+
+class RepositoryChunk(BaseModel):
+    """Repository document chunk."""
+
+    entry: RepositoryEntry
+
+    content: str
+
+    start_line: int
+
+    end_line: int

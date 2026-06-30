@@ -47,6 +47,10 @@ def repository_index(
                 is_directory=entry.is_directory,
                 size_bytes=entry.size_bytes,
                 modified_at=entry.modified_at,
+                language=entry.language,
+                sha256=entry.sha256,
+                is_text_file=entry.is_text_file,
+                mime_type=entry.mime_type,
             )
             for entry in index.entries
         ],

@@ -30,3 +30,27 @@ def test_build_index(
     assert index.summary.directories == 0
     assert index.summary.total_size_bytes == 5
     assert len(index.entries) == 1
+
+def test_build_manifest(
+    tmp_path: Path,
+) -> None:
+    """Repository manifest should separate files and directories."""
+
+    (tmp_path / "src").mkdir()
+
+    (tmp_path / "src" / "main.py").write_text(
+        "print('hello')",
+        encoding="utf-8",
+    )
+
+    service = RepositoryService(
+        scanner=RepositoryScanner(),
+        metadata_extractor=RepositoryMetadataExtractor(),
+    )
+
+    manifest = service.build_manifest(
+        tmp_path,
+    )
+
+    assert len(manifest.directories) == 1
+    assert len(manifest.files) == 1

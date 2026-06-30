@@ -19,6 +19,14 @@ class RepositoryEntryResponse(BaseModel):
 
     modified_at: datetime | None
 
+    language: str | None
+
+    sha256: str | None 
+
+    is_text_file: bool | None
+
+    mime_type: str | None
+
 
 class RepositorySummaryResponse(BaseModel):
     """Repository summary response."""

@@ -4,6 +4,8 @@ from pathlib import Path
 
 from app.repository.scanner import RepositoryScanner
 
+import pytest
+from app.repository.exceptions import RepositoryScanError
 
 def test_scan_returns_file(
     tmp_path: Path,
@@ -87,3 +89,39 @@ def test_scan_returns_sorted_results(
         "a.txt",
         "z.txt",
     ]
+
+def test_scan_nonexistent_directory(
+    tmp_path: Path,
+) -> None:
+    """Scanner should reject nonexistent repositories."""
+
+    scanner = RepositoryScanner()
+
+    with pytest.raises(
+        RepositoryScanError,
+    ):
+        scanner.scan(
+            tmp_path / "missing",
+        )
+
+
+def test_scan_file_instead_of_directory(
+    tmp_path: Path,
+) -> None:
+    """Scanner should reject files."""
+
+    file_path = tmp_path / "file.txt"
+
+    file_path.write_text(
+        "hello",
+        encoding="utf-8",
+    )
+
+    scanner = RepositoryScanner()
+
+    with pytest.raises(
+        RepositoryScanError,
+    ):
+        scanner.scan(
+            file_path,
+        )

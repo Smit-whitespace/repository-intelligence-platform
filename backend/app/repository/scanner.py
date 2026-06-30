@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+from app.repository.exceptions import RepositoryScanError
 from app.repository.ignore import should_ignore
 from app.repository.models import RepositoryEntry
 
@@ -16,9 +17,19 @@ class RepositoryScanner:
     ) -> list[RepositoryEntry]:
         """Scan a repository."""
 
-        entries: list[RepositoryEntry] = []
-
         root_directory = root_directory.resolve()
+
+        if not root_directory.exists():
+            raise RepositoryScanError(
+                f"Repository does not exist: {root_directory}"
+            )
+
+        if not root_directory.is_dir():
+            raise RepositoryScanError(
+                f"Repository is not a directory: {root_directory}"
+            )
+
+        entries: list[RepositoryEntry] = []
 
         for current_root, directories, files in os.walk(
             root_directory,
@@ -68,7 +79,5 @@ class RepositoryScanner:
 
         return sorted(
             entries,
-            key=lambda entry: (
-                entry.relative_path.as_posix(),
-            ),
+            key=lambda entry: entry.relative_path.as_posix(),
         )

@@ -1,4 +1,4 @@
-"""Tests for the repository service."""
+"""Tests for repository service."""
 
 from pathlib import Path
 
@@ -7,10 +7,10 @@ from app.repository.scanner import RepositoryScanner
 from app.repository.service import RepositoryService
 
 
-def test_repository_service_returns_metadata(
+def test_build_index(
     tmp_path: Path,
 ) -> None:
-    """Repository service should return enriched entries."""
+    """Repository index should be built."""
 
     (tmp_path / "README.md").write_text(
         "hello",
@@ -22,14 +22,11 @@ def test_repository_service_returns_metadata(
         metadata_extractor=RepositoryMetadataExtractor(),
     )
 
-    entries = service.scan(
+    index = service.build_index(
         tmp_path,
     )
 
-    assert len(entries) == 1
-
-    entry = entries[0]
-
-    assert entry.name == "README.md"
-    assert entry.size_bytes == 5
-    assert entry.modified_at is not None
+    assert index.summary.files == 1
+    assert index.summary.directories == 0
+    assert index.summary.total_size_bytes == 5
+    assert len(index.entries) == 1

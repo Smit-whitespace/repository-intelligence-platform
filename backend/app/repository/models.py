@@ -20,3 +20,21 @@ class RepositoryEntry(BaseModel):
     size_bytes: int | None = None
 
     modified_at: datetime | None = None
+
+
+class RepositorySummary(BaseModel):
+    """Repository summary."""
+
+    files: int
+
+    directories: int
+
+    total_size_bytes: int
+
+
+class RepositoryIndex(BaseModel):
+    """Repository scan result."""
+
+    summary: RepositorySummary
+
+    entries: list[RepositoryEntry]

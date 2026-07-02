@@ -40,7 +40,7 @@ class RepositoryService:
         """Build repository index."""
 
         entries = [
-            self._metadata_extractor.enrich(
+            self._metadata_extractor.enrich_fast(
                 entry,
             )
             for entry in self._scanner.scan(
@@ -73,10 +73,17 @@ class RepositoryService:
     ) -> RepositoryManifest:
         """Build repository manifest."""
 
+        index = self.build_index(
+            root_directory,
+        )
+
+        for entry in index.entries:
+            self._metadata_extractor.enrich_slow(
+                entry,
+            )
+
         return self._manifest_builder.build(
-            self.build_index(
-                root_directory,
-            ).entries,
+            index.entries,
         )
 
     def scan(

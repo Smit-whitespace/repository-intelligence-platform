@@ -3,21 +3,21 @@
 from datetime import UTC
 from datetime import datetime
 
+from app.repository.filetypes import is_text_file
 from app.repository.hashing import calculate_sha256
 from app.repository.languages import detect_language
-from app.repository.models import RepositoryEntry
-from app.repository.filetypes import is_text_file
 from app.repository.mime import detect_mime_type
+from app.repository.models import RepositoryEntry
 
 
 class RepositoryMetadataExtractor:
     """Populate repository metadata."""
 
-    def enrich(
+    def enrich_fast(
         self,
         entry: RepositoryEntry,
     ) -> RepositoryEntry:
-        """Populate metadata."""
+        """Populate inexpensive metadata."""
 
         stat = entry.absolute_path.stat()
 
@@ -28,21 +28,53 @@ class RepositoryMetadataExtractor:
             tz=UTC,
         )
 
-        if not entry.is_directory:
-            entry.language = detect_language(
-                entry.absolute_path,
-            )
+        if entry.is_directory:
+            return entry
 
-            entry.is_text_file = is_text_file(
-                entry.absolute_path,
-            )  
+        entry.language = detect_language(
+            entry.absolute_path,
+        )
 
-            entry.mime_type = detect_mime_type(
-                entry.absolute_path,
-            ) 
+        entry.is_text_file = is_text_file(
+            entry.absolute_path,
+        )
 
-            entry.sha256 = calculate_sha256(
-                entry.absolute_path,
-            )
+        entry.mime_type = detect_mime_type(
+            entry.absolute_path,
+        )
+
+        return entry
+
+    def enrich_slow(
+        self,
+        entry: RepositoryEntry,
+    ) -> RepositoryEntry:
+        """Populate expensive metadata."""
+
+        if (
+            entry.is_directory
+            or not entry.is_text_file
+        ):
+            return entry
+
+        entry.sha256 = calculate_sha256(
+            entry.absolute_path,
+        )
+
+        return entry
+
+    def enrich(
+        self,
+        entry: RepositoryEntry,
+    ) -> RepositoryEntry:
+        """Populate all metadata."""
+
+        self.enrich_fast(
+            entry,
+        )
+
+        self.enrich_slow(
+            entry,
+        )
 
         return entry

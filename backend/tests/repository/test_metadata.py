@@ -29,7 +29,7 @@ def test_metadata_sets_file_size(
         is_directory=False,
     )
 
-    RepositoryMetadataExtractor().enrich(
+    RepositoryMetadataExtractor().enrich_fast(
         entry,
     )
 
@@ -56,7 +56,7 @@ def test_metadata_sets_modified_time(
         is_directory=False,
     )
 
-    RepositoryMetadataExtractor().enrich(
+    RepositoryMetadataExtractor().enrich_fast(
         entry,
     )
 
@@ -82,7 +82,7 @@ def test_metadata_detects_language(
         is_directory=False,
     )
 
-    RepositoryMetadataExtractor().enrich(
+    RepositoryMetadataExtractor().enrich_fast(
         entry,
     )
 
@@ -107,7 +107,13 @@ def test_metadata_calculates_sha256(
         is_directory=False,
     )
 
-    RepositoryMetadataExtractor().enrich(
+    extractor = RepositoryMetadataExtractor()
+
+    extractor.enrich_fast(
+        entry,
+    )
+
+    extractor.enrich_slow(
         entry,
     )
 
@@ -133,7 +139,7 @@ def test_metadata_detects_text_file(
         is_directory=False,
     )
 
-    RepositoryMetadataExtractor().enrich(
+    RepositoryMetadataExtractor().enrich_fast(
         entry,
     )
 
@@ -159,7 +165,7 @@ def test_metadata_detects_mime_type(
         is_directory=False,
     )
 
-    RepositoryMetadataExtractor().enrich(
+    RepositoryMetadataExtractor().enrich_fast(
         entry,
     )
 

@@ -2,8 +2,8 @@
 
 from datetime import datetime
 from pathlib import Path
-
 from pydantic import BaseModel
+from enum import StrEnum
 
 
 class RepositoryEntry(BaseModel):
@@ -63,13 +63,51 @@ class RepositoryDocument(BaseModel):
 
     line_count: int
 
+class RepositoryChunkMetadata(BaseModel):
+    """Repository chunk metadata."""
+
+    relative_path: Path
+
+    language: str | None
+
+    mime_type: str | None
+
+    sha256: str
+
+
 class RepositoryChunk(BaseModel):
     """Repository document chunk."""
 
+    chunk_id: str
+
     entry: RepositoryEntry
+
+    metadata: RepositoryChunkMetadata
 
     content: str
 
     start_line: int
 
     end_line: int
+
+class ChunkType(StrEnum):
+    """Repository chunk type."""
+
+    GENERIC = "generic"
+
+    MODULE = "module"
+
+    CLASS = "class"
+
+    FUNCTION = "function"
+
+    ASYNC_FUNCTION = "async_function"
+
+class ChunkBoundary(BaseModel):
+    """Chunk line boundaries."""
+
+    start_line: int
+
+    end_line: int
+
+    chunk_type: ChunkType = ChunkType.GENERIC

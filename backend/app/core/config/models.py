@@ -1,7 +1,8 @@
 """Typed configuration model definitions."""
 
-from pydantic import BaseModel, Field
 from pathlib import Path
+
+from pydantic import BaseModel, Field
 
 
 class ServerSettings(BaseModel):
@@ -28,14 +29,22 @@ class OllamaSettings(BaseModel):
     """Ollama client configuration."""
 
     base_url: str = "http://localhost:11434"
-    model_name: str = "qwen3-coder"
+
+    embedding_model: str = "nomic-embed-text"
+
+    chat_model: str = "qwen3.6"
+
     timeout_seconds: int = 120
 
 
 class ChromaSettings(BaseModel):
     """ChromaDB configuration."""
 
-    persist_directory: Path = Path(".local_openclaw/index/chroma")
+    persist_directory: Path = Path(
+        ".local_openclaw/index/chroma",
+    )
+
+    collection_name: str = "repository_chunks"
 
 
 class IndexingSettings(BaseModel):
@@ -51,18 +60,23 @@ class ApplicationSettings(BaseModel):
     server: ServerSettings = Field(
         default_factory=ServerSettings,
     )
+
     logging: LoggingSettings = Field(
         default_factory=LoggingSettings,
     )
+
     storage: StorageSettings = Field(
         default_factory=StorageSettings,
     )
+
     ollama: OllamaSettings = Field(
         default_factory=OllamaSettings,
     )
+
     chroma: ChromaSettings = Field(
         default_factory=ChromaSettings,
     )
+
     indexing: IndexingSettings = Field(
         default_factory=IndexingSettings,
     )

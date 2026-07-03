@@ -1,8 +1,7 @@
 """Configuration provider implementations."""
 
-from pathlib import Path
-
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -17,33 +16,48 @@ from app.core.config.models import (
 )
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
+
 _ENV_FILE = _PROJECT_ROOT / ".env"
+
 
 class EnvironmentSettings(BaseSettings):
     """Environment-backed application settings."""
 
     model_config = SettingsConfigDict(
         env_prefix="LOC_",
-        env_file=_ENV_FILE, 
+        env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
     )
 
     server_host: str = "127.0.0.1"
+
     server_port: int = 8000
 
     logging_level: str = "INFO"
+
     logging_json_logs: bool = False
 
-    storage_root_directory: Path = Path(".local_openclaw")
+    storage_root_directory: Path = Path(
+        ".local_openclaw",
+    )
 
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model_name: str = "qwen3-coder"
+
+    ollama_embedding_model: str = "nomic-embed-text"
+
+    ollama_chat_model: str = "qwen3.6"
+
     ollama_timeout_seconds: int = 120
 
-    chroma_persist_directory: Path = Path(".local_openclaw/index/chroma")
+    chroma_persist_directory: Path = Path(
+        ".local_openclaw/index/chroma",
+    )
+
+    chroma_collection_name: str = "repository_chunks"
 
     indexing_chunk_size: int = 512
+
     indexing_chunk_overlap: int = 64
 
 
@@ -67,11 +81,13 @@ def get_settings() -> ApplicationSettings:
         ),
         ollama=OllamaSettings(
             base_url=environment.ollama_base_url,
-            model_name=environment.ollama_model_name,
+            embedding_model=environment.ollama_embedding_model,
+            chat_model=environment.ollama_chat_model,
             timeout_seconds=environment.ollama_timeout_seconds,
         ),
         chroma=ChromaSettings(
             persist_directory=environment.chroma_persist_directory,
+            collection_name=environment.chroma_collection_name,
         ),
         indexing=IndexingSettings(
             chunk_size=environment.indexing_chunk_size,

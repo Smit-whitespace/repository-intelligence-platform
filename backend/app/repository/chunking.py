@@ -1,5 +1,6 @@
 """Repository document chunking."""
 
+from app.repository.chunk_ids import generate_chunk_id
 from app.repository.chunking_algorithms import (
     ChunkAlgorithm,
     LineChunkAlgorithm,
@@ -10,8 +11,6 @@ from app.repository.models import (
     RepositoryChunkMetadata,
     RepositoryDocument,
 )
-from app.repository.chunk_ids import generate_chunk_id
-
 from app.repository.python_ast_algorithm import (
     PythonAstChunkAlgorithm,
 )
@@ -54,8 +53,8 @@ class RepositoryChunker:
 
         try:
             boundaries = algorithm.generate_boundaries(
-            document,
-        )
+                document,
+            )
 
         except SyntaxError:
             boundaries = self._default_algorithm.generate_boundaries(
@@ -66,7 +65,7 @@ class RepositoryChunker:
             document=document,
             boundaries=boundaries,
         )
-    
+
     def _build_chunks(
         self,
         document: RepositoryDocument,
@@ -81,13 +80,6 @@ class RepositoryChunker:
                 "Repository entry must contain SHA-256."
             )
 
-        metadata = RepositoryChunkMetadata(
-            relative_path=entry.relative_path,
-            language=entry.language,
-            mime_type=entry.mime_type,
-            sha256=entry.sha256,
-        )
-
         document_lines = document.content.splitlines()
 
         chunks: list[
@@ -95,6 +87,13 @@ class RepositoryChunker:
         ] = []
 
         for boundary in boundaries:
+            metadata = RepositoryChunkMetadata(
+                relative_path=entry.relative_path,
+                language=entry.language,
+                mime_type=entry.mime_type,
+                sha256=entry.sha256,
+            )
+
             chunks.append(
                 RepositoryChunk(
                     chunk_id=generate_chunk_id(
@@ -104,14 +103,13 @@ class RepositoryChunker:
                     ),
                     entry=entry,
                     metadata=metadata,
+                    boundary=boundary,
                     content="\n".join(
                         document_lines[
                             boundary.start_line - 1:
                             boundary.end_line
                         ]
                     ),
-                    start_line=boundary.start_line,
-                    end_line=boundary.end_line,
                 )
             )
 

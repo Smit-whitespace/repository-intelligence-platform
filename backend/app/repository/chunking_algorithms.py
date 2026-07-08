@@ -33,7 +33,7 @@ class LineChunkAlgorithm(ChunkAlgorithm):
 
         document_lines = document.content.splitlines()
 
-        boundaries: list[
+        boundaries: list[ 
             ChunkBoundary
         ] = []
 

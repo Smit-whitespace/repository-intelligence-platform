@@ -49,8 +49,8 @@ def test_chunk_single_document(
 
     chunk = chunks[0]
 
-    assert chunk.start_line == 1
-    assert chunk.end_line == 10
+    assert chunk.boundary.start_line == 1
+    assert chunk.boundary.end_line == 10
     assert "line 1" in chunk.content
     assert "line 10" in chunk.content
     assert chunk.metadata.relative_path == Path(
@@ -174,6 +174,6 @@ def test_invalid_python_falls_back_to_line_chunking(
 
     assert len(chunks) == 1
 
-    assert chunks[0].start_line == 1
+    assert chunks[0].boundary.start_line == 1
 
-    assert chunks[0].end_line == 2
+    assert chunks[0].boundary.end_line == 2

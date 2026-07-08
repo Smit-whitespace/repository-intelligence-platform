@@ -15,7 +15,7 @@ from app.repository.chunking import RepositoryChunker
 from app.repository.documents import RepositoryDocumentLoader
 from app.repository.metadata import RepositoryMetadataExtractor
 from app.repository.scanner import RepositoryScanner
-
+from app.indexing.retrieval_models import SearchHit
 
 class FakeEmbeddingProvider(
     EmbeddingProvider,
@@ -59,6 +59,15 @@ class FakeVectorStore(
         self.chunks.extend(
             chunks,
         )
+
+    def search(
+        self,
+        query_embedding: EmbeddingVector,
+        limit: int = 10,
+    ) -> list[SearchHit]:
+        """Return matching indexed chunks."""
+
+        return []
 
     def delete(
         self,

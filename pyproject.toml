@@ -3,6 +3,7 @@ name = "local-openclaw"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "chromadb==1.0.20",
     "fastapi==0.138.1",
     "httpx==0.28.1",
     "ollama==0.6.2",
@@ -22,4 +23,5 @@ dev = [
     "pytest-asyncio==1.4.0",
     "pytest-cov==7.1.0",
     "ruff==0.15.20",
+    "chromadb==1.0.20",
 ]

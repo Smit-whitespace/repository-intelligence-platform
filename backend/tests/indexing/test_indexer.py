@@ -1,5 +1,6 @@
 """Tests for repository indexing."""
 
+from collections.abc import Sequence
 from pathlib import Path
 
 from app.indexing.indexer import (
@@ -12,16 +13,18 @@ from app.indexing.models import (
 from app.indexing.providers import (
     EmbeddingProvider,
 )
+from app.indexing.retrieval_models import (
+    SearchHit,
+)
 from app.indexing.stores import (
     VectorStore,
 )
 from app.repository.models import (
+    ChunkBoundary,
     RepositoryChunk,
     RepositoryChunkMetadata,
     RepositoryEntry,
 )
-
-from collections.abc import Sequence
 
 
 class FakeEmbeddingProvider(
@@ -52,25 +55,43 @@ class FakeVectorStore(
         self,
     ) -> None:
         """Initialize the fake vector store."""
-        self.chunks: list[IndexedChunk] = []
+
+        self.chunks: list[
+            IndexedChunk
+        ] = []
 
     def add(
         self,
-        chunks,
-    ):
+        chunks: Sequence[IndexedChunk],
+    ) -> None:
+        """Store indexed chunks."""
+
         self.chunks.extend(
             chunks,
         )
 
+    def search(
+        self,
+        query_embedding: EmbeddingVector,
+        limit: int = 10,
+    ) -> list[SearchHit]:
+        """Return matching indexed chunks."""
+
+        return []
+
     def delete(
         self,
-        chunk_ids,
-    ):
+        chunk_ids: Sequence[str],
+    ) -> None:
+        """Delete indexed chunks."""
+
         pass
 
     def clear(
         self,
-    ):
+    ) -> None:
+        """Remove indexed chunks."""
+
         self.chunks.clear()
 
 
@@ -97,13 +118,17 @@ def test_index_repository_chunk() -> None:
         sha256="abc",
     )
 
+    boundary = ChunkBoundary(
+        start_line=1,
+        end_line=1,
+    )
+
     chunk = RepositoryChunk(
         chunk_id="1",
         entry=entry,
         metadata=metadata,
+        boundary=boundary,
         content="print('hello')",
-        start_line=1,
-        end_line=1,
     )
 
     vector_store = FakeVectorStore()
@@ -114,7 +139,7 @@ def test_index_repository_chunk() -> None:
     ).index(
         [
             chunk,
-        ]
+        ],
     )
 
     assert result.indexed_chunks == 1

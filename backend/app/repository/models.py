@@ -1,9 +1,10 @@
 """Repository domain models."""
 
 from datetime import datetime
-from pathlib import Path
-from pydantic import BaseModel
 from enum import StrEnum
+from pathlib import Path
+
+from pydantic import BaseModel
 
 
 class RepositoryEntry(BaseModel):
@@ -47,12 +48,14 @@ class RepositoryIndex(BaseModel):
 
     entries: list[RepositoryEntry]
 
+
 class RepositoryManifest(BaseModel):
     """Repository manifest."""
 
     files: list[RepositoryEntry]
 
     directories: list[RepositoryEntry]
+
 
 class RepositoryDocument(BaseModel):
     """Loaded repository document."""
@@ -62,6 +65,7 @@ class RepositoryDocument(BaseModel):
     content: str
 
     line_count: int
+
 
 class RepositoryChunkMetadata(BaseModel):
     """Repository chunk metadata."""
@@ -74,21 +78,6 @@ class RepositoryChunkMetadata(BaseModel):
 
     sha256: str
 
-
-class RepositoryChunk(BaseModel):
-    """Repository document chunk."""
-
-    chunk_id: str
-
-    entry: RepositoryEntry
-
-    metadata: RepositoryChunkMetadata
-
-    content: str
-
-    start_line: int
-
-    end_line: int
 
 class ChunkType(StrEnum):
     """Repository chunk type."""
@@ -103,6 +92,7 @@ class ChunkType(StrEnum):
 
     ASYNC_FUNCTION = "async_function"
 
+
 class ChunkBoundary(BaseModel):
     """Chunk line boundaries."""
 
@@ -111,3 +101,17 @@ class ChunkBoundary(BaseModel):
     end_line: int
 
     chunk_type: ChunkType = ChunkType.GENERIC
+
+
+class RepositoryChunk(BaseModel):
+    """Repository document chunk."""
+
+    chunk_id: str
+
+    entry: RepositoryEntry
+
+    metadata: RepositoryChunkMetadata
+
+    boundary: ChunkBoundary
+
+    content: str

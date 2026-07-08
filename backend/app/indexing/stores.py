@@ -4,7 +4,11 @@ from abc import ABC
 from abc import abstractmethod
 from collections.abc import Sequence
 
-from app.indexing.models import IndexedChunk
+from app.indexing.models import (
+    EmbeddingVector,
+    IndexedChunk,
+)
+from app.indexing.retrieval_models import SearchHit
 
 
 class VectorStore(ABC):
@@ -16,6 +20,14 @@ class VectorStore(ABC):
         chunks: Sequence[IndexedChunk],
     ) -> None:
         """Store indexed chunks."""
+
+    @abstractmethod
+    def search(
+        self,
+        query_embedding: EmbeddingVector,
+        limit: int = 10,
+    ) -> list[SearchHit]:
+        """Return the most similar indexed chunks."""
 
     @abstractmethod
     def delete(

@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from app.indexing.exceptions import EmbeddingError
 from app.indexing.models import (
     EmbeddingVector,
     IndexedChunk,
@@ -10,7 +11,7 @@ from app.indexing.models import (
 from app.indexing.providers import EmbeddingProvider
 from app.indexing.stores import VectorStore
 from app.repository.models import RepositoryChunk
-from app.indexing.exceptions import EmbeddingError
+
 
 class RepositoryIndexer:
     """Indexes repository chunks."""
@@ -22,17 +23,13 @@ class RepositoryIndexer:
     ) -> None:
         """Initialize the repository indexer."""
 
-        self._embedding_provider = (
-            embedding_provider
-        )
+        self._embedding_provider = embedding_provider
 
         self._vector_store = vector_store
 
     def index(
         self,
-        chunks: Sequence[
-            RepositoryChunk
-        ],
+        chunks: Sequence[RepositoryChunk],
     ) -> IndexingResult:
         """Index repository chunks."""
 
@@ -41,10 +38,8 @@ class RepositoryIndexer:
             for chunk in chunks
         ]
 
-        embeddings = (
-            self._embedding_provider.embed(
-                texts,
-            )
+        embeddings = self._embedding_provider.embed(
+            texts,
         )
 
         if len(embeddings) != len(chunks):
@@ -56,7 +51,9 @@ class RepositoryIndexer:
         indexed_chunks = [
             IndexedChunk(
                 chunk_id=chunk.chunk_id,
-                text=chunk.content,
+                content=chunk.content,
+                metadata=chunk.metadata,
+                boundary=chunk.boundary,
                 embedding=EmbeddingVector(
                     values=embedding.values,
                 ),
@@ -78,4 +75,3 @@ class RepositoryIndexer:
             skipped_files=0,
             failed_files=0,
         )
-        

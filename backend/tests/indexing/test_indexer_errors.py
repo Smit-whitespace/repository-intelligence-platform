@@ -13,6 +13,8 @@ from app.indexing.models import (
 )
 from app.indexing.providers import EmbeddingProvider
 from app.indexing.stores import VectorStore
+from app.indexing.retrieval_models import SearchHit
+from app.repository.models import ChunkBoundary
 from app.repository.models import (
     RepositoryChunk,
     RepositoryChunkMetadata,
@@ -45,6 +47,15 @@ class FakeVectorStore(
     ) -> None:
         """Store chunks."""
 
+    def search(
+        self,
+        query_embedding: EmbeddingVector,
+        limit: int = 10,
+    ) -> list[SearchHit]:
+        """Return matching indexed chunks."""
+
+        return []
+
     def delete(
         self,
         chunk_ids: Sequence[str],
@@ -72,8 +83,6 @@ def test_embedding_count_mismatch() -> None:
         language="Python",
         mime_type="text/x-python",
         sha256="abc",
-        character_count=10,
-        line_count=1,
     )
 
     chunk = RepositoryChunk(
@@ -81,8 +90,10 @@ def test_embedding_count_mismatch() -> None:
         entry=entry,
         metadata=metadata,
         content="print('hello')",
-        start_line=1,
-        end_line=1,
+         boundary=ChunkBoundary(
+            start_line=1,
+            end_line=1,
+        ),
     )
 
     indexer = RepositoryIndexer(

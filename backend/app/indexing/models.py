@@ -1,8 +1,14 @@
 """Indexing domain models."""
 
-from pydantic import BaseModel
 from datetime import datetime
 from pathlib import Path
+
+from pydantic import BaseModel
+
+from app.repository.models import (
+    ChunkBoundary,
+    RepositoryChunkMetadata,
+)
 
 
 class EmbeddingVector(BaseModel):
@@ -16,7 +22,11 @@ class IndexedChunk(BaseModel):
 
     chunk_id: str
 
-    text: str
+    content: str
+
+    metadata: RepositoryChunkMetadata
+
+    boundary: ChunkBoundary
 
     embedding: EmbeddingVector
 
@@ -33,6 +43,7 @@ class IndexingResult(BaseModel):
     skipped_files: int
 
     failed_files: int
+
 
 class RepositoryIndex(BaseModel):
     """Indexed repository."""

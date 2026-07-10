@@ -1,3 +1,7 @@
+> **Document Status**
+>
+> This document records the release state and completion criteria for Sprint 4. With Sprint 4 frozen, it serves as the historical release record. Future releases should create their own release-state documentation rather than modifying this document.
+
 ### Consistency Verification Result
 
 No inconsistencies requiring interruption were identified.

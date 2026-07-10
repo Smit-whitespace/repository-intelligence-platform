@@ -1,3 +1,7 @@
+> **Document Status**
+>
+> This continuation package captures the operational handoff for the completion of Sprint 4. It remains a historical reference for that milestone. Future continuation guidance should be maintained separately for subsequent sprints.
+
 # Document 4 — Continuation Package
 
 ## Chapter 1 — Purpose & Usage

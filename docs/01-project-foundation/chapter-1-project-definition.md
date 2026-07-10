@@ -1,3 +1,7 @@
+> **Document Status**
+>
+> This Software Architecture Specification reflects the frozen Version 1 architecture established at the conclusion of Sprint 4. Future revisions should clarify or extend the documentation without altering accepted Architecture Decision Records unless a new ADR explicitly supersedes an existing decision.
+
 Chapter 1 — Project Definition
 
 Local OpenClaw (LOC)

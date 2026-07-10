@@ -1,3 +1,7 @@
+> **Document Status**
+>
+> This document captures engineering knowledge, conventions, and lessons learned during Sprint 4. It is intended to evolve incrementally as the project grows while preserving previously validated engineering guidance.
+
 # Document 5 — Supplementary Engineering Knowledge
 
 ## Chapter 1 — Current Engineering Knowledge

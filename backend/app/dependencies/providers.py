@@ -2,9 +2,37 @@
 
 from functools import lru_cache
 
+from app.chat.ollama_provider import (
+    OllamaChatProvider,
+)
+from app.chat.providers import (
+    ChatProvider,
+)
+from app.chat.service import ChatService
+from app.context_assembly.providers import (
+    ContextAssembly,
+)
+from app.context_assembly.service import (
+    DefaultContextAssembly,
+)
 from app.core.config.settings import settings
 from app.core.storage.abstractions import StorageProvider
 from app.core.storage.filesystem import FileSystemStorage
+from app.indexing.chroma_store import (
+    ChromaVectorStore,
+)
+from app.indexing.ollama_provider import (
+    OllamaEmbeddingProvider,
+)
+from app.indexing.providers import (
+    EmbeddingProvider,
+)
+from app.indexing.retrieval_service import (
+    RetrievalService,
+)
+from app.indexing.stores import (
+    VectorStore,
+)
 from app.projects.repository import ProjectRepository
 from app.projects.service import ProjectService
 from app.repository.metadata import RepositoryMetadataExtractor
@@ -63,4 +91,59 @@ def get_repository_service() -> RepositoryService:
     return RepositoryService(
         scanner=get_repository_scanner(),
         metadata_extractor=get_repository_metadata_extractor(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_embedding_provider() -> EmbeddingProvider:
+    """Return the embedding provider."""
+
+    return OllamaEmbeddingProvider(
+        settings.ollama,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_vector_store() -> VectorStore:
+    """Return the vector store."""
+
+    return ChromaVectorStore(
+        settings.chroma,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_retrieval_service() -> RetrievalService:
+    """Return the retrieval service."""
+
+    return RetrievalService(
+        embedding_provider=get_embedding_provider(),
+        vector_store=get_vector_store(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_context_assembly() -> ContextAssembly:
+    """Return the Context Assembly service."""
+
+    return DefaultContextAssembly()
+
+
+@lru_cache(maxsize=1)
+def get_chat_provider() -> ChatProvider:
+    """Return the chat provider."""
+
+    return OllamaChatProvider(
+        settings.ollama,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_chat_service() -> ChatService:
+    """Return the chat service."""
+
+    return ChatService(
+        retrieval_service=get_retrieval_service(),
+        context_assembly=get_context_assembly(),
+        chat_provider=get_chat_provider(),
     )

@@ -18,6 +18,15 @@ from app.context_assembly.service import (
 from app.core.config.settings import settings
 from app.core.storage.abstractions import StorageProvider
 from app.core.storage.filesystem import FileSystemStorage
+from app.editing.default_provider import (
+    DefaultEditingProvider,
+)
+from app.editing.providers import (
+    EditingProvider,
+)
+from app.editing.service import (
+    EditingService,
+)
 from app.indexing.chroma_store import (
     ChromaVectorStore,
 )
@@ -146,4 +155,20 @@ def get_chat_service() -> ChatService:
         retrieval_service=get_retrieval_service(),
         context_assembly=get_context_assembly(),
         chat_provider=get_chat_provider(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_editing_provider() -> EditingProvider:
+    """Return the editing provider."""
+
+    return DefaultEditingProvider()
+
+
+@lru_cache(maxsize=1)
+def get_editing_service() -> EditingService:
+    """Return the editing service."""
+
+    return EditingService(
+        editing_provider=get_editing_provider(),
     )

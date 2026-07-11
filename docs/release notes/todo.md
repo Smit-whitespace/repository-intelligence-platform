@@ -1,5 +1,6 @@
-Technical Debt
+### Technical Debt
 
+## 1
 TD-005
 Review FastAPI / Starlette / httpx compatibility during the next planned dependency upgrade.
 
@@ -18,3 +19,11 @@ Deferred.
 
 Priority:
 Low.
+
+
+## 2
+Area: Product Evaluation
+
+Status:	Not Performed	
+
+Reason: End-to-end developer workflow not yet convenient to exercise. Swagger is suitable for API verification but not for evaluating developer experience. Product evaluation deferred until a dedicated client/UI or practical evaluation workflow exists.

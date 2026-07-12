@@ -8,6 +8,8 @@ from pydantic import BaseModel
 class EditRequest(BaseModel):
     """Request to modify a repository."""
 
+    repository_root: Path
+
     instruction: str
 
 

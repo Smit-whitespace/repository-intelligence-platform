@@ -68,6 +68,7 @@ def test_edit() -> None:
 
     response = service.edit(
         EditRequest(
+            repository_root=Path("."),
             instruction="Rename function.",
         ),
     )

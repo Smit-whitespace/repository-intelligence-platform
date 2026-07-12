@@ -8,11 +8,7 @@ from app.dependencies.providers import (
 )
 from app.editing.models import (
     EditRequest,
-)
-from app.editing.schemas import (
-    EditRepositoryRequest,
-    EditRepositoryResponse,
-    FileEditResponse,
+    EditResponse,
 )
 from app.editing.service import (
     EditingService,
@@ -26,29 +22,16 @@ router = APIRouter(
 
 @router.post(
     "/edit",
-    response_model=EditRepositoryResponse,
+    response_model=EditResponse,
 )
 def edit_repository(
-    request: EditRepositoryRequest,
+    request: EditRequest,
     editing_service: EditingService = Depends(
         get_editing_service,
     ),
-) -> EditRepositoryResponse:
+) -> EditResponse:
     """Generate repository modifications."""
 
-    response = editing_service.edit(
-        EditRequest(
-            instruction=request.instruction,
-        ),
-    )
-
-    return EditRepositoryResponse(
-        edits=[
-            FileEditResponse(
-                relative_path=edit.relative_path,
-                original_content=edit.original_content,
-                updated_content=edit.updated_content,
-            )
-            for edit in response.change_set.edits
-        ],
+    return editing_service.edit(
+        request,
     )

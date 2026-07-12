@@ -72,6 +72,7 @@ def test_edit_repository() -> None:
     response = client.post(
         "/api/v1/editing/edit",
         json={
+            "repository_root": ".",
             "instruction": "Rename foo to bar.",
         },
     )
@@ -94,11 +95,13 @@ def test_edit_repository() -> None:
     )
 
     assert response.json() == {
-        "edits": [
-            {
-                "relative_path": "main.py",
-                "original_content": "old",
-                "updated_content": "new",
-            },
-        ],
+        "change_set": {
+            "edits": [
+                {
+                    "relative_path": "main.py",
+                    "original_content": "old",
+                    "updated_content": "new",
+                },
+            ],
+        },
     }

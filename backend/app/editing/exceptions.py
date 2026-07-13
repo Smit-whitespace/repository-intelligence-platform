@@ -7,3 +7,10 @@ class EditingError(Exception):
 
 class InvalidRepositoryError(EditingError):
     """Repository root is invalid."""
+
+class SnapshotNotFoundError(EditingError):
+    """Snapshot could not be found."""
+
+
+class SnapshotPersistenceError(EditingError):
+    """Snapshot persistence failed."""

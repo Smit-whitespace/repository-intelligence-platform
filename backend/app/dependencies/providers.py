@@ -47,6 +47,12 @@ from app.projects.service import ProjectService
 from app.repository.metadata import RepositoryMetadataExtractor
 from app.repository.scanner import RepositoryScanner
 from app.repository.service import RepositoryService
+from app.editing.change_applier import (
+    ChangeApplier,
+)
+from app.editing.snapshot_store import (
+    SnapshotStore,
+)
 
 
 @lru_cache(maxsize=1)
@@ -171,4 +177,20 @@ def get_editing_service() -> EditingService:
 
     return EditingService(
         editing_provider=get_editing_provider(),
+        change_applier=get_change_applier(),
+        snapshot_store=get_snapshot_store(),
+    )
+
+@lru_cache(maxsize=1)
+def get_change_applier() -> ChangeApplier:
+    """Return the ChangeSet applier."""
+
+    return ChangeApplier()
+
+@lru_cache(maxsize=1)
+def get_snapshot_store() -> SnapshotStore:
+    """Return the snapshot store."""
+
+    return SnapshotStore(
+        storage=get_storage(),
     )

@@ -1,7 +1,11 @@
 """Tests for the Editing service."""
 
 from pathlib import Path
+from typing import Any
 
+from app.core.storage.abstractions import (
+    StorageProvider,
+)
 from app.editing.change_applier import (
     ChangeApplier,
 )
@@ -20,9 +24,11 @@ from app.editing.service import (
 from app.editing.snapshot_store import (
     SnapshotStore,
 )
-from app.core.storage.abstractions import (
-    StorageProvider,
+from app.editing.snapshot_models import (
+    Snapshot,
+    SnapshotFile,
 )
+
 
 class FakeEditingProvider(
     EditingProvider,
@@ -83,6 +89,10 @@ class FakeChangeApplier(
             None
         )
 
+        self.snapshot: Snapshot | None = (
+            None
+        )
+
     def apply(
         self,
         repository_root: Path,
@@ -98,6 +108,19 @@ class FakeChangeApplier(
             change_set
         )
 
+    def restore(
+        self,
+        repository_root: Path,
+        snapshot: Snapshot,
+    ) -> None:
+        """Record the restore request."""
+
+        self.repository_root = (
+            repository_root
+        )
+
+        self.snapshot = snapshot
+
 
 class FakeSnapshotStore(
     SnapshotStore,
@@ -111,20 +134,35 @@ class FakeSnapshotStore(
             storage=FakeStorageProvider(),
         )
 
-        self.snapshot = None
+        self.snapshot: Snapshot | None = None
+
+        self.loaded_snapshot_id: str | None = (
+            None
+        )
 
     def save(
         self,
-        snapshot,
+        snapshot: Snapshot,
     ) -> None:
         self.snapshot = snapshot
 
     def load(
         self,
         snapshot_id: str,
-    ):
-        raise AssertionError(
-            "Unexpected call.",
+    ) -> Snapshot:
+        self.loaded_snapshot_id = snapshot_id
+
+        return Snapshot(
+            snapshot_id=snapshot_id,
+            files=[
+                SnapshotFile(
+                    relative_path=Path(
+                        "main.py",
+                    ),
+                    existed=True,
+                    content="old",
+                ),
+            ],
         )
 
     def delete(
@@ -203,7 +241,7 @@ def test_edit() -> None:
 
 
 def test_apply() -> None:
-    """Editing service should create a snapshot before execution."""
+    """Editing service should create and return a snapshot before execution."""
 
     provider = FakeEditingProvider()
 
@@ -223,7 +261,7 @@ def test_apply() -> None:
         edits=[],
     )
 
-    service.apply(
+    snapshot_id = service.apply(
         repository_root=repository_root,
         change_set=change_set,
     )
@@ -231,6 +269,11 @@ def test_apply() -> None:
     assert (
         snapshot_store.snapshot
         is not None
+    )
+
+    assert (
+        snapshot_id
+        == snapshot_store.snapshot.snapshot_id
     )
 
     assert (
@@ -249,6 +292,52 @@ def test_apply() -> None:
         applier.change_set
         == change_set
     )
+
+
+def test_rollback_loads_snapshot_and_restores() -> None:
+    """Rollback should load a snapshot and delegate restore."""
+
+    provider = FakeEditingProvider()
+
+    applier = FakeChangeApplier()
+
+    snapshot_store = FakeSnapshotStore()
+
+    service = EditingService(
+        editing_provider=provider,
+        change_applier=applier,
+        snapshot_store=snapshot_store,
+    )
+
+    repository_root = Path(
+        "/repository",
+    )
+
+    service.rollback(
+        repository_root=repository_root,
+        snapshot_id="snapshot-1",
+    )
+
+    assert (
+        snapshot_store.loaded_snapshot_id
+        == "snapshot-1"
+    )
+
+    assert (
+        applier.repository_root
+        == repository_root
+    )
+
+    assert (
+        applier.snapshot
+        is not None
+    )
+
+    assert (
+        applier.snapshot.snapshot_id
+        == "snapshot-1"
+    )
+
 
 class FakeStorageProvider(StorageProvider):
     """Fake storage provider."""
@@ -288,7 +377,7 @@ class FakeStorageProvider(StorageProvider):
     def read_json(
         self,
         path: Path,
-    ) -> dict:
+    ) -> dict[str, Any]:
         raise AssertionError(
             "Unexpected call.",
         )
@@ -296,7 +385,7 @@ class FakeStorageProvider(StorageProvider):
     def write_json(
         self,
         path: Path,
-        data: dict,
+        data: dict[str, Any],
     ) -> None:
         pass
 

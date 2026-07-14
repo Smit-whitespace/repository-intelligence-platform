@@ -7,6 +7,8 @@ from fastapi import status
 
 from app.api.routes.editing_schemas import (
     ApplyRequest,
+    ApplyResponse,
+    RollbackRequest,
 )
 from app.dependencies.providers import (
     get_editing_service,
@@ -44,19 +46,41 @@ def edit_repository(
 
 @router.post(
     "/apply",
-    status_code=status.HTTP_204_NO_CONTENT,
+    response_model=ApplyResponse,
 )
 def apply_changes(
     request: ApplyRequest,
     editing_service: EditingService = Depends(
         get_editing_service,
     ),
-) -> Response:
+) -> ApplyResponse:
     """Apply a previously planned ChangeSet."""
 
-    editing_service.apply(
+    snapshot_id = editing_service.apply(
         repository_root=request.repository_root,
         change_set=request.change_set,
+    )
+
+    return ApplyResponse(
+        snapshot_id=snapshot_id,
+    )
+
+
+@router.post(
+    "/rollback",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def rollback_changes(
+    request: RollbackRequest,
+    editing_service: EditingService = Depends(
+        get_editing_service,
+    ),
+) -> Response:
+    """Restore files from a previously captured snapshot."""
+
+    editing_service.rollback(
+        repository_root=request.repository_root,
+        snapshot_id=request.snapshot_id,
     )
 
     return Response(

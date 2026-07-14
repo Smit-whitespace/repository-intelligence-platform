@@ -15,7 +15,6 @@ from app.editing.snapshot_models import (
     Snapshot,
 )
 
-
 class SnapshotStore:
     """Persist ChangeSet-scoped snapshots."""
 

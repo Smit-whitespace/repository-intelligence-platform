@@ -5,6 +5,9 @@ from pathlib import Path
 from app.editing.change_applier import (
     ChangeApplier,
 )
+from app.editing.exceptions import (
+    EditingError,
+)
 from app.editing.models import (
     ChangeSet,
     EditRequest,
@@ -20,6 +23,7 @@ from app.editing.snapshot_models import (
 from app.editing.snapshot_store import (
     SnapshotStore,
 )
+
 
 class EditingService:
     """Repository Editing orchestration service."""
@@ -40,7 +44,9 @@ class EditingService:
             change_applier
         )
 
-        self._snapshot_store = snapshot_store
+        self._snapshot_store = (
+            snapshot_store
+        )
 
     def edit(
         self,
@@ -56,7 +62,7 @@ class EditingService:
         self,
         repository_root: Path,
         change_set: ChangeSet,
-    ) -> None:
+    ) -> str:
         """Apply a previously generated ChangeSet."""
 
         snapshot = self._create_snapshot(
@@ -73,6 +79,24 @@ class EditingService:
             change_set=change_set,
         )
 
+        return snapshot.snapshot_id
+
+    def rollback(
+        self,
+        repository_root: Path,
+        snapshot_id: str,
+    ) -> None:
+        """Restore a previously captured repository snapshot."""
+
+        snapshot = self._snapshot_store.load(
+            snapshot_id,
+        )
+
+        self._change_applier.restore(
+            repository_root=repository_root,
+            snapshot=snapshot,
+        )
+
     def _create_snapshot(
         self,
         repository_root: Path,
@@ -80,24 +104,38 @@ class EditingService:
     ) -> Snapshot:
         """Create a ChangeSet-scoped snapshot."""
 
+        repository_root = (
+            repository_root.resolve()
+        )
+
         files: list[SnapshotFile] = []
 
         for edit in change_set.edits:
             target_path = (
                 repository_root
                 / edit.relative_path
-            )
+            ).resolve()
 
-            if target_path.exists():
-                content = target_path.read_text(
-                    encoding="utf-8",
-                )
+            existed = target_path.exists()
+
+            if existed:
+                try:
+                    content = target_path.read_text(
+                        encoding="utf-8",
+                    )
+
+                except OSError as error:
+                    raise EditingError(
+                        "Failed to read repository file while creating snapshot.",
+                    ) from error
+
             else:
                 content = ""
 
             files.append(
                 SnapshotFile(
                     relative_path=edit.relative_path,
+                    existed=existed,
                     content=content,
                 ),
             )

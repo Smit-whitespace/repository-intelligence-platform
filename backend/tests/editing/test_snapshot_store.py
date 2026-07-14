@@ -1,6 +1,7 @@
 """Tests for the SnapshotStore."""
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -45,12 +46,18 @@ def create_snapshot() -> Snapshot:
         snapshot_id="snapshot-1",
         files=[
             SnapshotFile(
-                relative_path=Path("main.py"),
+                relative_path=Path(
+                    "main.py",
+                ),
+                existed=True,
                 content="print('hello')",
             ),
             SnapshotFile(
-                relative_path=Path("README.md"),
-                content="# README",
+                relative_path=Path(
+                    "README.md",
+                ),
+                existed=False,
+                content="",
             ),
         ],
     )
@@ -62,7 +69,9 @@ def test_save_and_load_snapshot(
     """Snapshot should survive a save/load round-trip."""
 
     store = SnapshotStore(
-        storage=create_storage(tmp_path),
+        storage=create_storage(
+            tmp_path,
+        ),
     )
 
     snapshot = create_snapshot()
@@ -94,7 +103,9 @@ def test_save_and_load_snapshot(
 
     assert (
         loaded.files[0].relative_path
-        == Path("main.py")
+        == Path(
+            "main.py",
+        )
     )
 
     assert (
@@ -103,13 +114,25 @@ def test_save_and_load_snapshot(
     )
 
     assert (
+        loaded.files[0].existed
+        is True
+    )
+
+    assert (
         loaded.files[1].relative_path
-        == Path("README.md")
+        == Path(
+            "README.md",
+        )
     )
 
     assert (
         loaded.files[1].content
-        == "# README"
+        == ""
+    )
+
+    assert (
+        loaded.files[1].existed
+        is False
     )
 
 
@@ -119,7 +142,9 @@ def test_delete_snapshot(
     """Deleting a snapshot should remove it."""
 
     store = SnapshotStore(
-        storage=create_storage(tmp_path),
+        storage=create_storage(
+            tmp_path,
+        ),
     )
 
     snapshot = create_snapshot()
@@ -146,7 +171,9 @@ def test_load_missing_snapshot(
     """Loading a missing snapshot should fail."""
 
     store = SnapshotStore(
-        storage=create_storage(tmp_path),
+        storage=create_storage(
+            tmp_path,
+        ),
     )
 
     with pytest.raises(
@@ -165,7 +192,7 @@ class WriteFailureStorage(
     def write_json(
         self,
         path: Path,
-        data: dict,
+        data: dict[str, Any],
     ) -> None:
         raise StorageWriteError(
             "boom",
@@ -180,7 +207,7 @@ class ReadFailureStorage(
     def read_json(
         self,
         path: Path,
-    ) -> dict:
+    ) -> dict[str, Any]:
         raise StorageReadError(
             "boom",
         )

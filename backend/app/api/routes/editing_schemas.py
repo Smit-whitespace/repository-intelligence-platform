@@ -15,3 +15,17 @@ class ApplyRequest(BaseModel):
     repository_root: Path
 
     change_set: ChangeSet
+
+
+class ApplyResponse(BaseModel):
+    """Response returned after applying a ChangeSet."""
+
+    snapshot_id: str
+
+
+class RollbackRequest(BaseModel):
+    """Request to restore a previously captured snapshot."""
+
+    repository_root: Path
+
+    snapshot_id: str

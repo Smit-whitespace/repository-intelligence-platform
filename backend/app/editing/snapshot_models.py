@@ -10,9 +10,11 @@ from pydantic import Field
 
 
 class SnapshotFile(BaseModel):
-    """Pre-application state of a single repository file."""
+    """Snapshot of a single repository file."""
 
     relative_path: Path
+
+    existed: bool
 
     content: str
 

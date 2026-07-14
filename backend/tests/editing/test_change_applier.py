@@ -11,6 +11,10 @@ from app.editing.models import (
     ChangeSet,
     FileEdit,
 )
+from app.editing.snapshot_models import (
+    Snapshot,
+    SnapshotFile,
+)
 from app.editing.exceptions import (
     EditingError,
 )
@@ -221,3 +225,163 @@ def test_invalid_changeset_performs_no_writes(
     assert not (
         tmp_path / "README.md"
     ).exists()
+
+
+def test_restore_modified_file(
+    tmp_path: Path,
+) -> None:
+    """Existing files should be restored from snapshot content."""
+
+    file_path = (
+        tmp_path
+        / "README.md"
+    )
+
+    file_path.write_text(
+        "Changed",
+        encoding="utf-8",
+    )
+
+    applier = ChangeApplier()
+
+    applier.restore(
+        repository_root=tmp_path,
+        snapshot=Snapshot(
+            snapshot_id="snapshot-1",
+            files=[
+                SnapshotFile(
+                    relative_path=Path(
+                        "README.md",
+                    ),
+                    existed=True,
+                    content="Original",
+                ),
+            ],
+        ),
+    )
+
+    assert (
+        file_path.read_text(
+            encoding="utf-8",
+        )
+        == "Original"
+    )
+
+
+def test_restore_recreates_deleted_file(
+    tmp_path: Path,
+) -> None:
+    """Deleted files should be recreated during restore."""
+
+    applier = ChangeApplier()
+
+    applier.restore(
+        repository_root=tmp_path,
+        snapshot=Snapshot(
+            snapshot_id="snapshot-1",
+            files=[
+                SnapshotFile(
+                    relative_path=Path(
+                        "docs/guide.md",
+                    ),
+                    existed=True,
+                    content="Guide",
+                ),
+            ],
+        ),
+    )
+
+    assert (
+        tmp_path
+        / "docs"
+        / "guide.md"
+    ).read_text(
+        encoding="utf-8",
+    ) == "Guide"
+
+
+def test_restore_removes_newly_created_file(
+    tmp_path: Path,
+) -> None:
+    """Files that did not exist at snapshot time should be removed."""
+
+    file_path = (
+        tmp_path
+        / "new.py"
+    )
+
+    file_path.write_text(
+        "print('new')",
+        encoding="utf-8",
+    )
+
+    applier = ChangeApplier()
+
+    applier.restore(
+        repository_root=tmp_path,
+        snapshot=Snapshot(
+            snapshot_id="snapshot-1",
+            files=[
+                SnapshotFile(
+                    relative_path=Path(
+                        "new.py",
+                    ),
+                    existed=False,
+                    content="",
+                ),
+            ],
+        ),
+    )
+
+    assert not file_path.exists()
+
+
+def test_restore_rejects_path_escape(
+    tmp_path: Path,
+) -> None:
+    """Snapshot repository escape should fail before restore."""
+
+    target_path = (
+        tmp_path
+        / "safe.txt"
+    )
+
+    target_path.write_text(
+        "Safe",
+        encoding="utf-8",
+    )
+
+    applier = ChangeApplier()
+
+    with pytest.raises(
+        EditingError,
+    ):
+        applier.restore(
+            repository_root=tmp_path,
+            snapshot=Snapshot(
+                snapshot_id="snapshot-1",
+                files=[
+                    SnapshotFile(
+                        relative_path=Path(
+                            "safe.txt",
+                        ),
+                        existed=True,
+                        content="Restored",
+                    ),
+                    SnapshotFile(
+                        relative_path=Path(
+                            "../outside.txt",
+                        ),
+                        existed=True,
+                        content="Bad",
+                    ),
+                ],
+            ),
+        )
+
+    assert (
+        target_path.read_text(
+            encoding="utf-8",
+        )
+        == "Safe"
+    )

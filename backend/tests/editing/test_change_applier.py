@@ -227,6 +227,131 @@ def test_invalid_changeset_performs_no_writes(
     ).exists()
 
 
+def test_absolute_relative_path_is_rejected(
+    tmp_path: Path,
+) -> None:
+    """Absolute edit paths should fail validation."""
+
+    target_path = (
+        tmp_path
+        / "README.md"
+    )
+
+    applier = ChangeApplier()
+
+    with pytest.raises(
+        EditingError,
+    ):
+        applier.apply(
+            repository_root=tmp_path,
+            change_set=ChangeSet(
+                edits=[
+                    FileEdit(
+                        relative_path=target_path,
+                        original_content="",
+                        updated_content="Bad",
+                    ),
+                ],
+            ),
+        )
+
+    assert not target_path.exists()
+
+
+def test_path_conflict_performs_no_writes(
+    tmp_path: Path,
+) -> None:
+    """File and child-file conflicts should fail before mutation."""
+
+    applier = ChangeApplier()
+
+    with pytest.raises(
+        EditingError,
+    ):
+        applier.apply(
+            repository_root=tmp_path,
+            change_set=ChangeSet(
+                edits=[
+                    FileEdit(
+                        relative_path=Path(
+                            "README.md",
+                        ),
+                        original_content="",
+                        updated_content="Parent file",
+                    ),
+                    FileEdit(
+                        relative_path=Path(
+                            "README.md/details.txt",
+                        ),
+                        original_content="",
+                        updated_content="Child file",
+                    ),
+                ],
+            ),
+        )
+
+    assert not (
+        tmp_path
+        / "README.md"
+    ).exists()
+
+
+def test_existing_file_parent_performs_no_writes(
+    tmp_path: Path,
+) -> None:
+    """Existing file parents should fail before earlier edits mutate."""
+
+    (
+        tmp_path
+        / "README.md"
+    ).write_text(
+        "Original",
+        encoding="utf-8",
+    )
+
+    (
+        tmp_path
+        / "notes.md"
+    ).write_text(
+        "Original notes",
+        encoding="utf-8",
+    )
+
+    applier = ChangeApplier()
+
+    with pytest.raises(
+        EditingError,
+    ):
+        applier.apply(
+            repository_root=tmp_path,
+            change_set=ChangeSet(
+                edits=[
+                    FileEdit(
+                        relative_path=Path(
+                            "notes.md",
+                        ),
+                        original_content="Original notes",
+                        updated_content="Changed notes",
+                    ),
+                    FileEdit(
+                        relative_path=Path(
+                            "README.md/details.txt",
+                        ),
+                        original_content="",
+                        updated_content="Child file",
+                    ),
+                ],
+            ),
+        )
+
+    assert (
+        tmp_path
+        / "notes.md"
+    ).read_text(
+        encoding="utf-8",
+    ) == "Original notes"
+
+
 def test_restore_modified_file(
     tmp_path: Path,
 ) -> None:

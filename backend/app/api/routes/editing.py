@@ -5,6 +5,12 @@ from fastapi import Depends
 from fastapi import Response
 from fastapi import status
 
+from app.api.response_docs import (
+    BAD_REQUEST_RESPONSE,
+    NOT_FOUND_RESPONSE,
+    SERVER_ERROR_RESPONSE,
+    VALIDATION_ERROR_RESPONSE,
+)
 from app.api.routes.editing_schemas import (
     ApplyRequest,
     ApplyResponse,
@@ -30,6 +36,17 @@ router = APIRouter(
 @router.post(
     "/edit",
     response_model=EditResponse,
+    operation_id="planEdit",
+    summary="Plan repository edit",
+    description=(
+        "Generate a ChangeSet for client review without mutating the "
+        "repository."
+    ),
+    response_description="Planned ChangeSet for review.",
+    responses={
+        **BAD_REQUEST_RESPONSE,
+        **VALIDATION_ERROR_RESPONSE,
+    },
 )
 def edit_repository(
     request: EditRequest,
@@ -47,6 +64,18 @@ def edit_repository(
 @router.post(
     "/apply",
     response_model=ApplyResponse,
+    operation_id="applyChangeSet",
+    summary="Apply ChangeSet",
+    description=(
+        "Create a snapshot, persist it, and explicitly apply a reviewed "
+        "ChangeSet."
+    ),
+    response_description="Generated snapshot identifier for rollback.",
+    responses={
+        **BAD_REQUEST_RESPONSE,
+        **VALIDATION_ERROR_RESPONSE,
+        **SERVER_ERROR_RESPONSE,
+    },
 )
 def apply_changes(
     request: ApplyRequest,
@@ -69,6 +98,18 @@ def apply_changes(
 @router.post(
     "/rollback",
     status_code=status.HTTP_204_NO_CONTENT,
+    operation_id="rollbackChangeSet",
+    summary="Rollback applied ChangeSet",
+    description=(
+        "Restore repository files from a previously persisted snapshot."
+    ),
+    response_description="Rollback completed successfully.",
+    responses={
+        **BAD_REQUEST_RESPONSE,
+        **NOT_FOUND_RESPONSE,
+        **VALIDATION_ERROR_RESPONSE,
+        **SERVER_ERROR_RESPONSE,
+    },
 )
 def rollback_changes(
     request: RollbackRequest,

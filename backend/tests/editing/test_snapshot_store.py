@@ -213,6 +213,26 @@ class ReadFailureStorage(
         )
 
 
+class MalformedSnapshotStorage(
+    FileSystemStorage,
+):
+    """Storage that returns malformed snapshot data."""
+
+    def read_json(
+        self,
+        path: Path,
+    ) -> dict[str, Any]:
+        return {
+            "snapshot_id": "snapshot-1",
+            "files": [
+                {
+                    "relative_path": "README.md",
+                    "content": "missing existed field",
+                },
+            ],
+        }
+
+
 class DeleteFailureStorage(
     FileSystemStorage,
 ):
@@ -256,6 +276,29 @@ def test_load_translates_storage_error(
     """Storage read failures should become Editing exceptions."""
 
     storage = ReadFailureStorage(
+        root_directory=tmp_path,
+    )
+
+    storage.initialize()
+
+    store = SnapshotStore(
+        storage=storage,
+    )
+
+    with pytest.raises(
+        SnapshotPersistenceError,
+    ):
+        store.load(
+            "snapshot-1",
+        )
+
+
+def test_load_translates_malformed_snapshot(
+    tmp_path: Path,
+) -> None:
+    """Malformed persisted snapshots should become persistence errors."""
+
+    storage = MalformedSnapshotStorage(
         root_directory=tmp_path,
     )
 

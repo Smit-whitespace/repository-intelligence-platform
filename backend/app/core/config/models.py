@@ -32,7 +32,7 @@ class OllamaSettings(BaseModel):
 
     embedding_model: str = "nomic-embed-text"
 
-    chat_model: str = "qwen3.6"
+    chat_model: str = "qwen3:8b"
 
     timeout_seconds: int = 120
 

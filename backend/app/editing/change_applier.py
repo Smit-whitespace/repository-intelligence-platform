@@ -29,6 +29,10 @@ class ChangeApplier:
             repository_root.resolve()
         )
 
+        self._validate_repository_root(
+            repository_root,
+        )
+
         self._validate_relative_paths(
             repository_root=repository_root,
             relative_paths=[
@@ -36,8 +40,12 @@ class ChangeApplier:
                 for edit in change_set.edits
             ],
             empty_path_message="ChangeSet contains an empty relative path.",
+            absolute_path_message="ChangeSet contains an absolute path.",
             escape_message="ChangeSet contains a path outside the repository.",
             duplicate_message="ChangeSet contains duplicate target paths.",
+            conflict_message="ChangeSet contains conflicting target paths.",
+            parent_message="ChangeSet target parent is not a directory.",
+            target_directory_message="ChangeSet target path is a directory.",
         )
 
         for edit in change_set.edits:
@@ -62,6 +70,10 @@ class ChangeApplier:
             repository_root.resolve()
         )
 
+        self._validate_repository_root(
+            repository_root,
+        )
+
         self._validate_relative_paths(
             repository_root=repository_root,
             relative_paths=[
@@ -69,8 +81,12 @@ class ChangeApplier:
                 for file in snapshot.files
             ],
             empty_path_message="Snapshot contains an empty relative path.",
+            absolute_path_message="Snapshot contains an absolute path.",
             escape_message="Snapshot contains a path outside the repository.",
             duplicate_message="Snapshot contains duplicate target paths.",
+            conflict_message="Snapshot contains conflicting target paths.",
+            parent_message="Snapshot target parent is not a directory.",
+            target_directory_message="Snapshot target path is a directory.",
         )
 
         for file in snapshot.files:
@@ -88,17 +104,38 @@ class ChangeApplier:
             elif target_path.exists():
                 target_path.unlink()
 
+    def _validate_repository_root(
+        self,
+        repository_root: Path,
+    ) -> None:
+        """Validate the repository root before mutation."""
+
+        if not repository_root.exists():
+            raise EditingError(
+                "Repository root does not exist.",
+            )
+
+        if not repository_root.is_dir():
+            raise EditingError(
+                "Repository root is not a directory.",
+            )
+
     def _validate_relative_paths(
         self,
         repository_root: Path,
         relative_paths: list[Path],
         empty_path_message: str,
+        absolute_path_message: str,
         escape_message: str,
         duplicate_message: str,
+        conflict_message: str,
+        parent_message: str,
+        target_directory_message: str,
     ) -> None:
         """Validate repository-relative filesystem paths."""
 
         seen_paths: set[Path] = set()
+        repository_relative_paths: list[Path] = []
 
         for relative_path in relative_paths:
             if (
@@ -107,6 +144,11 @@ class ChangeApplier:
             ):
                 raise EditingError(
                     empty_path_message,
+                )
+
+            if relative_path.is_absolute():
+                raise EditingError(
+                    absolute_path_message,
                 )
 
             target_path = (
@@ -137,6 +179,44 @@ class ChangeApplier:
             seen_paths.add(
                 repository_relative_path,
             )
+            repository_relative_paths.append(
+                repository_relative_path,
+            )
+
+            if target_path.exists() and target_path.is_dir():
+                raise EditingError(
+                    target_directory_message,
+                )
+
+            parent_path = target_path.parent
+
+            while parent_path != repository_root:
+                if parent_path.exists() and not parent_path.is_dir():
+                    raise EditingError(
+                        parent_message,
+                    )
+
+                parent_path = parent_path.parent
+
+        for repository_relative_path in repository_relative_paths:
+            for other_relative_path in repository_relative_paths:
+                if (
+                    repository_relative_path
+                    == other_relative_path
+                ):
+                    continue
+
+                try:
+                    other_relative_path.relative_to(
+                        repository_relative_path,
+                    )
+
+                except ValueError:
+                    continue
+
+                raise EditingError(
+                    conflict_message,
+                )
 
     def _write_file_atomic(
         self,

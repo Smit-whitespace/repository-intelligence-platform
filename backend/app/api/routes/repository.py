@@ -4,6 +4,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query
 
+from app.api.response_docs import (
+    BAD_REQUEST_RESPONSE,
+    VALIDATION_ERROR_RESPONSE,
+)
 from app.dependencies.providers import get_repository_service
 from app.repository.schemas import (
     RepositoryEntryResponse,
@@ -21,9 +25,26 @@ router = APIRouter(
 @router.get(
     "/index",
     response_model=RepositoryIndexResponse,
+    operation_id="getRepositoryIndex",
+    summary="Get repository index",
+    description=(
+        "Scan a repository and return both aggregate summary data and "
+        "individual file or directory entries."
+    ),
+    response_description="Repository index with summary and entries.",
+    responses={
+        **BAD_REQUEST_RESPONSE,
+        **VALIDATION_ERROR_RESPONSE,
+    },
 )
 def repository_index(
-    root_directory: Path = Query(...),
+    root_directory: Path = Query(
+        ...,
+        description="Absolute path to the repository root directory.",
+        examples=[
+            "A:/Personal Projects/Projects/local-openclaw",
+        ],
+    ),
     repository_service: RepositoryService = Depends(
         get_repository_service,
     ),
@@ -60,9 +81,23 @@ def repository_index(
 @router.get(
     "/scan",
     response_model=list[RepositoryEntryResponse],
+    operation_id="scanRepository",
+    summary="Scan repository",
+    description="Scan a repository and return file and directory entries.",
+    response_description="Repository file and directory entries.",
+    responses={
+        **BAD_REQUEST_RESPONSE,
+        **VALIDATION_ERROR_RESPONSE,
+    },
 )
 def repository_scan(
-    root_directory: Path = Query(...),
+    root_directory: Path = Query(
+        ...,
+        description="Absolute path to the repository root directory.",
+        examples=[
+            "A:/Personal Projects/Projects/local-openclaw",
+        ],
+    ),
     repository_service: RepositoryService = Depends(
         get_repository_service,
     ),
@@ -78,9 +113,23 @@ def repository_scan(
 @router.get(
     "/summary",
     response_model=RepositorySummaryResponse,
+    operation_id="getRepositorySummary",
+    summary="Get repository summary",
+    description="Scan a repository and return aggregate summary data.",
+    response_description="Repository aggregate summary.",
+    responses={
+        **BAD_REQUEST_RESPONSE,
+        **VALIDATION_ERROR_RESPONSE,
+    },
 )
 def repository_summary(
-    root_directory: Path = Query(...),
+    root_directory: Path = Query(
+        ...,
+        description="Absolute path to the repository root directory.",
+        examples=[
+            "A:/Personal Projects/Projects/local-openclaw",
+        ],
+    ),
     repository_service: RepositoryService = Depends(
         get_repository_service,
     ),

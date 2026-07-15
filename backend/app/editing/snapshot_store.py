@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from app.core.storage.abstractions import StorageProvider
 from app.core.storage.exceptions import (
     StorageError,
@@ -74,9 +76,15 @@ class SnapshotStore:
                 "Failed to load snapshot.",
             ) from error
 
-        return Snapshot.model_validate(
-            data,
-        )
+        try:
+            return Snapshot.model_validate(
+                data,
+            )
+
+        except ValidationError as error:
+            raise SnapshotPersistenceError(
+                "Failed to load snapshot.",
+            ) from error
 
     def delete(
         self,

@@ -13,7 +13,11 @@ from app.api.response_docs import (
     VALIDATION_ERROR_RESPONSE,
 )
 from app.dependencies.providers import (
+    get_project_initialization_service,
     get_project_service,
+)
+from app.projects.initialization_service import (
+    ProjectInitializationService,
 )
 from app.projects.schemas import (
     OpenProjectRequest,
@@ -36,8 +40,7 @@ router = APIRouter(
     operation_id="openProject",
     summary="Open project",
     description=(
-        "Validate a project root directory and persist Local OpenClaw "
-        "project metadata."
+        "Validate a project root directory and persist Local OpenClaw project metadata."
     ),
     response_description="Opened project metadata.",
     responses={
@@ -48,13 +51,13 @@ router = APIRouter(
 )
 def open_project(
     request: OpenProjectRequest,
-    project_service: ProjectService = Depends(
-        get_project_service,
+    initialization_service: ProjectInitializationService = Depends(
+        get_project_initialization_service,
     ),
 ) -> OpenProjectResponse:
     """Open a project."""
 
-    project = project_service.open_project(
+    project = initialization_service.open_project(
         request.root_directory,
     )
 

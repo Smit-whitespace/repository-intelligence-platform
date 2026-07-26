@@ -30,6 +30,9 @@ from app.editing.service import (
 from app.indexing.chroma_store import (
     ChromaVectorStore,
 )
+from app.indexing.indexer import (
+    RepositoryIndexer,
+)
 from app.indexing.ollama_provider import (
     OllamaEmbeddingProvider,
 )
@@ -39,11 +42,21 @@ from app.indexing.providers import (
 from app.indexing.retrieval_service import (
     RetrievalService,
 )
+from app.indexing.service import IndexingService
 from app.indexing.stores import (
     VectorStore,
 )
+from app.projects.initialization_service import (
+    ProjectInitializationService,
+)
 from app.projects.repository import ProjectRepository
 from app.projects.service import ProjectService
+from app.repository.chunking import (
+    RepositoryChunker,
+)
+from app.repository.documents import (
+    RepositoryDocumentLoader,
+)
 from app.repository.metadata import RepositoryMetadataExtractor
 from app.repository.scanner import RepositoryScanner
 from app.repository.service import RepositoryService
@@ -92,11 +105,24 @@ def get_repository_scanner() -> RepositoryScanner:
 
 
 @lru_cache(maxsize=1)
-def get_repository_metadata_extractor(
-) -> RepositoryMetadataExtractor:
+def get_repository_metadata_extractor() -> RepositoryMetadataExtractor:
     """Return the repository metadata extractor."""
 
     return RepositoryMetadataExtractor()
+
+
+@lru_cache(maxsize=1)
+def get_repository_document_loader() -> RepositoryDocumentLoader:
+    """Return the repository document loader."""
+
+    return RepositoryDocumentLoader()
+
+
+@lru_cache(maxsize=1)
+def get_repository_chunker() -> RepositoryChunker:
+    """Return the repository chunker."""
+
+    return RepositoryChunker()
 
 
 @lru_cache(maxsize=1)
@@ -124,6 +150,29 @@ def get_vector_store() -> VectorStore:
 
     return ChromaVectorStore(
         settings.chroma,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_repository_indexer() -> RepositoryIndexer:
+    """Return the repository indexer."""
+
+    return RepositoryIndexer(
+        embedding_provider=get_embedding_provider(),
+        vector_store=get_vector_store(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_indexing_service() -> IndexingService:
+    """Return the indexing service."""
+
+    return IndexingService(
+        scanner=get_repository_scanner(),
+        metadata_extractor=get_repository_metadata_extractor(),
+        document_loader=get_repository_document_loader(),
+        chunker=get_repository_chunker(),
+        indexer=get_repository_indexer(),
     )
 
 
@@ -181,11 +230,13 @@ def get_editing_service() -> EditingService:
         snapshot_store=get_snapshot_store(),
     )
 
+
 @lru_cache(maxsize=1)
 def get_change_applier() -> ChangeApplier:
     """Return the ChangeSet applier."""
 
     return ChangeApplier()
+
 
 @lru_cache(maxsize=1)
 def get_snapshot_store() -> SnapshotStore:
@@ -193,4 +244,15 @@ def get_snapshot_store() -> SnapshotStore:
 
     return SnapshotStore(
         storage=get_storage(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_project_initialization_service() -> ProjectInitializationService:
+    """Return the project initialization service."""
+
+    return ProjectInitializationService(
+        project_service=get_project_service(),
+        repository_service=get_repository_service(),
+        indexing_service=get_indexing_service(),
     )

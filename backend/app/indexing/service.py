@@ -79,9 +79,7 @@ class IndexingService:
 
                 indexed_files += 1
 
-                indexed_chunks += (
-                    result.indexed_chunks
-                )
+                indexed_chunks += result.indexed_chunks
 
             except Exception:
                 #

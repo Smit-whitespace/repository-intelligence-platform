@@ -8,7 +8,7 @@ export function EditingPage() {
         <p className="text-sm text-muted-foreground">Editing workflow foundation.</p>
       </div>
       <EmptyState
-        title="Editing UI is not implemented in Sprint 11"
+        title="Editing — Available Soon"
         description="The shell is ready for plan, review, apply, and rollback workflows."
       />
     </section>

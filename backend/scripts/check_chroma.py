@@ -32,7 +32,7 @@ def main() -> None:
 
     chunk = IndexedChunk(
         chunk_id="demo",
-        text="Hello Local OpenClaw",
+        text="Hello RIP",
         embedding=EmbeddingVector(
             values=[0.1, 0.2, 0.3],
         ),

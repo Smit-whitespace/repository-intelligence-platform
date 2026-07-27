@@ -1,1 +1,1 @@
-"""Local OpenClaw backend application package."""
+"""RIP backend application package."""

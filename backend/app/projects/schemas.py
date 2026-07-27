@@ -14,14 +14,14 @@ class OpenProjectRequest(BaseModel):
     root_directory: Path = Field(
         description="Absolute path to the project root directory.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     )
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "root_directory": "A:/Personal Projects/Projects/local-openclaw",
+                "root_directory": "/home/user/projects/my-project",
             },
         },
     )
@@ -33,22 +33,22 @@ class OpenProjectResponse(BaseModel):
     project: str = Field(
         description="Project display name derived from the root directory.",
         examples=[
-            "local-openclaw",
+            "my-project",
         ],
     )
 
     root_directory: Path = Field(
         description="Absolute path to the opened project root directory.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     )
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "project": "local-openclaw",
-                "root_directory": "A:/Personal Projects/Projects/local-openclaw",
+                "project": "my-project",
+                "root_directory": "/home/user/projects/my-project",
             },
         },
     )
@@ -60,21 +60,21 @@ class ProjectInfoResponse(BaseModel):
     name: str = Field(
         description="Project display name.",
         examples=[
-            "local-openclaw",
+            "my-project",
         ],
     )
 
     root_directory: Path = Field(
         description="Absolute path to the project root directory.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     )
 
     storage_directory: Path = Field(
         description="Absolute path to the project metadata directory.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw/.local_openclaw",
+            "/home/user/projects/my-project/.local_openclaw",
         ],
     )
 
@@ -88,10 +88,10 @@ class ProjectInfoResponse(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "name": "local-openclaw",
-                "root_directory": "A:/Personal Projects/Projects/local-openclaw",
+                "name": "my-project",
+                "root_directory": "/home/user/projects/my-project",
                 "storage_directory": (
-                    "A:/Personal Projects/Projects/local-openclaw/.local_openclaw"
+                    "/home/user/projects/my-project/.local_openclaw"
                 ),
                 "created_at": "2026-07-15T10:30:00Z",
             },

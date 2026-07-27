@@ -39,9 +39,7 @@ router = APIRouter(
     response_model=OpenProjectResponse,
     operation_id="openProject",
     summary="Open project",
-    description=(
-        "Validate a project root directory and persist Local OpenClaw project metadata."
-    ),
+    description=("Validate a project root directory and persist RIP project metadata."),
     response_description="Opened project metadata.",
     responses={
         **BAD_REQUEST_RESPONSE,
@@ -72,7 +70,7 @@ def open_project(
     response_model=ProjectInfoResponse,
     operation_id="getProjectInfo",
     summary="Get project info",
-    description="Return persisted Local OpenClaw project metadata.",
+    description="Return persisted RIP project metadata.",
     response_description="Persisted project metadata.",
     responses={
         **NOT_FOUND_RESPONSE,
@@ -85,7 +83,7 @@ def get_project_info(
         ...,
         description="Absolute path to the project root directory.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     ),
     project_service: ProjectService = Depends(

@@ -81,7 +81,7 @@ def create_application() -> FastAPI:
         version="0.1.0",
         description=(
             "Repository Intelligence Platform (RIP) backend API for "
-            "repository intelligence and editing."
+            "repository-aware coding assistance."
         ),
         openapi_tags=OPENAPI_TAGS,
         lifespan=lifespan,

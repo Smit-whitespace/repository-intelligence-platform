@@ -1,14 +1,18 @@
 # Roadmap
 
-> **Status:** Scaffold — contents to be populated in Phase 3.
+> **Status:** Living document — updated each sprint.
 
 ## Purpose
 
 Documents the forward plan through Release Candidate.
 
-## Contents (planned)
+## Completed Milestones
 
-- Sprint 12.2 — Chat Integration
+- Sprint 12.1 — Project Initialization Service
+- Sprint 12.2 — Repository-Aware Answer Quality
+
+## Planned Milestones
+
 - Sprint 13 — TBD
 - Sprint 14 — TBD
 - Sprint 15 — TBD

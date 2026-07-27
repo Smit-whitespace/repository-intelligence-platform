@@ -62,7 +62,11 @@ Invoke-RestMethod http://127.0.0.1:8000/api/v1/system/status
 
 ## Frontend Setup
 
-No frontend startup command is available yet.
+From the `frontend` directory:
+
+```powershell
+npm run dev
+```
 
 ## Quality Gates
 

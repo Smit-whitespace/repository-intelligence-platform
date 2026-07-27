@@ -31,18 +31,14 @@ class ChromaVectorStore(VectorStore):
     ) -> None:
         """Initialize the ChromaDB client."""
 
-        self._client: ClientAPI = (
-            chromadb.PersistentClient(
-                path=str(
-                    settings.persist_directory,
-                ),
-            )
+        self._client: ClientAPI = chromadb.PersistentClient(
+            path=str(
+                settings.persist_directory,
+            ),
         )
 
-        self._collection: Collection = (
-            self._client.get_or_create_collection(
-                name=settings.collection_name,
-            )
+        self._collection: Collection = self._client.get_or_create_collection(
+            name=settings.collection_name,
         )
 
     def add(
@@ -55,20 +51,11 @@ class ChromaVectorStore(VectorStore):
             return
 
         self._collection.add(
-            ids=[
-                chunk.chunk_id
-                for chunk in chunks
-            ],
-            documents=[
-                chunk.content
-                for chunk in chunks
-            ],
+            ids=[chunk.chunk_id for chunk in chunks],
+            documents=[chunk.content for chunk in chunks],
             embeddings=cast(
                 list[Sequence[float]],
-                [
-                    chunk.embedding.values
-                    for chunk in chunks
-                ],
+                [chunk.embedding.values for chunk in chunks],
             ),
             metadatas=[
                 {
@@ -135,12 +122,7 @@ class ChromaVectorStore(VectorStore):
             ),
         )
 
-        if (
-            not ids
-            or not documents
-            or not metadatas
-            or not distances
-        ):
+        if not ids or not documents or not metadatas or not distances:
             return []
 
         batch_ids = ids[0]
@@ -210,10 +192,8 @@ class ChromaVectorStore(VectorStore):
             self._collection.name,
         )
 
-        self._collection = (
-            self._client.get_or_create_collection(
-                name=self._collection.name,
-            )
+        self._collection = self._client.get_or_create_collection(
+            name=self._collection.name,
         )
 
     def _create_search_hit(
@@ -252,28 +232,20 @@ class ChromaVectorStore(VectorStore):
             relative_path=Path(
                 cast(
                     str,
-                    metadata[
-                        "relative_path"
-                    ],
+                    metadata["relative_path"],
                 ),
             ),
             language=cast(
                 str | None,
-                metadata[
-                    "language"
-                ],
+                metadata["language"],
             ),
             mime_type=cast(
                 str | None,
-                metadata[
-                    "mime_type"
-                ],
+                metadata["mime_type"],
             ),
             sha256=cast(
                 str,
-                metadata[
-                    "sha256"
-                ],
+                metadata["sha256"],
             ),
         )
 
@@ -286,22 +258,16 @@ class ChromaVectorStore(VectorStore):
         return ChunkBoundary(
             start_line=cast(
                 int,
-                metadata[
-                    "start_line"
-                ],
+                metadata["start_line"],
             ),
             end_line=cast(
                 int,
-                metadata[
-                    "end_line"
-                ],
+                metadata["end_line"],
             ),
             chunk_type=ChunkType(
                 cast(
                     str,
-                    metadata[
-                        "chunk_type"
-                    ],
+                    metadata["chunk_type"],
                 ),
             ),
         )

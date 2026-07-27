@@ -33,10 +33,7 @@ class RepositoryIndexer:
     ) -> IndexingResult:
         """Index repository chunks."""
 
-        texts = [
-            chunk.content
-            for chunk in chunks
-        ]
+        texts = [chunk.content for chunk in chunks]
 
         embeddings = self._embedding_provider.embed(
             texts,
@@ -44,8 +41,7 @@ class RepositoryIndexer:
 
         if len(embeddings) != len(chunks):
             raise EmbeddingError(
-                "Embedding provider returned an unexpected number "
-                "of embedding vectors."
+                "Embedding provider returned an unexpected number of embedding vectors."
             )
 
         indexed_chunks = [

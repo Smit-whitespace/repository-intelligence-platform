@@ -17,7 +17,7 @@ class ApplyRequest(BaseModel):
     repository_root: Path = Field(
         description="Absolute path to the repository root.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     )
 
@@ -28,7 +28,7 @@ class ApplyRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "repository_root": "A:/Personal Projects/Projects/local-openclaw",
+                "repository_root": "/home/user/projects/my-project",
                 "change_set": {
                     "edits": [
                         {
@@ -68,7 +68,7 @@ class RollbackRequest(BaseModel):
     repository_root: Path = Field(
         description="Absolute path to the repository root.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     )
 
@@ -82,7 +82,7 @@ class RollbackRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "repository_root": "A:/Personal Projects/Projects/local-openclaw",
+                "repository_root": "/home/user/projects/my-project",
                 "snapshot_id": "8f3c7c8c-2d43-48de-8e2f-0b6c43e22f14",
             },
         },

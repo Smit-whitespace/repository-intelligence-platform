@@ -13,7 +13,7 @@ class EditRequest(BaseModel):
     repository_root: Path = Field(
         description="Absolute path to the repository root.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     )
 
@@ -27,7 +27,7 @@ class EditRequest(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "repository_root": "A:/Personal Projects/Projects/local-openclaw",
+                "repository_root": "/home/user/projects/my-project",
                 "instruction": "create file docs/notes.md",
             },
         },

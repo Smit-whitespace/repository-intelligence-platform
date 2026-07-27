@@ -79,9 +79,7 @@ class FakeVectorStore(VectorStore):
     ) -> None:
         """Initialize fake vector store."""
 
-        self.query_embedding: EmbeddingVector | None = (
-            None
-        )
+        self.query_embedding: EmbeddingVector | None = None
 
     def add(
         self,
@@ -205,16 +203,9 @@ def test_project_management_workflow(
         },
     )
 
-    assert (
-        open_response.status_code
-        == 200
-    )
+    assert open_response.status_code == 200
 
-    assert (
-        tmp_path
-        / ".local_openclaw"
-        / "project.json"
-    ).exists()
+    assert (tmp_path / ".local_openclaw" / "project.json").exists()
 
     info_response = client.get(
         "/api/v1/projects/info",
@@ -225,15 +216,9 @@ def test_project_management_workflow(
         },
     )
 
-    assert (
-        info_response.status_code
-        == 200
-    )
+    assert info_response.status_code == 200
 
-    assert (
-        info_response.json()["name"]
-        == tmp_path.name
-    )
+    assert info_response.json()["name"] == tmp_path.name
 
 
 def test_project_open_rejects_invalid_project(
@@ -249,21 +234,14 @@ def test_project_open_rejects_invalid_project(
         "/api/v1/projects/open",
         json={
             "root_directory": str(
-                tmp_path
-                / "missing",
+                tmp_path / "missing",
             ),
         },
     )
 
-    assert (
-        response.status_code
-        == 400
-    )
+    assert response.status_code == 400
 
-    assert (
-        "detail"
-        in response.json()
-    )
+    assert "detail" in response.json()
 
 
 def test_project_info_handles_deleted_project(
@@ -284,10 +262,7 @@ def test_project_info_handles_deleted_project(
         },
     )
 
-    assert (
-        open_response.status_code
-        == 200
-    )
+    assert open_response.status_code == 200
 
     shutil.rmtree(
         tmp_path,
@@ -302,15 +277,9 @@ def test_project_info_handles_deleted_project(
         },
     )
 
-    assert (
-        info_response.status_code
-        == 404
-    )
+    assert info_response.status_code == 404
 
-    assert (
-        "detail"
-        in info_response.json()
-    )
+    assert "detail" in info_response.json()
 
 
 def test_repository_intelligence_workflow(
@@ -318,25 +287,16 @@ def test_repository_intelligence_workflow(
 ) -> None:
     """Repository index should honor ignores and return metadata."""
 
-    (
-        tmp_path
-        / "main.py"
-    ).write_text(
+    (tmp_path / "main.py").write_text(
         "print('hello')",
         encoding="utf-8",
     )
 
-    internal_directory = (
-        tmp_path
-        / ".local_openclaw"
-    )
+    internal_directory = tmp_path / ".local_openclaw"
 
     internal_directory.mkdir()
 
-    (
-        internal_directory
-        / "project.json"
-    ).write_text(
+    (internal_directory / "project.json").write_text(
         "{}",
         encoding="utf-8",
     )
@@ -354,10 +314,7 @@ def test_repository_intelligence_workflow(
         },
     )
 
-    assert (
-        index_response.status_code
-        == 200
-    )
+    assert index_response.status_code == 200
 
     data = index_response.json()
 
@@ -367,31 +324,22 @@ def test_repository_intelligence_workflow(
         "total_size_bytes": 14,
     }
 
-    assert len(
-        data["entries"],
-    ) == 1
+    assert (
+        len(
+            data["entries"],
+        )
+        == 1
+    )
 
     entry = data["entries"][0]
 
-    assert (
-        entry["relative_path"]
-        == "main.py"
-    )
+    assert entry["relative_path"] == "main.py"
 
-    assert (
-        entry["language"]
-        == "Python"
-    )
+    assert entry["language"] == "Python"
 
-    assert (
-        entry["is_text_file"]
-        is True
-    )
+    assert entry["is_text_file"] is True
 
-    assert (
-        entry["mime_type"]
-        == "text/x-python"
-    )
+    assert entry["mime_type"] == "text/x-python"
 
 
 def test_repository_index_rejects_invalid_repository(
@@ -407,21 +355,14 @@ def test_repository_index_rejects_invalid_repository(
         "/api/v1/repository/index",
         params={
             "root_directory": str(
-                tmp_path
-                / "missing",
+                tmp_path / "missing",
             ),
         },
     )
 
-    assert (
-        response.status_code
-        == 400
-    )
+    assert response.status_code == 400
 
-    assert (
-        "detail"
-        in response.json()
-    )
+    assert "detail" in response.json()
 
 
 def test_repository_index_rejects_file_path(
@@ -429,10 +370,7 @@ def test_repository_index_rejects_file_path(
 ) -> None:
     """Repository index should reject files as repository roots."""
 
-    repository_file = (
-        tmp_path
-        / "README.md"
-    )
+    repository_file = tmp_path / "README.md"
 
     repository_file.write_text(
         "hello",
@@ -452,15 +390,9 @@ def test_repository_index_rejects_file_path(
         },
     )
 
-    assert (
-        response.status_code
-        == 400
-    )
+    assert response.status_code == 400
 
-    assert (
-        "detail"
-        in response.json()
-    )
+    assert "detail" in response.json()
 
 
 def test_repository_aware_chat_workflow() -> None:
@@ -468,9 +400,7 @@ def test_repository_aware_chat_workflow() -> None:
 
     chat_provider = RecordingChatProvider()
 
-    app.dependency_overrides[
-        get_chat_service
-    ] = lambda: create_chat_service(
+    app.dependency_overrides[get_chat_service] = lambda: create_chat_service(
         embedding_provider=FakeEmbeddingProvider(),
         chat_provider=chat_provider,
     )
@@ -488,24 +418,15 @@ def test_repository_aware_chat_workflow() -> None:
 
     app.dependency_overrides.clear()
 
-    assert (
-        response.status_code
-        == 200
-    )
+    assert response.status_code == 200
 
     assert response.json() == {
         "content": "Repository answer.",
     }
 
-    assert (
-        chat_provider.prompt
-        is not None
-    )
+    assert chat_provider.prompt is not None
 
-    assert (
-        "File: main.py"
-        in chat_provider.prompt.messages[1].content
-    )
+    assert "File: main.py" in chat_provider.prompt.messages[2].content
 
 
 def test_chat_streaming_workflow() -> None:
@@ -513,9 +434,7 @@ def test_chat_streaming_workflow() -> None:
 
     chat_provider = RecordingChatProvider()
 
-    app.dependency_overrides[
-        get_chat_service
-    ] = lambda: create_chat_service(
+    app.dependency_overrides[get_chat_service] = lambda: create_chat_service(
         embedding_provider=FakeEmbeddingProvider(),
         chat_provider=chat_provider,
     )
@@ -531,10 +450,7 @@ def test_chat_streaming_workflow() -> None:
             "query": "Explain main.py",
         },
     ) as response:
-        assert (
-            response.status_code
-            == 200
-        )
+        assert response.status_code == 200
 
         stream = "".join(
             response.iter_text(),
@@ -542,18 +458,9 @@ def test_chat_streaming_workflow() -> None:
 
     app.dependency_overrides.clear()
 
-    assert (
-        stream
-        == (
-            "data: Repository\n\n"
-            "data:  answer.\n\n"
-        )
-    )
+    assert stream == ("data: Repository\n\ndata:  answer.\n\n")
 
-    assert (
-        chat_provider.prompt
-        is not None
-    )
+    assert chat_provider.prompt is not None
 
 
 def test_chat_rejects_invalid_request() -> None:
@@ -568,18 +475,13 @@ def test_chat_rejects_invalid_request() -> None:
         json={},
     )
 
-    assert (
-        response.status_code
-        == 422
-    )
+    assert response.status_code == 422
 
 
 def test_chat_propagates_retrieval_errors() -> None:
     """Retrieval failures should return the documented server error shape."""
 
-    app.dependency_overrides[
-        get_chat_service
-    ] = lambda: create_chat_service(
+    app.dependency_overrides[get_chat_service] = lambda: create_chat_service(
         embedding_provider=FailingEmbeddingProvider(),
         chat_provider=RecordingChatProvider(),
     )
@@ -597,10 +499,7 @@ def test_chat_propagates_retrieval_errors() -> None:
 
     app.dependency_overrides.clear()
 
-    assert (
-        response.status_code
-        == 500
-    )
+    assert response.status_code == 500
 
     assert response.json() == {
         "detail": "Embedding provider unavailable.",
@@ -612,10 +511,7 @@ def test_complete_editing_apply_rollback_workflow(
 ) -> None:
     """Editing should plan, apply, snapshot, and rollback through the API."""
 
-    readme_path = (
-        tmp_path
-        / "README.md"
-    )
+    readme_path = tmp_path / "README.md"
 
     readme_path.write_text(
         "Original contents",
@@ -636,10 +532,7 @@ def test_complete_editing_apply_rollback_workflow(
         },
     )
 
-    assert (
-        plan_response.status_code
-        == 200
-    )
+    assert plan_response.status_code == 200
 
     assert (
         readme_path.read_text(
@@ -648,9 +541,7 @@ def test_complete_editing_apply_rollback_workflow(
         == "Original contents"
     )
 
-    change_set = plan_response.json()[
-        "change_set"
-    ]
+    change_set = plan_response.json()["change_set"]
 
     apply_response = client.post(
         "/api/v1/editing/apply",
@@ -662,14 +553,9 @@ def test_complete_editing_apply_rollback_workflow(
         },
     )
 
-    assert (
-        apply_response.status_code
-        == 200
-    )
+    assert apply_response.status_code == 200
 
-    snapshot_id = apply_response.json()[
-        "snapshot_id"
-    ]
+    snapshot_id = apply_response.json()["snapshot_id"]
 
     assert snapshot_id
 
@@ -690,10 +576,7 @@ def test_complete_editing_apply_rollback_workflow(
         },
     )
 
-    assert (
-        rollback_response.status_code
-        == 204
-    )
+    assert rollback_response.status_code == 204
 
     assert (
         readme_path.read_text(
@@ -722,15 +605,9 @@ def test_editing_rejects_repository_boundary_escape(
         },
     )
 
-    assert (
-        response.status_code
-        == 400
-    )
+    assert response.status_code == 400
 
-    assert not (
-        tmp_path.parent
-        / "outside.txt"
-    ).exists()
+    assert not (tmp_path.parent / "outside.txt").exists()
 
 
 def test_editing_apply_rejects_invalid_repository(
@@ -738,10 +615,7 @@ def test_editing_apply_rejects_invalid_repository(
 ) -> None:
     """Apply should reject missing repository roots."""
 
-    missing_root = (
-        tmp_path
-        / "missing"
-    )
+    missing_root = tmp_path / "missing"
 
     client = TestClient(
         app,
@@ -765,10 +639,7 @@ def test_editing_apply_rejects_invalid_repository(
         },
     )
 
-    assert (
-        response.status_code
-        == 400
-    )
+    assert response.status_code == 400
 
     assert not missing_root.exists()
 
@@ -792,10 +663,7 @@ def test_editing_rejects_invalid_snapshot_id(
         },
     )
 
-    assert (
-        response.status_code
-        == 404
-    )
+    assert response.status_code == 404
 
 
 def test_editing_rollback_rejects_invalid_repository(
@@ -803,10 +671,7 @@ def test_editing_rollback_rejects_invalid_repository(
 ) -> None:
     """Rollback should reject missing repository roots."""
 
-    repository_file = (
-        tmp_path
-        / "README.md"
-    )
+    repository_file = tmp_path / "README.md"
 
     repository_file.write_text(
         "Original contents",
@@ -835,33 +700,21 @@ def test_editing_rollback_rejects_invalid_repository(
         },
     )
 
-    assert (
-        apply_response.status_code
-        == 200
-    )
+    assert apply_response.status_code == 200
 
     response = client.post(
         "/api/v1/editing/rollback",
         json={
             "repository_root": str(
-                tmp_path
-                / "missing",
+                tmp_path / "missing",
             ),
-            "snapshot_id": apply_response.json()[
-                "snapshot_id"
-            ],
+            "snapshot_id": apply_response.json()["snapshot_id"],
         },
     )
 
-    assert (
-        response.status_code
-        == 400
-    )
+    assert response.status_code == 400
 
-    assert not (
-        tmp_path
-        / "missing"
-    ).exists()
+    assert not (tmp_path / "missing").exists()
 
 
 def test_editing_rejects_invalid_rollback_request() -> None:
@@ -878,7 +731,4 @@ def test_editing_rejects_invalid_rollback_request() -> None:
         },
     )
 
-    assert (
-        response.status_code
-        == 422
-    )
+    assert response.status_code == 422

@@ -1,3 +1,3 @@
-"""Configuration package for local OpenClaw."""
+"""Configuration package for RIP."""
 
 __all__: tuple[str, ...] = ()

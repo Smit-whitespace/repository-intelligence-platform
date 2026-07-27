@@ -42,7 +42,7 @@ def repository_index(
         ...,
         description="Absolute path to the repository root directory.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     ),
     repository_service: RepositoryService = Depends(
@@ -95,7 +95,7 @@ def repository_scan(
         ...,
         description="Absolute path to the repository root directory.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     ),
     repository_service: RepositoryService = Depends(
@@ -127,7 +127,7 @@ def repository_summary(
         ...,
         description="Absolute path to the repository root directory.",
         examples=[
-            "A:/Personal Projects/Projects/local-openclaw",
+            "/home/user/projects/my-project",
         ],
     ),
     repository_service: RepositoryService = Depends(

@@ -31,7 +31,16 @@ class SearchHit(BaseModel):
 
 
 class SearchResult(BaseModel):
-    """Semantic search result."""
+    """Semantic search result.
+
+    Note
+    ----
+    ``similarity_score`` is a **heuristic ranking score**, not a calibrated
+    cosine similarity. It is derived from L2 distance via
+    ``1 / (1 + distance)``. The value should only be interpreted as a
+    relative ranking metric — higher is more relevant. It is not comparable
+    across different queries or embedding models.
+    """
 
     chunk_id: str
 

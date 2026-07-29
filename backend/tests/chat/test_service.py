@@ -73,6 +73,7 @@ class FakeVectorStore(
         self,
         query_embedding: EmbeddingVector,
         limit: int = 10,
+        where: dict | None = None,
     ) -> list[SearchHit]:
         """Return deterministic search hits."""
 

@@ -15,6 +15,8 @@ class SearchQuery(BaseModel):
 
     limit: int = 10
 
+    root_directory: str | None = None
+
 
 class SearchHit(BaseModel):
     """Candidate returned from vector search."""

@@ -73,6 +73,13 @@ class IndexingService:
                     document,
                 )
 
+                root_dir_str = str(
+                    root_directory,
+                )
+
+                for chunk in chunks:
+                    chunk.metadata.root_directory = root_dir_str
+
                 result = self._indexer.index(
                     chunks,
                 )

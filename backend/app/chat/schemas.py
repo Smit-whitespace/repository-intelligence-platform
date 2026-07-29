@@ -15,10 +15,19 @@ class ChatRequest(BaseModel):
         ],
     )
 
+    root_directory: str | None = Field(
+        default=None,
+        description="Active project root directory for scoping retrieval.",
+        examples=[
+            "/home/user/projects/my-project",
+        ],
+    )
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "query": "Explain the editing workflow.",
+                "root_directory": "/home/user/projects/my-project",
             },
         },
     )

@@ -26,6 +26,7 @@ class VectorStore(ABC):
         self,
         query_embedding: EmbeddingVector,
         limit: int = 10,
+        where: dict | None = None,
     ) -> list[SearchHit]:
         """Return the most similar indexed chunks."""
 

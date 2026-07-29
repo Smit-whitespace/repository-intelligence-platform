@@ -29,11 +29,11 @@ export function DashboardPage() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="animate-fade-in space-y-8">
       <div>
-        <h2 className="text-xl font-semibold">Dashboard</h2>
-        <p className="text-sm text-muted-foreground">
-          Repository Intelligence Platform (RIP) workspace status.
+        <h1 className="text-lg font-semibold text-[#F8FAFC]">Dashboard</h1>
+        <p className="mt-1 text-sm text-[#7A8599]">
+          Workspace status and overview.
         </p>
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -52,9 +52,8 @@ export function DashboardPage() {
         />
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-md border border-border bg-surface p-4">
-          <h3 className="text-sm font-semibold">Project</h3>
-          <dl className="mt-3 space-y-2 text-sm">
+        <Panel title="Project">
+          <dl className="space-y-4 text-sm">
             <Row label="Name" value={activeProject?.name ?? "No project open"} />
             <Row
               label="Repository"
@@ -75,10 +74,9 @@ export function DashboardPage() {
               value={repository.data ? "available" : status.data?.indexing_state ?? "unknown"}
             />
           </dl>
-        </section>
-        <section className="rounded-md border border-border bg-surface p-4">
-          <h3 className="text-sm font-semibold">Repository summary</h3>
-          <dl className="mt-3 space-y-2 text-sm">
+        </Panel>
+        <Panel title="Repository summary">
+          <dl className="space-y-4 text-sm">
             <Row
               label="Files"
               value={repository.data?.summary.files.toLocaleString() ?? "none"}
@@ -104,7 +102,7 @@ export function DashboardPage() {
               }
             />
           </dl>
-        </section>
+        </Panel>
       </div>
     </section>
   );
@@ -118,13 +116,15 @@ type MetricProps = {
 
 function Metric({ label, value, tone = "default" }: MetricProps) {
   return (
-    <div className="rounded-md border border-border bg-surface p-4">
-      <p className="text-xs uppercase text-muted-foreground">{label}</p>
+    <div className="rounded-[var(--radius)] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-5">
+      <p className="text-xs font-medium uppercase tracking-wider text-[#7A8599]">
+        {label}
+      </p>
       <p
         className={
           tone === "ok"
-            ? "mt-2 text-sm font-semibold text-primary"
-            : "mt-2 text-sm font-semibold"
+            ? "mt-2 text-sm font-semibold text-[#10B981]"
+            : "mt-2 text-sm font-semibold text-[#F8FAFC]"
         }
       >
         {value}
@@ -140,11 +140,25 @@ type RowProps = {
 
 function Row({ label, value }: RowProps) {
   return (
-    <div className="grid gap-2 sm:grid-cols-[8rem_1fr]">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 truncate font-medium" title={value}>
+    <div className="flex items-start justify-between gap-4">
+      <dt className="shrink-0 text-[#7A8599]">{label}</dt>
+      <dd className="min-w-0 truncate text-right font-medium text-[#F8FAFC]" title={value}>
         {value}
       </dd>
     </div>
+  );
+}
+
+type PanelProps = {
+  title: string;
+  children: React.ReactNode;
+};
+
+function Panel({ title, children }: PanelProps) {
+  return (
+    <section className="rounded-[var(--radius)] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-5">
+      <h3 className="text-sm font-semibold text-[#F8FAFC]">{title}</h3>
+      <div className="mt-4">{children}</div>
+    </section>
   );
 }

@@ -175,6 +175,61 @@ class TestSearch:
 
         assert store.search.call_args[1]["limit"] == 5
 
+    def test_passes_where_filter_when_root_directory_set(
+        self,
+    ) -> None:
+        """Search should forward the where filter when root_directory is set."""
+
+        service, provider, store = create_service()
+
+        provider.embed.return_value = [
+            EmbeddingVector(
+                values=[1.0, 2.0, 3.0],
+            ),
+        ]
+
+        store.search.return_value = [
+            create_hit(),
+        ]
+
+        service.search(
+            SearchQuery(
+                query="test",
+                root_directory="/projects/foo",
+            ),
+        )
+
+        store.search.assert_called_once()
+
+        assert store.search.call_args[1]["where"] == {
+            "root_directory": "/projects/foo",
+        }
+
+    def test_where_is_none_when_no_root_directory(
+        self,
+    ) -> None:
+        """Search should not filter when root_directory is not set."""
+
+        service, provider, store = create_service()
+
+        provider.embed.return_value = [
+            EmbeddingVector(
+                values=[1.0, 2.0, 3.0],
+            ),
+        ]
+
+        store.search.return_value = [
+            create_hit(),
+        ]
+
+        service.search(
+            SearchQuery(query="test"),
+        )
+
+        store.search.assert_called_once()
+
+        assert store.search.call_args[1]["where"] is None
+
     def test_embeds_query(
         self,
     ) -> None:

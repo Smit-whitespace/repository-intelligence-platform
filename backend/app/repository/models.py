@@ -78,6 +78,8 @@ class RepositoryChunkMetadata(BaseModel):
 
     sha256: str
 
+    root_directory: str = ""
+
 
 class ChunkType(StrEnum):
     """Repository chunk type."""

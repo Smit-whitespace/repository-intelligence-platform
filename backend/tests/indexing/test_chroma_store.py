@@ -124,6 +124,7 @@ def test_add_stores_indexed_chunks() -> None:
                 "language": "python",
                 "mime_type": "text/x-python",
                 "sha256": "abc123",
+                "root_directory": "",
                 "start_line": 1,
                 "end_line": 2,
                 "chunk_type": "function",
@@ -210,6 +211,7 @@ def test_search_returns_search_hits() -> None:
             ],
         ],
         n_results=5,
+        where=None,
     )
 
     assert len(
@@ -264,6 +266,42 @@ def test_search_returns_search_hits() -> None:
         hit.vector_score
         == 0.123
     )
+def test_search_passes_where_filter() -> None:
+    """Search should forward the where filter to Chroma."""
+
+    (
+        store,
+        _client,
+        collection,
+    ) = create_store()
+
+    collection.query.return_value = {}
+
+    store.search(
+        EmbeddingVector(
+            values=[
+                1.0,
+            ],
+        ),
+        limit=10,
+        where={
+            "root_directory": "/projects/foo",
+        },
+    )
+
+    collection.query.assert_called_once_with(
+        query_embeddings=[
+            [
+                1.0,
+            ],
+        ],
+        n_results=10,
+        where={
+            "root_directory": "/projects/foo",
+        },
+    )
+
+
 def test_search_returns_empty_list_for_empty_response() -> None:
     """Empty Chroma response should return no search hits."""
 

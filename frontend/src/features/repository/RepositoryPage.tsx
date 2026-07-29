@@ -26,10 +26,10 @@ export function RepositoryPage() {
 
   if (!activeProject) {
     return (
-      <section className="space-y-6">
+      <section className="animate-fade-in space-y-8">
         <div>
-          <h2 className="text-xl font-semibold">Repository</h2>
-          <p className="text-sm text-muted-foreground">
+          <h1 className="text-lg font-semibold text-[#F8FAFC]">Search</h1>
+          <p className="mt-1 text-sm text-[#7A8599]">
             Repository overview and indexing state.
           </p>
         </div>
@@ -42,10 +42,10 @@ export function RepositoryPage() {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="animate-fade-in space-y-8">
       <div>
-        <h2 className="text-xl font-semibold">Repository</h2>
-        <p className="text-sm text-muted-foreground">
+        <h1 className="text-lg font-semibold text-[#F8FAFC]">Search</h1>
+        <p className="mt-1 font-mono text-xs text-[#7A8599]">
           {activeProject.root_directory}
         </p>
       </div>
@@ -71,19 +71,21 @@ export function RepositoryPage() {
           <div className="grid gap-4 xl:grid-cols-3">
             <Panel title="Supported languages">
               {languages.length ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {languages.map((language) => (
                     <div
                       key={language.name}
                       className="flex items-center justify-between gap-3 text-sm"
                     >
-                      <span>{language.name}</span>
-                      <span className="text-muted-foreground">{language.count}</span>
+                      <span className="text-[#AAB4C5]">{language.name}</span>
+                      <span className="text-xs text-[#7A8599]">
+                        {language.count}
+                      </span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm text-[#7A8599]">
                   No language metadata reported.
                 </p>
               )}
@@ -96,7 +98,7 @@ export function RepositoryPage() {
             </Panel>
           </div>
           <Panel title="Repository metadata">
-            <dl className="grid gap-3 text-sm md:grid-cols-2">
+            <dl className="grid gap-4 text-sm md:grid-cols-2">
               <Detail label="Project" value={activeProject.name} />
               <Detail label="Root" value={activeProject.root_directory} />
               <Detail label="Entries" value={entries.length.toLocaleString()} />
@@ -116,9 +118,11 @@ type MetricProps = {
 
 function Metric({ label, value }: MetricProps) {
   return (
-    <div className="rounded-md border border-border bg-surface p-4">
-      <p className="text-xs uppercase text-muted-foreground">{label}</p>
-      <p className="mt-2 text-sm font-semibold">{value}</p>
+    <div className="rounded-[var(--radius)] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-5">
+      <p className="text-xs font-medium uppercase tracking-wider text-[#7A8599]">
+        {label}
+      </p>
+      <p className="mt-2 text-sm font-semibold text-[#F8FAFC]">{value}</p>
     </div>
   );
 }
@@ -130,9 +134,9 @@ type PanelProps = {
 
 function Panel({ title, children }: PanelProps) {
   return (
-    <section className="rounded-md border border-border bg-surface p-4">
-      <h3 className="text-sm font-semibold">{title}</h3>
-      <div className="mt-3">{children}</div>
+    <section className="rounded-[var(--radius)] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-5">
+      <h3 className="text-sm font-semibold text-[#F8FAFC]">{title}</h3>
+      <div className="mt-4">{children}</div>
     </section>
   );
 }
@@ -144,17 +148,20 @@ type FileListProps = {
 
 function FileList({ entries, mode }: FileListProps) {
   if (!entries.length) {
-    return <p className="text-sm text-muted-foreground">No files reported.</p>;
+    return <p className="text-sm text-[#7A8599]">No files reported.</p>;
   }
 
   return (
     <div className="space-y-3">
       {entries.map((entry) => (
         <div key={entry.relative_path} className="min-w-0 text-sm">
-          <p className="truncate font-medium" title={entry.relative_path}>
+          <p
+            className="truncate font-mono text-xs text-[#AAB4C5]"
+            title={entry.relative_path}
+          >
             {entry.relative_path}
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="mt-0.5 text-xs text-[#7A8599]">
             {mode === "size"
               ? formatBytes(entry.size_bytes ?? 0)
               : formatDate(entry.modified_at)}
@@ -173,8 +180,8 @@ type DetailProps = {
 function Detail({ label, value }: DetailProps) {
   return (
     <div>
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words font-medium">{value}</dd>
+      <dt className="text-xs font-medium text-[#7A8599]">{label}</dt>
+      <dd className="mt-1 break-words font-mono text-xs text-[#AAB4C5]">{value}</dd>
     </div>
   );
 }

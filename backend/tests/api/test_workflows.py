@@ -91,6 +91,7 @@ class FakeVectorStore(VectorStore):
         self,
         query_embedding: EmbeddingVector,
         limit: int = 10,
+        where: dict | None = None,
     ) -> list[SearchHit]:
         """Return one repository search hit."""
 

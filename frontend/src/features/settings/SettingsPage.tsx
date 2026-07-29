@@ -46,87 +46,107 @@ export function SettingsPage() {
     "";
 
   return (
-    <section className="space-y-6">
+    <section className="animate-fade-in space-y-8">
       <div>
-        <h2 className="text-xl font-semibold">Settings</h2>
-        <p className="text-sm text-muted-foreground">
-          Backend-supported application settings.
+        <h1 className="text-lg font-semibold text-[#F8FAFC]">Settings</h1>
+        <p className="mt-1 text-sm text-[#7A8599]">
+          Application configuration.
         </p>
       </div>
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-md border border-border bg-surface p-4">
-          <h3 className="text-sm font-semibold">Theme</h3>
-          <select
-            value={theme}
-            onChange={(event) => setTheme(event.target.value as ThemeMode)}
-            className="mt-3 h-9 w-full rounded-md border border-border bg-background px-2 text-sm"
-          >
-            {themeOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </div>
-        <form
-          className="rounded-md border border-border bg-surface p-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (!modelValue) {
-              return;
-            }
-            updateActiveModel.mutate(
-              {
-                model: modelValue,
-              },
-              {
-                onSuccess: () => {
-                  setSelectedModel(null);
-                  toast.success("Active model updated");
-                },
-              },
-            );
-          }}
-        >
-          <h3 className="text-sm font-semibold">Backend model</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Provider: {activeModel.data?.active_provider ?? status.data?.active_provider}
-          </p>
-          <div className="mt-3 flex flex-col gap-3 md:flex-row">
-            <select
-              value={modelValue}
-              onChange={(event) => setSelectedModel(event.target.value)}
-              className="h-9 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-sm"
-            >
-              {models.data?.models.length ? (
-                models.data.models.map((model) => (
-                  <option key={model.name} value={model.name}>
-                    {model.name}
-                  </option>
-                ))
-              ) : (
-                <option value="">No installed models</option>
-              )}
-            </select>
-            <Button type="submit" disabled={!canSave}>
-              {updateActiveModel.isPending ? (
-                <RefreshCw className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
-              ) : (
-                <Save className="mr-2 h-4 w-4" aria-hidden="true" />
-              )}
-              Save
-            </Button>
+        <Panel title="Theme">
+          <div className="mt-4 space-y-3">
+            <div className="flex gap-2">
+              {themeOptions.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setTheme(option)}
+                  className={
+                    theme === option
+                      ? "flex-1 rounded-[var(--radius-sm)] border border-[#4F8CFF] bg-[rgba(79,140,255,0.08)] px-3 py-2 text-sm font-medium text-[#F8FAFC] transition"
+                      : "flex-1 rounded-[var(--radius-sm)] border border-[rgba(255,255,255,0.1)] bg-transparent px-3 py-2 text-sm text-[#AAB4C5] transition hover:border-[rgba(255,255,255,0.2)] hover:text-[#F8FAFC]"
+                  }
+                >
+                  {option.charAt(0).toUpperCase() + option.slice(1)}
+                </button>
+              ))}
+            </div>
           </div>
-          {models.isError ? (
-            <p className="mt-3 text-sm text-red-500">{models.error.message}</p>
-          ) : null}
-          {updateActiveModel.isError ? (
-            <p className="mt-3 text-sm text-red-500">
-              {updateActiveModel.error.message}
+        </Panel>
+        <Panel title="Backend model">
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!modelValue) {
+                return;
+              }
+              updateActiveModel.mutate(
+                {
+                  model: modelValue,
+                },
+                {
+                  onSuccess: () => {
+                    setSelectedModel(null);
+                    toast.success("Active model updated");
+                  },
+                },
+              );
+            }}
+          >
+            <p className="mt-1 text-sm text-[#7A8599]">
+              Provider: {activeModel.data?.active_provider ?? status.data?.active_provider}
             </p>
-          ) : null}
-        </form>
+            <div className="mt-4 flex flex-col gap-3 md:flex-row">
+              <select
+                value={modelValue}
+                onChange={(event) => setSelectedModel(event.target.value)}
+                className="h-9 min-w-0 flex-1 rounded-[var(--radius-sm)] border border-[rgba(255,255,255,0.1)] bg-[#0A0F1E] px-3 text-sm text-[#F8FAFC] outline-none transition focus:border-[#4F8CFF]/50"
+              >
+                {models.data?.models.length ? (
+                  models.data.models.map((model) => (
+                    <option key={model.name} value={model.name}>
+                      {model.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="">No installed models</option>
+                )}
+              </select>
+              <Button type="submit" disabled={!canSave}>
+                {updateActiveModel.isPending ? (
+                  <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Save className="h-4 w-4" aria-hidden="true" />
+                )}
+                Save
+              </Button>
+            </div>
+            {models.isError ? (
+              <p className="mt-3 text-sm text-[#EF4444]">{models.error.message}</p>
+            ) : null}
+            {updateActiveModel.isError ? (
+              <p className="mt-3 text-sm text-[#EF4444]">
+                {updateActiveModel.error.message}
+              </p>
+            ) : null}
+          </form>
+        </Panel>
       </div>
+    </section>
+  );
+}
+
+type PanelProps = {
+  title: string;
+  children: React.ReactNode;
+};
+
+function Panel({ title, children }: PanelProps) {
+  return (
+    <section className="rounded-[var(--radius)] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-5">
+      <h3 className="text-sm font-semibold text-[#F8FAFC]">{title}</h3>
+      {children}
     </section>
   );
 }

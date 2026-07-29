@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import pytest
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -185,7 +186,14 @@ def test_no_custom_middleware_is_registered() -> None:
 
     application = main.create_application()
 
-    assert application.user_middleware == []
+    middleware_classes = [
+        m.cls
+        for m in application.user_middleware
+    ]
+
+    assert middleware_classes == [
+        CORSMiddleware,
+    ]
 
 
 def test_dependency_providers_are_cached_and_wired() -> None:

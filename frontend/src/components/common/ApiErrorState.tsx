@@ -12,10 +12,12 @@ export function ApiErrorState({ error }: ApiErrorStateProps) {
       : "The backend request could not be completed.";
 
   return (
-    <div className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-md border border-border bg-surface p-6 text-center">
-      <AlertTriangle className="h-5 w-5 text-red-500" aria-hidden="true" />
-      <h2 className="text-sm font-semibold">Request failed</h2>
-      <p className="max-w-lg text-sm text-muted-foreground">{message}</p>
+    <div className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-[var(--radius)] border border-[rgba(239,68,68,0.2)] bg-[rgba(239,68,68,0.06)] p-8 text-center">
+      <div className="rounded-[var(--radius-sm)] bg-[rgba(239,68,68,0.1)] p-2">
+        <AlertTriangle className="h-5 w-5 text-[#EF4444]" aria-hidden="true" />
+      </div>
+      <h2 className="text-sm font-semibold text-[#F8FAFC]">Request failed</h2>
+      <p className="max-w-md text-sm leading-relaxed text-[#AAB4C5]">{message}</p>
     </div>
   );
 }

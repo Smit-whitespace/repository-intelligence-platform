@@ -8,12 +8,12 @@ export function StatusBar() {
   const connected = data?.backend_health === "healthy";
 
   return (
-    <footer className="flex items-center justify-between border-t border-border bg-surface px-4 text-xs text-muted-foreground">
+    <footer className="flex items-center justify-between border-t border-[rgba(255,255,255,0.06)] bg-[#111827] px-4 text-xs text-[#7A8599]">
       <div className="flex items-center gap-2">
         {connected ? (
-          <Wifi className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+          <Wifi className="h-3.5 w-3.5 text-[#10B981]" aria-hidden="true" />
         ) : (
-          <WifiOff className="h-3.5 w-3.5 text-red-500" aria-hidden="true" />
+          <WifiOff className="h-3.5 w-3.5 text-[#EF4444]" aria-hidden="true" />
         )}
         <span>
           {isLoading
@@ -26,7 +26,7 @@ export function StatusBar() {
         </span>
       </div>
       <span className="min-w-0 truncate">
-        {activeProject ? `${activeProject.name} - ` : ""}
+        {activeProject ? `${activeProject.name} — ` : ""}
         {data ? `${data.active_provider}: ${data.active_model}` : "No model"}
       </span>
     </footer>

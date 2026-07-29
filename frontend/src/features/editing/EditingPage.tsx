@@ -2,10 +2,12 @@ import { EmptyState } from "@/components/common/EmptyState";
 
 export function EditingPage() {
   return (
-    <section className="space-y-6">
+    <section className="animate-fade-in space-y-8">
       <div>
-        <h2 className="text-xl font-semibold">Editing</h2>
-        <p className="text-sm text-muted-foreground">Editing workflow foundation.</p>
+        <h1 className="text-lg font-semibold text-[#F8FAFC]">Editing</h1>
+        <p className="mt-1 text-sm text-[#7A8599]">
+          Plan, review, and apply code changes.
+        </p>
       </div>
       <EmptyState
         title="Editing — Available Soon"

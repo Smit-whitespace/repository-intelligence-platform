@@ -13,6 +13,7 @@ from app.indexing.models import (
     IndexedChunk,
 )
 from app.repository.models import (
+    ChunkBoundary,
     RepositoryChunkMetadata,
 )
 
@@ -32,7 +33,7 @@ def main() -> None:
 
     chunk = IndexedChunk(
         chunk_id="demo",
-        text="Hello RIP",
+        content="Hello RIP",
         embedding=EmbeddingVector(
             values=[0.1, 0.2, 0.3],
         ),
@@ -43,6 +44,10 @@ def main() -> None:
             language="Python",
             mime_type="text/x-python",
             sha256="demo",
+        ),
+        boundary=ChunkBoundary(
+            start_line=1,
+            end_line=1,
         ),
     )
 

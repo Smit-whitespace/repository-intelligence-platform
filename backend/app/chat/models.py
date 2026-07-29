@@ -34,6 +34,8 @@ class ChatRequest(BaseModel):
 
     query: str
 
+    root_directory: str | None = None
+
 
 class ChatResponse(BaseModel):
     """Complete chat response."""

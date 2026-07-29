@@ -30,20 +30,39 @@ class RetrievalService:
     ) -> SearchResponse:
         """Perform semantic retrieval."""
 
+        import logging
+        logging.warning("[INSTRUMENT] RetrievalService.search() — query=%r, limit=%s, root_directory=%s", query.query, query.limit, query.root_directory)
+
         query_embedding = self._embedding_provider.embed(
             [
                 query.query,
             ],
         )[0]
 
+        where = (
+            {"root_directory": query.root_directory}
+            if query.root_directory is not None
+            else None
+        )
+
         search_hits = self._vector_store.search(
             query_embedding=query_embedding,
             limit=query.limit,
+            where=where,
         )
+
+        logging.warning("[INSTRUMENT] VectorStore returned %d raw hits (where=%s)", len(search_hits), where)
+        for i, hit in enumerate(search_hits):
+            logging.warning(
+                "[INSTRUMENT]   hit[%s]: chunk_id=%r, path=%r, score=%s",
+                i, hit.chunk_id, str(hit.metadata.relative_path), hit.vector_score,
+            )
 
         search_hits = self._deduplicate(
             search_hits,
         )
+
+        logging.warning("[INSTRUMENT] After dedup: %d hits", len(search_hits))
 
         search_results = [
             SearchResult(

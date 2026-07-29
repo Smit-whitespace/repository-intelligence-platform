@@ -30,7 +30,7 @@ export class ErrorBoundary extends Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen bg-background p-8 text-foreground">
+        <div className="flex min-h-screen items-center justify-center bg-[#0A0F1E] p-8">
           <EmptyState
             title="Something went wrong"
             description="Refresh the page to restart the application shell."

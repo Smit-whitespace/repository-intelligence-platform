@@ -98,10 +98,14 @@ class DefaultContextAssembly(
     ) -> ContextAssemblyResponse:
         """Assemble repository context into a chat prompt."""
 
+        import logging
+        logging.warning("[INSTRUMENT] ContextAssembly.assemble() — %d results received, min_similarity=%s", len(request.results), self._min_similarity)
+
         results = list(request.results)
 
         # Filter low-similarity noise
         results = [r for r in results if r.similarity_score >= self._min_similarity]
+        logging.warning("[INSTRUMENT] After similarity filter (>=%s): %d results remain", self._min_similarity, len(results))
 
         # Deduplicate by exact content match
         seen: set[str] = set()
@@ -111,8 +115,10 @@ class DefaultContextAssembly(
                 seen.add(r.content)
                 deduped.append(r)
         results = deduped
+        logging.warning("[INSTRUMENT] After content dedup: %d results remain", len(results))
 
         if not results:
+            logging.warning("[INSTRUMENT] No results — using INSTRUCTION_WITHOUT_CONTEXT prompt")
             return ContextAssemblyResponse(
                 prompt=ChatPrompt(
                     messages=[
@@ -141,6 +147,12 @@ class DefaultContextAssembly(
             key=lambda g: max(r.similarity_score for r in g),
             reverse=True,
         )
+
+        logging.warning("[INSTRUMENT] After grouping: %d file groups", len(sorted_groups))
+        for g in sorted_groups:
+            p = g[0].metadata.relative_path
+            s = max(r.similarity_score for r in g)
+            logging.warning("[INSTRUMENT]   group: path=%s, chunks=%d, max_score=%.3f", p, len(g), s)
 
         # Build context overview
         overview = self._build_context_overview(sorted_groups)
@@ -180,6 +192,10 @@ class DefaultContextAssembly(
             total_tokens += block_token_count
 
         repository_context = "\n\n".join(blocks)
+
+        logging.warning("[INSTRUMENT] Final context assembled — %d tokens, %d blocks", total_tokens, len(blocks))
+        logging.warning("[INSTRUMENT] Context overview:\n%s", overview)
+        logging.warning("[INSTRUMENT] SYSTEM instruction: %s", _INSTRUCTION_WITH_CONTEXT[:100])
 
         prompt = ChatPrompt(
             messages=[

@@ -1,6 +1,5 @@
 import { Copy } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/Button";
 
 type MarkdownMessageProps = {
   content: string;
@@ -21,7 +20,7 @@ export function MarkdownMessage({ content }: MarkdownMessageProps) {
   const segments = parseMarkdown(content);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {segments.map((segment, index) =>
         segment.type === "code" ? (
           <CodeBlock
@@ -48,11 +47,11 @@ function TextBlock({ content }: { content: string }) {
   }
 
   return (
-    <div className="space-y-2 text-sm leading-6">
+    <div className="space-y-2 leading-7">
       {lines.map((line, index) =>
         line.startsWith("- ") ? (
-          <p key={`${line}-${index}`} className="pl-3">
-            <span className="text-muted-foreground">- </span>
+          <p key={`${line}-${index}`} className="pl-4">
+            <span className="text-[#7A8599]">- </span>
             {renderInline(line.slice(2))}
           </p>
         ) : (
@@ -65,23 +64,24 @@ function TextBlock({ content }: { content: string }) {
 
 function CodeBlock({ code, language }: { code: string; language: string }) {
   return (
-    <div className="overflow-hidden rounded-md border border-border bg-background">
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
-        <span className="text-xs uppercase text-muted-foreground">
+    <div className="overflow-hidden rounded-[var(--radius-sm)] border border-[rgba(255,255,255,0.06)] bg-[#0A0F1E]">
+      <div className="flex items-center justify-between border-b border-[rgba(255,255,255,0.06)] bg-[#111827] px-4 py-2">
+        <span className="text-xs font-medium text-[#7A8599]">
           {language || "code"}
         </span>
-        <Button
-          className="h-7 bg-muted px-2 text-foreground"
+        <button
+          type="button"
           onClick={() => {
             void navigator.clipboard.writeText(code);
             toast.success("Code copied");
           }}
+          className="flex items-center gap-1.5 rounded-[4px] px-2 py-1 text-xs text-[#7A8599] transition hover:bg-[rgba(255,255,255,0.06)] hover:text-[#F8FAFC]"
         >
-          <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          <Copy className="h-3 w-3" />
           Copy
-        </Button>
+        </button>
       </div>
-      <pre className="overflow-x-auto p-3 text-xs leading-5">
+      <pre className="overflow-x-auto p-4 text-xs leading-6">
         <code>{highlightCode(code)}</code>
       </pre>
     </div>
@@ -134,7 +134,7 @@ function renderInline(line: string) {
     part.startsWith("`") && part.endsWith("`") ? (
       <code
         key={`${part}-${index}`}
-        className="rounded bg-muted px-1 py-0.5 text-xs"
+        className="rounded bg-[rgba(79,140,255,0.1)] px-1.5 py-0.5 text-xs font-mono text-[#22D3EE]"
       >
         {part.slice(1, -1)}
       </code>
@@ -151,7 +151,7 @@ function highlightCode(code: string) {
 
   return tokens.map((token, index) =>
     keywordPattern.test(token) ? (
-      <span key={`${token}-${index}`} className="text-primary">
+      <span key={`${token}-${index}`} className="text-[#4F8CFF]">
         {token}
       </span>
     ) : (

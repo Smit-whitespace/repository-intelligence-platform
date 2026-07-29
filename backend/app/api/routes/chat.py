@@ -47,9 +47,13 @@ def chat(
 ) -> ChatResponse:
     """Generate a repository-aware chat response."""
 
+    import logging
+    logging.warning("[INSTRUMENT] chat() called — query=%r, root_directory=%s", request.query, request.root_directory)
+
     response = chat_service.chat(
         models.ChatRequest(
             query=request.query,
+            root_directory=request.root_directory,
         ),
     )
 
@@ -87,6 +91,13 @@ def stream_chat(
             "Explain the editing workflow.",
         ],
     ),
+    root_directory: str | None = Query(
+        default=None,
+        description="Active project root directory for scoping retrieval.",
+        examples=[
+            "/home/user/projects/my-project",
+        ],
+    ),
     chat_service: ChatService = Depends(
         get_chat_service,
     ),
@@ -98,6 +109,7 @@ def stream_chat(
             chat_service.stream(
                 models.ChatRequest(
                     query=query,
+                    root_directory=root_directory,
                 ),
             ),
         ),

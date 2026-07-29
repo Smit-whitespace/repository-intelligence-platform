@@ -1,4 +1,4 @@
-import { Copy, RefreshCw, Send, Trash2, X } from "lucide-react";
+import { Copy, Send, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
@@ -28,6 +28,7 @@ export function ChatPage() {
   const streamRef = useRef<StreamClient | null>(null);
   const hadContentRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     listRef.current?.scrollTo({
@@ -84,59 +85,77 @@ export function ChatPage() {
     );
   }
 
+  function handleKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  }
+
   return (
-    <section className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
+    <section className="animate-fade-in flex h-full flex-col">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Chat</h2>
-          <p className="text-sm text-muted-foreground">
-            Repository-aware conversation using the active backend model.
+          <h1 className="text-lg font-semibold text-[#F8FAFC]">Chat</h1>
+          <p className="mt-1 text-sm text-[#7A8599]">
+            Repository-aware conversation.
           </p>
         </div>
-        <div className="rounded-md border border-border bg-surface px-3 py-2 text-sm">
-          <span className="text-muted-foreground">Model </span>
-          <span className="font-medium">
+        <div className="flex items-center gap-3">
+          <span className="rounded-[var(--radius-sm)] bg-[#1A2335] px-3 py-1.5 text-xs text-[#AAB4C5]">
             {activeModel.data?.active_model ?? "loading"}
           </span>
+          {messages.length > 0 ? (
+            <Button
+              variant="ghost"
+              onClick={() => {
+                clearConversation();
+                setError(null);
+              }}
+              disabled={isStreaming}
+              className="h-8 px-2"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          ) : null}
         </div>
       </div>
+
       {activeModel.isError ? <ApiErrorState error={activeModel.error} /> : null}
-      {!activeProject ? (
-        <EmptyState
-          title="No project open"
-          description="Open a project to provide repository context for chat."
-        />
-      ) : null}
+
       <div
         ref={listRef}
-        className="min-h-[24rem] flex-1 overflow-y-auto rounded-md border border-border bg-surface p-4"
+        className="flex-1 overflow-y-auto"
       >
         {messages.length ? (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {messages.map((message) => (
-              <MessageBubble key={message.id} message={message} />
+              <MessageBlock key={message.id} message={message} />
             ))}
             {isStreaming ? (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" />
-                Streaming response
+              <div className="flex items-center gap-2 pl-9">
+                <span className="h-1.5 w-1.5 animate-pulse-blue rounded-full bg-[#4F8CFF]" />
+                <span className="text-xs text-[#7A8599]">Generating response</span>
               </div>
             ) : null}
           </div>
         ) : (
           <EmptyState
             title="Ask a repository question"
-            description="Questions are sent to the backend chat stream and answered with repository context."
+            description="Type a question about your open repository. RIP will retrieve relevant context and generate an answer."
+            className="min-h-48"
           />
         )}
       </div>
+
       {error ? (
-        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-600">
+        <div className="mb-4 rounded-[var(--radius-sm)] border border-[rgba(239,68,68,0.2)] bg-[rgba(239,68,68,0.06)] px-4 py-3 text-sm text-[#EF4444]">
           {error}
         </div>
       ) : null}
+
       <form
-        className="rounded-md border border-border bg-surface p-3"
+        className="mt-4"
         onSubmit={(event) => {
           event.preventDefault();
           sendMessage();
@@ -145,78 +164,88 @@ export function ChatPage() {
         <label className="sr-only" htmlFor="chatQuery">
           Chat query
         </label>
-        <textarea
-          id="chatQuery"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Ask about the open repository..."
-          className="min-h-24 w-full resize-none rounded-md border border-border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-primary"
-        />
-        <div className="mt-3 flex flex-wrap justify-between gap-2">
-          <Button
-            className="bg-muted text-foreground"
-            onClick={() => {
-              clearConversation();
-              setError(null);
-            }}
-            disabled={isStreaming || messages.length === 0}
-          >
-            <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-            Clear
-          </Button>
-          <div className="flex gap-2">
+        <div className="relative rounded-[var(--radius)] border border-[rgba(255,255,255,0.1)] bg-[#111827] transition-colors focus-within:border-[#4F8CFF]/50">
+          <textarea
+            ref={inputRef}
+            id="chatQuery"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask a question about your repository..."
+            rows={3}
+            className="min-h-[52px] w-full resize-none bg-transparent px-4 py-3.5 pr-12 text-sm text-[#F8FAFC] placeholder-[#7A8599] outline-none"
+          />
+          <div className="absolute bottom-2 right-2 flex items-center gap-1">
             {isStreaming ? (
-              <Button className="bg-muted text-foreground" onClick={stopStreaming}>
-                <X className="mr-2 h-4 w-4" aria-hidden="true" />
-                Stop
-              </Button>
-            ) : null}
-            <Button type="submit" disabled={!query.trim() || isStreaming}>
-              <Send className="mr-2 h-4 w-4" aria-hidden="true" />
-              Send
-            </Button>
+              <button
+                type="button"
+                onClick={stopStreaming}
+                className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-gradient-to-r from-[#4F8CFF] to-[#8B5CF6] text-white transition hover:opacity-90"
+              >
+                <Square className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!query.trim()}
+                className="flex h-8 w-8 items-center justify-center rounded-[var(--radius-sm)] bg-gradient-to-r from-[#4F8CFF] to-[#8B5CF6] text-white transition hover:opacity-90 disabled:opacity-30"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         </div>
+        <p className="mt-2 text-xs text-[#7A8599]">
+          Press Enter to send, Shift+Enter for new line
+        </p>
       </form>
     </section>
   );
 }
 
-function MessageBubble({ message }: { message: ChatMessage }) {
+function MessageBlock({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
 
   return (
-    <article
-      className={cn(
-        "rounded-md border border-border p-3",
-        isUser ? "ml-auto max-w-[80%] bg-primary text-primary-foreground" : "bg-background",
-      )}
-    >
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase">
-          {isUser ? "You" : "RIP"}
-        </span>
-        <Button
+    <article className="animate-slide-in group">
+      <div className="flex items-start gap-3">
+        <div
           className={cn(
-            "h-7 bg-muted px-2 text-foreground",
-            isUser && "bg-primary-foreground text-primary",
+            "flex h-7 w-7 shrink-0 items-center justify-center rounded-[var(--radius-sm)] text-[11px] font-semibold",
+            isUser
+              ? "bg-[#1A2335] text-[#AAB4C5]"
+              : "bg-gradient-to-br from-[#4F8CFF] to-[#8B5CF6] text-white",
           )}
-          onClick={() => {
-            void navigator.clipboard.writeText(message.content);
-            toast.success("Message copied");
-          }}
         >
-          <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden="true" />
-          Copy
-        </Button>
+          {isUser ? "U" : "R"}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center gap-2">
+            <span className="text-xs font-medium text-[#F8FAFC]">
+              {isUser ? "You" : "RIP"}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(message.content);
+                toast.success("Message copied");
+              }}
+              className="opacity-0 transition-opacity group-hover:opacity-100"
+            >
+              <Copy className="h-3 w-3 text-[#7A8599] hover:text-[#F8FAFC]" />
+            </button>
+          </div>
+          <div className="text-sm leading-relaxed text-[#AAB4C5]">
+            {isUser ? (
+              <p className="whitespace-pre-wrap">{message.content}</p>
+            ) : message.content ? (
+              <MarkdownMessage content={message.content} />
+            ) : (
+              <p className="text-[#7A8599]">Waiting for response...</p>
+            )}
+          </div>
+        </div>
       </div>
-      {isUser ? (
-        <p className="whitespace-pre-wrap text-sm leading-6">{message.content}</p>
-      ) : message.content ? (
-        <MarkdownMessage content={message.content} />
-      ) : (
-        <p className="text-sm text-muted-foreground">Waiting for response...</p>
-      )}
     </article>
   );
 }

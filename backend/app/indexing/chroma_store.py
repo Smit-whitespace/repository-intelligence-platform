@@ -74,8 +74,12 @@ class ChromaVectorStore(VectorStore):
         self,
         query_embedding: EmbeddingVector,
         limit: int = 10,
+        where: dict | None = None,
     ) -> list[SearchHit]:
         """Return the most similar indexed chunks."""
+
+        import logging
+        logging.warning("[INSTRUMENT] ChromaVectorStore.search() — collection=%r, limit=%s, where=%s", self._collection.name, limit, where)
 
         raw_result = cast(
             dict[str, Any],
@@ -87,6 +91,7 @@ class ChromaVectorStore(VectorStore):
                     ],
                 ),
                 n_results=limit,
+                where=where,
             ),
         )
 
@@ -123,6 +128,7 @@ class ChromaVectorStore(VectorStore):
         )
 
         if not ids or not documents or not metadatas or not distances:
+            logging.warning("[INSTRUMENT] Chroma query returned empty (no matching chunks)")
             return []
 
         batch_ids = ids[0]

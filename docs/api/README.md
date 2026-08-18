@@ -2,7 +2,7 @@
 
 > **Status:** Complete
 > **Sprint Introduced:** Sprint 4
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 > **Reading Time:** 5 minutes
 > **Audience:** Backend and frontend contributors
 > **Prerequisites:** [Architecture Overview](../architecture/system-overview.md)
@@ -38,7 +38,7 @@ Initiates the full project initialization pipeline (validate → persist → sca
 
 **Request:** `OpenProjectRequest` — `root_directory: Path`
 
-**Response:** `OpenProjectResponse` — `project: str`, `root_directory: Path`
+**Response:** `OpenProjectResponse` — `project: str`, `root_directory: Path`, `indexing_diagnostics` (optional; present when a full index ran)
 
 **See:** [Project Management Architecture](../architecture/backend/project-management.md), ADR-0009, ADR-0013
 
@@ -73,15 +73,17 @@ Initiates the full project initialization pipeline (validate → persist → sca
 
 ### POST /chat
 
-**Request:** `ChatRequest` — `query: str`
+**Request:** `ChatRequest` — `query: str`, `root_directory: str | None` (optional; scopes retrieval to the opened project)
 
 **Response:** `ChatResponse` — `content: str`
 
 ### GET /chat/stream
 
-**Query:** `query: str`
+**Query:** `query: str`, `root_directory: str | None` (optional)
 
 **Response:** `text/event-stream` — `data: <content>\n\n`
+
+> Retrieval is project-scoped: a chat request without `root_directory` (or for a project that has never been indexed) receives no repository context.
 
 **See:** [Chat Architecture](../architecture/backend/chat.md)
 

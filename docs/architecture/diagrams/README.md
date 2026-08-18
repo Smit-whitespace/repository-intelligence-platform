@@ -1,7 +1,7 @@
 # Reusable Architecture Diagrams
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 
 ---
 
@@ -30,8 +30,9 @@ graph TD
     CHAT --> CA["Context Assembly"]
     CHAT --> LLM["AI Provider (Ollama)"]
     EDIT --> SS["Snapshot Store"]
-    INDEX --> VS["Vector Store (ChromaDB)"]
-    RET --> VS
+    INDEX --> VR["VectorStoreResolver"]
+    RET --> VR
+    VR --> VS["Vector Store (ChromaDB)"]
     PM --> FS["Filesystem"]
     EDIT --> FS
 ```
@@ -78,7 +79,8 @@ graph LR
     RC["RepositoryChunk"] --> IS["IndexingService"]
     IS --> IX["RepositoryIndexer"]
     IX --> EP["EmbeddingProvider (Ollama)"]
-    IX --> VS["VectorStore (ChromaDB)"]
+    IX --> VR["VectorStoreResolver"]
+    VR --> VS["VectorStore (ChromaDB)"]
     EP --> EMB["EmbeddingVector"]
     EMB --> IC["IndexedChunk"]
     IC --> VS
@@ -91,7 +93,8 @@ graph LR
 graph LR
     CS["ChatService"] --> RS["RetrievalService"]
     RS --> EP["EmbeddingProvider"]
-    RS --> VS2["VectorStore"]
+    RS --> VR["VectorStoreResolver"]
+    VR --> VS2["VectorStore"]
     EP --> QEMB["Query Embedding"]
     VS2 --> DB2[("ChromaDB")]
     VS2 --> RESULTS["Search Results"]
@@ -109,8 +112,8 @@ sequenceDiagram
     participant CA as ContextAssembly
     participant LLM as ChatProvider
 
-    User->>CS: chat(query)
-    CS->>RS: search(query)
+    User->>CS: chat(query, root_directory?)
+    CS->>RS: search(query, root_directory?)
     RS-->>CS: SearchResponse
     CS->>CA: assemble(query, results)
     CA-->>CS: ContextAssemblyResponse (prompt)
@@ -157,14 +160,14 @@ graph TD
     RET --> CHAT["Chat"]
     CHAT --> CA["Context Assembly"]
     CHAT --> LLM["ChatProvider"]
-    IDX --> STO["Storage"]
-    PM --> STO
+    IDX --> VR["VectorStoreResolver"]
+    RET --> VR
+    VR --> VS["VectorStore"]
+    PM --> STO["Storage"]
     EDIT["Editing"] --> STO
     EDIT --> LLM
     IDX --> EMB["EmbeddingProvider"]
     RET --> EMB
-    RET --> VS["VectorStore"]
-    IDX --> VS
 ```
 
 ### Storage Relationships
@@ -174,8 +177,9 @@ graph LR
     PM["ProjectService"] --> SPR["StorageProvider"]
     SS["SnapshotStore"] --> SPR
     SPR --> FS[("Filesystem")]
-    IX["RepositoryIndexer"] --> VS3["VectorStore"]
-    RS["RetrievalService"] --> VS3
+    IX["RepositoryIndexer"] --> VR["VectorStoreResolver"]
+    RS["RetrievalService"] --> VR
+    VR --> VS3["VectorStore"]
     VS3 --> CDB[("ChromaDB")]
 ```
 

@@ -32,6 +32,7 @@ from app.indexing.retrieval_models import (
 from app.indexing.retrieval_service import (
     RetrievalService,
 )
+from app.indexing.store_resolver import StaticVectorStoreResolver
 from app.indexing.stores import VectorStore
 from app.repository.models import (
     ChunkBoundary,
@@ -106,6 +107,14 @@ class FakeVectorStore(
         chunk_ids: Sequence[str],
     ) -> None:
         """Delete indexed chunks."""
+
+    def get_chunk_ids(
+        self,
+        where: dict | None = None,
+    ) -> list[str]:
+        """Return ids of chunks matching the filter."""
+
+        return []
 
     def clear(
         self,
@@ -214,7 +223,9 @@ def create_chat_service() -> tuple[
 
     retrieval_service = RetrievalService(
         embedding_provider=FakeEmbeddingProvider(),
-        vector_store=FakeVectorStore(),
+        vector_store_resolver=StaticVectorStoreResolver(
+            FakeVectorStore(),
+        ),
     )
 
     context_assembly = (

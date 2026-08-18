@@ -295,7 +295,7 @@ BENCHMARKS: list[RetrievalTestCase] = [
         ],
         expected_symbols=[
             "get_embedding_provider",
-            "get_vector_store",
+            "get_vector_store_resolver",
             "get_retrieval_service",
             "get_context_assembly",
         ],

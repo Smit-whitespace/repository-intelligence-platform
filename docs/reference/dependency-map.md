@@ -1,7 +1,7 @@
 # Dependency Map
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 
 ---
 
@@ -22,8 +22,9 @@ graph TD
     EDIT --> LLM
     IDX --> EMB["EmbeddingProvider"]
     RET --> EMB
-    RET --> VS["VectorStore"]
-    IDX --> VS
+    IDX --> VR["VectorStoreResolver"]
+    RET --> VR
+    VR --> VS["VectorStore"]
 ```
 
 ## Allowed Dependencies
@@ -32,8 +33,8 @@ graph TD
 |-----------|--------------|
 | Project Management | Repository, Indexing, Storage |
 | Repository | (nothing — foundational) |
-| Indexing | Repository, Storage, EmbeddingProvider, VectorStore |
-| Retrieval | EmbeddingProvider, VectorStore |
+| Indexing | Repository, Storage, EmbeddingProvider, VectorStoreResolver |
+| Retrieval | EmbeddingProvider, VectorStoreResolver |
 | Chat | Retrieval, ContextAssembly, ChatProvider |
 | Context Assembly | (nothing — stand-alone) |
 | Editing | Storage, ChatProvider |

@@ -47,9 +47,6 @@ def chat(
 ) -> ChatResponse:
     """Generate a repository-aware chat response."""
 
-    import logging
-    logging.warning("[INSTRUMENT] chat() called — query=%r, root_directory=%s", request.query, request.root_directory)
-
     response = chat_service.chat(
         models.ChatRequest(
             query=request.query,

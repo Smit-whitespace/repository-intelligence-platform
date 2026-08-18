@@ -3,10 +3,6 @@ name = "local-openclaw"
 version = "0.1.0"
 description = "Repository Intelligence Platform — offline-first, repository-aware AI coding assistant"
 requires-python = ">=3.12,<3.13"
-
-[project.urls]
-Homepage = "https://github.com/Smit-whitespace/repository-intelligence-platform"
-Documentation = "https://github.com/Smit-whitespace/repository-intelligence-platform/tree/main/docs"
 dependencies = [
     "chromadb==1.0.20",
     "fastapi==0.138.1",
@@ -19,6 +15,10 @@ dependencies = [
     "uvicorn[standard]==0.49.0",
     "watchdog==6.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Smit-whitespace/repository-intelligence-platform"
+Documentation = "https://github.com/Smit-whitespace/repository-intelligence-platform/tree/main/docs"
 
 [dependency-groups]
 dev = [

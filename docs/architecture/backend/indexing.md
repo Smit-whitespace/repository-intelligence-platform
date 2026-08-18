@@ -2,11 +2,11 @@
 
 > **Status:** Complete
 > **Sprint Introduced:** Sprint 4
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 > **Reading Time:** 4 minutes
 > **Audience:** Backend contributors
 > **Prerequisites:** [Repository](repository.md)
-> **Related ADRs:** ADR-0003, ADR-0016
+> **Related ADRs:** ADR-0003, ADR-0016, ADR-0010
 > **Related APIs:** `POST /projects/open` (triggers indexing)
 > **Next Reading:** [Retrieval](retrieval.md)
 
@@ -46,7 +46,8 @@ graph LR
     RC["RepositoryChunk"] --> IS["IndexingService"]
     IS --> IX["RepositoryIndexer"]
     IX --> EP["EmbeddingProvider (Ollama)"]
-    IX --> VS["VectorStore (ChromaDB)"]
+    IX --> VR["VectorStoreResolver"]
+    VR --> VS["ChromaVectorStore"]
     EP --> EMB["EmbeddingVector"]
     EMB --> IC["IndexedChunk"]
     IC --> VS
@@ -94,9 +95,16 @@ sequenceDiagram
 ### RepositoryIndexer
 
 - **File:** `app/indexing/indexer.py`
-- **Dependencies:** `EmbeddingProvider`, `VectorStore`
+- **Dependencies:** `EmbeddingProvider`, `VectorStoreResolver`
 - **Methods:**
   - `index(chunks: Sequence[RepositoryChunk]) -> IndexingResult` — embed + store
+- The vector store is resolved for the chunk's `root_directory` (`VectorStoreResolver.for_project(root, create=True)`), so persistence is project-root based — never process-CWD based.
+
+### VectorStoreResolver
+
+- **File:** `app/indexing/store_resolver.py`
+- **Implementations:** `ProjectChromaStoreResolver` (per-project Chroma stores, `create=False` yields `None` for never-indexed projects), `StaticVectorStoreResolver` (test helper)
+- **Key file:** `app/core/storage/locations.py` — canonical project storage layout (`<root>/.local_openclaw/`, `index/chroma/`, `snapshots/`, `project.json`)
 
 ### IndexingResult
 
@@ -110,9 +118,10 @@ sequenceDiagram
 > [!IMPORTANT]
 
 1. Indexing **never performs retrieval**. The retrieval subsystem is a separate consumer of the vector store.
-2. Indexing **never owns vector persistence logic**. Persistence is delegated to `VectorStore`.
-3. `IndexingResult` is the sole output contract — callers receive summary counts.
-4. Indexing skips directories and non-text files silently.
+2. Indexing **never owns vector persistence logic**. Persistence is delegated to `VectorStore`, resolved through `VectorStoreResolver`.
+3. **Persistence identity comes from the opened project, not the process CWD.** Chroma persistence always resolves to `<project root>/.local_openclaw/index/chroma` for the indexed project.
+4. `IndexingResult` is the sole output contract — callers receive summary counts.
+5. Indexing skips directories and non-text files silently.
 
 ---
 

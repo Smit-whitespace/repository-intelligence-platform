@@ -16,6 +16,10 @@ from app.indexing.retrieval_models import (
 from app.indexing.retrieval_service import (
     RetrievalService,
 )
+from app.indexing.store_resolver import (
+    StaticVectorStoreResolver,
+    VectorStoreResolver,
+)
 from app.indexing.stores import VectorStore
 from app.repository.models import (
     ChunkBoundary,
@@ -92,6 +96,35 @@ class FakeFilteringVectorStore(VectorStore):
                 None,
             )
 
+    def get_chunk_ids(
+        self,
+        where: dict | None = None,
+    ) -> list[str]:
+        matching: list[
+            str
+        ] = []
+
+        for chunk in self._chunks.values():
+            if where:
+                metadata = (
+                    chunk.metadata.model_dump(
+                        mode="json",
+                    )
+                )
+                if all(
+                    metadata.get(k) == v
+                    for k, v in where.items()
+                ):
+                    matching.append(
+                        chunk.chunk_id,
+                    )
+            else:
+                matching.append(
+                    chunk.chunk_id,
+                )
+
+        return matching
+
     def clear(
         self,
     ) -> None:
@@ -150,7 +183,9 @@ def make_retrieval_service(
 
     service = RetrievalService(
         embedding_provider=provider,
-        vector_store=store,
+        vector_store_resolver=StaticVectorStoreResolver(
+            store,
+        ),
     )
 
     return service, provider
@@ -159,10 +194,15 @@ def make_retrieval_service(
 class TestProjectScopedRetrieval:
     """Regression tests for project-scoped retrieval isolation."""
 
-    def test_unscoped_search_returns_all_projects(
+    def test_unscoped_search_returns_no_results(
         self,
     ) -> None:
-        """Search without root_directory should return chunks from all repos."""
+        """Search without root_directory returns no results.
+
+        Retrieval is always scoped to a project: a query that does not
+        name a project cannot resolve a store, so it returns nothing
+        instead of leaking chunks from every repository.
+        """
 
         store = FakeFilteringVectorStore()
         store.add(
@@ -185,13 +225,39 @@ class TestProjectScopedRetrieval:
             SearchQuery(query="test"),
         )
 
-        assert {
-            r.chunk_id
-            for r in result.results
-        } == {
-            "a-1",
-            "b-1",
-        }
+        assert result.results == []
+
+    def test_unopened_project_returns_no_results(
+        self,
+    ) -> None:
+        """A project that was never indexed returns no results."""
+
+        resolver = MagicMock(
+            spec=VectorStoreResolver,
+        )
+        resolver.for_project.return_value = (
+            None
+        )
+
+        service = RetrievalService(
+            embedding_provider=MagicMock(
+                spec=EmbeddingProvider,
+            ),
+            vector_store_resolver=resolver,
+        )
+
+        result = service.search(
+            SearchQuery(
+                query="test",
+                root_directory="/projects/never-indexed",
+            ),
+        )
+
+        assert result.results == []
+
+        resolver.for_project.assert_called_once_with(
+            "/projects/never-indexed",
+        )
 
     def test_scoped_search_isolates_repository(
         self,

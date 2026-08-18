@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from app.core.storage.locations import project_storage_directory
 from app.projects.exceptions import (
     InvalidProjectError,
 )
@@ -45,8 +46,8 @@ class ProjectService:
         project = Project(
             name=root_directory.name,
             root_directory=root_directory,
-            storage_directory=(
-                root_directory / ".local_openclaw"
+            storage_directory=project_storage_directory(
+                root_directory,
             ),
         )
 
@@ -63,5 +64,7 @@ class ProjectService:
         """Return project metadata."""
 
         return self._repository.load(
-            root_directory / ".local_openclaw",
+            project_storage_directory(
+                root_directory,
+            ),
         )

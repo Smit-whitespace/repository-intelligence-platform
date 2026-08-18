@@ -31,6 +31,32 @@ class IndexedChunk(BaseModel):
     embedding: EmbeddingVector
 
 
+class FileFailureInfo(BaseModel):
+    """Information about a single indexing failure."""
+
+    relative_path: str
+
+    stage: str
+
+    exception_type: str
+
+    message: str
+
+
+class IndexingDiagnostics(BaseModel):
+    """Repository indexing diagnostics."""
+
+    total_files_discovered: int
+
+    text_files_detected: int
+
+    total_chunks_created: int
+
+    indexing_duration_ms: int
+
+    failed_files_details: list[FileFailureInfo]
+
+
 class IndexingResult(BaseModel):
     """Repository indexing summary."""
 
@@ -43,6 +69,8 @@ class IndexingResult(BaseModel):
     skipped_files: int
 
     failed_files: int
+
+    diagnostics: IndexingDiagnostics | None = None
 
 
 class RepositoryIndex(BaseModel):

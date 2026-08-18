@@ -12,6 +12,7 @@ from app.indexing.retrieval_models import (
 from app.indexing.retrieval_service import (
     RetrievalService,
 )
+from app.indexing.store_resolver import StaticVectorStoreResolver
 from app.indexing.stores import VectorStore
 from app.repository.models import (
     ChunkBoundary,
@@ -64,13 +65,29 @@ def create_service() -> tuple[
 
     service = RetrievalService(
         embedding_provider=embedding_provider,
-        vector_store=vector_store,
+        vector_store_resolver=StaticVectorStoreResolver(
+            vector_store,
+        ),
     )
 
     return (
         service,
         embedding_provider,
         vector_store,
+    )
+
+
+def make_query(
+    query: str = "test",
+    *,
+    limit: int = 10,
+) -> SearchQuery:
+    """Create a project-scoped search query."""
+
+    return SearchQuery(
+        query=query,
+        root_directory="/projects/foo",
+        limit=limit,
     )
 
 
@@ -95,7 +112,7 @@ class TestSearch:
         ]
 
         result = service.search(
-            SearchQuery(query="test"),
+            make_query(),
         )
 
         assert result.query == "test"
@@ -136,7 +153,7 @@ class TestSearch:
         ]
 
         result = service.search(
-            SearchQuery(query="test"),
+            make_query(),
         )
 
         assert len(result.results) == 3
@@ -165,8 +182,7 @@ class TestSearch:
         ]
 
         service.search(
-            SearchQuery(
-                query="test",
+            make_query(
                 limit=5,
             ),
         )
@@ -205,10 +221,10 @@ class TestSearch:
             "root_directory": "/projects/foo",
         }
 
-    def test_where_is_none_when_no_root_directory(
+    def test_search_skips_store_without_root_directory(
         self,
     ) -> None:
-        """Search should not filter when root_directory is not set."""
+        """Search without a project root never touches a store."""
 
         service, provider, store = create_service()
 
@@ -222,13 +238,13 @@ class TestSearch:
             create_hit(),
         ]
 
-        service.search(
+        result = service.search(
             SearchQuery(query="test"),
         )
 
-        store.search.assert_called_once()
+        assert result.results == []
 
-        assert store.search.call_args[1]["where"] is None
+        store.search.assert_not_called()
 
     def test_embeds_query(
         self,
@@ -248,7 +264,7 @@ class TestSearch:
         ]
 
         service.search(
-            SearchQuery(query="find main function"),
+            make_query(query="find main function"),
         )
 
         provider.embed.assert_called_once_with(
@@ -273,7 +289,7 @@ class TestSearch:
         store.search.return_value = []
 
         result = service.search(
-            SearchQuery(query="test"),
+            make_query(),
         )
 
         assert result.results == []
@@ -307,7 +323,7 @@ class TestSearch:
         ]
 
         result = service.search(
-            SearchQuery(query="test"),
+            make_query(),
         )
 
         assert [r.chunk_id for r in result.results] == [
@@ -320,6 +336,132 @@ class TestSearch:
             result.results[0].similarity_score
             > result.results[1].similarity_score
             > result.results[2].similarity_score
+        )
+
+    def test_retrieves_mjs_chunks(
+        self,
+    ) -> None:
+        """Retrieval should return .mjs chunks with correct metadata."""
+
+        service, provider, store = create_service()
+
+        provider.embed.return_value = [
+            EmbeddingVector(
+                values=[1.0],
+            ),
+        ]
+
+        store.search.return_value = [
+            SearchHit(
+                chunk_id="mjs-chunk",
+                content="export const VERSION = '1.0.0';",
+                metadata=RepositoryChunkMetadata(
+                    relative_path=Path(
+                        "module.mjs",
+                    ),
+                    language="JavaScript",
+                    mime_type="text/javascript",
+                    sha256="abc123",
+                ),
+                boundary=ChunkBoundary(
+                    start_line=1,
+                    end_line=1,
+                    chunk_type=ChunkType.GENERIC,
+                ),
+                vector_score=0.5,
+            ),
+        ]
+
+        result = service.search(
+            make_query(),
+        )
+
+        assert len(
+            result.results,
+        ) == 1
+
+        hit = result.results[0]
+
+        assert (
+            hit.metadata.relative_path
+            == Path("module.mjs")
+        )
+
+        assert (
+            hit.metadata.language
+            == "JavaScript"
+        )
+
+        assert (
+            hit.metadata.mime_type
+            == "text/javascript"
+        )
+
+        assert (
+            hit.metadata.sha256 == "abc123"
+        )
+
+    def test_retrieves_cjs_chunks(
+        self,
+    ) -> None:
+        """Retrieval should return .cjs chunks with correct metadata."""
+
+        service, provider, store = create_service()
+
+        provider.embed.return_value = [
+            EmbeddingVector(
+                values=[1.0],
+            ),
+        ]
+
+        store.search.return_value = [
+            SearchHit(
+                chunk_id="cjs-chunk",
+                content="module.exports = {};",
+                metadata=RepositoryChunkMetadata(
+                    relative_path=Path(
+                        "config.cjs",
+                    ),
+                    language="JavaScript",
+                    mime_type="text/javascript",
+                    sha256="def456",
+                ),
+                boundary=ChunkBoundary(
+                    start_line=1,
+                    end_line=1,
+                    chunk_type=ChunkType.GENERIC,
+                ),
+                vector_score=0.5,
+            ),
+        ]
+
+        result = service.search(
+            make_query(),
+        )
+
+        assert len(
+            result.results,
+        ) == 1
+
+        hit = result.results[0]
+
+        assert (
+            hit.metadata.relative_path
+            == Path("config.cjs")
+        )
+
+        assert (
+            hit.metadata.language
+            == "JavaScript"
+        )
+
+        assert (
+            hit.metadata.mime_type
+            == "text/javascript"
+        )
+
+        assert (
+            hit.metadata.sha256 == "def456"
         )
 
 
@@ -355,7 +497,7 @@ class TestDeduplication:
         ]
 
         result = service.search(
-            SearchQuery(query="test"),
+            make_query(),
         )
 
         chunk_ids = [r.chunk_id for r in result.results]
@@ -402,7 +544,7 @@ class TestDeduplication:
         store.search.return_value = hits
 
         result = service.search(
-            SearchQuery(query="test"),
+            make_query(),
         )
 
         assert len(result.results) == 3
@@ -429,7 +571,7 @@ class TestDeduplication:
         store.search.return_value = []
 
         result = service.search(
-            SearchQuery(query="test"),
+            make_query(),
         )
 
         assert result.results == []

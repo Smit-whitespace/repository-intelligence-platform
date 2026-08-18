@@ -1,7 +1,7 @@
 # Project Timeline
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 > **Reading Time:** 3 minutes
 > **Audience:** All contributors
 
@@ -32,6 +32,10 @@ gantt
 
     section Integration
     Sprint 12.1 :s121, after s9, 14d
+    Sprint 12.2 :s122, after s121, 14d
+
+    section Persistence
+    Sprint 13 :s13, after s122, 14d
 ```
 
 ## Sprint Detail
@@ -117,11 +121,38 @@ gantt
 
 **Key ADRs:** 0009, 0011, 0013, 0014
 
+### Sprint 12.2 — Repository-Aware Answer Quality
+
+**Objective:** Improve the quality of repository-aware chat responses without architectural changes.
+
+**Delivered:**
+- Retrieval precision improvements (deduplication, heuristic score normalization)
+- Context assembly enhancements (similarity filtering, token budget, grounding, no-context path)
+- Standalone evaluation suite (`backend/eval/`) with 20 golden benchmarks
+
+**See:** [Sprint 12.2 freeze report](../sprints/sprint-12.2.md)
+
+### Sprint 13 — CWD-Independent Project Persistence
+
+**Objective:** Make persistence identity derive from the opened project root, never from the process working directory.
+
+**Delivered:**
+- `VectorStoreResolver` (`ProjectChromaStoreResolver`) — per-project vector store resolution at `<project root>/.local_openclaw/index/chroma`
+- Canonical project storage layout (`app/core/storage/locations.py`)
+- Project-scoped retrieval (unscoped/unindexed queries return no results)
+- Per-project snapshot stores; repository-root validation in editing
+- Windows file-handle release for Chroma clients (`close()`, `close_all()`)
+- Runtime CWD-independence verification (same store from repo-root and `backend/` CWD)
+
+**Key ADRs:** 0010 (refinement)
+
+**See:** [Sprint 13 freeze report](../sprints/sprint-13.md)
+
 ---
 
 ## Next Sprints
 
-See [Roadmap](../roadmap/) for planned sprints 12.2 through 18.
+See [Roadmap](../roadmap/) for planned sprints 14 through 18.
 
 ---
 
@@ -132,4 +163,6 @@ See [Roadmap](../roadmap/) for planned sprints 12.2 through 18.
 | Architecture Evolution | [../architecture/evolution.md](../architecture/evolution.md) |
 | Roadmap | [../roadmap/](../roadmap/) |
 | Sprint 12.1 | [../sprints/sprint-12.1.md](../sprints/sprint-12.1.md) |
+| Sprint 12.2 | [../sprints/sprint-12.2.md](../sprints/sprint-12.2.md) |
+| Sprint 13 | [../sprints/sprint-13.md](../sprints/sprint-13.md) |
 | ADR Index | [../adr/](../adr/README.md) |

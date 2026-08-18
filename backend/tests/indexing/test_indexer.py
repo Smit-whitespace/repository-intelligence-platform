@@ -16,6 +16,7 @@ from app.indexing.providers import (
 from app.indexing.retrieval_models import (
     SearchHit,
 )
+from app.indexing.store_resolver import StaticVectorStoreResolver
 from app.indexing.stores import (
     VectorStore,
 )
@@ -80,13 +81,32 @@ class FakeVectorStore(
 
         return []
 
+    def get_chunk_ids(
+        self,
+        where: dict | None = None,
+    ) -> list[str]:
+        """Return ids of chunks matching the filter."""
+
+        return [
+            chunk.chunk_id
+            for chunk in self.chunks
+        ]
+
     def delete(
         self,
         chunk_ids: Sequence[str],
     ) -> None:
         """Delete indexed chunks."""
 
-        pass
+        delete_set = set(
+            chunk_ids,
+        )
+
+        self.chunks = [
+            chunk
+            for chunk in self.chunks
+            if chunk.chunk_id not in delete_set
+        ]
 
     def clear(
         self,
@@ -117,6 +137,7 @@ def test_index_repository_chunk() -> None:
         language="Python",
         mime_type="text/x-python",
         sha256="abc",
+        root_directory="/projects/foo",
     )
 
     boundary = ChunkBoundary(
@@ -136,7 +157,9 @@ def test_index_repository_chunk() -> None:
 
     result = RepositoryIndexer(
         embedding_provider=FakeEmbeddingProvider(),
-        vector_store=vector_store,
+        vector_store_resolver=StaticVectorStoreResolver(
+            vector_store,
+        ),
     ).index(
         [
             chunk,

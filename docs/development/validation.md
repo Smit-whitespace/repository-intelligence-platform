@@ -1,18 +1,24 @@
 # Validation Workflow
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 
 ---
 
 ## Gates
 
-Three validation gates must pass before any sprint can be declared frozen:
+Three validation gates must pass before any sprint can be declared frozen. All gates run from the `backend/` directory.
 
 ## Ruff
 
 ```bash
-uv run ruff check backend/
+uv run ruff check app tests scripts eval
+```
+
+Ruff may also be run from the repository root:
+
+```bash
+uv run ruff check backend/app backend/tests backend/scripts backend/eval
 ```
 
 Checks: style, formatting, import sorting, common errors.
@@ -20,7 +26,7 @@ Checks: style, formatting, import sorting, common errors.
 ## MyPy
 
 ```bash
-uv run mypy backend/
+uv run python -m mypy app
 ```
 
 Checks: type correctness across the entire backend.
@@ -30,10 +36,12 @@ Checks: type correctness across the entire backend.
 ## Pytest
 
 ```bash
-uv run pytest
+uv run python -m pytest tests -q
 ```
 
 Runs all backend tests. Pre-existing test failures are documented in sprint freeze reports and do not block progress on unrelated changes.
+
+> [!WARNING] On Windows, running `uv` itself from the repository root can fail with `uv trampoline failed to canonicalize script path`. This is an environment/tooling quirk, not an application failure — run the gates from `backend/`, or invoke the project virtual environment directly (`.venv\Scripts\python.exe -m pytest tests -q`).
 
 ## Pre-commit
 

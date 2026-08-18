@@ -1,7 +1,7 @@
 # Naming Conventions
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 
 ---
 
@@ -11,9 +11,21 @@
 |---------|------|
 | Full name | Repository Intelligence Platform (RIP) |
 | Historical | Local OpenClaw (LOC) |
-| Package | `local-openclaw` |
+| Public repository | `repository-intelligence-platform` |
 | Application code | `app` |
 | Frontend | `frontend/` |
+
+### Public vs. Internal Identifiers
+
+Public identity is **Repository Intelligence Platform (RIP)**. Some internal compatibility identifiers from the Local OpenClaw era were intentionally retained:
+
+| Identifier | Status | Where it appears |
+|------------|--------|------------------|
+| `.local_openclaw` | Active internal storage directory | `<project root>/.local_openclaw/` (project metadata, Chroma index, snapshots) |
+| `LOC_` | Active environment variable prefix | `LOC_SERVER_PORT`, `LOC_OLLAMA_*`, `LOC_CHROMA_*`, `LOC_INDEXING_*` |
+| `local-openclaw` | Historical (package/logger names in legacy references) | Historical docs and records |
+
+> [!NOTE] `.repository-intelligence-platform` appears only as a **stale historical index store** from the pre-Sprint-13 era. It is not the current RIP index and is not described as active.
 
 ## Module Naming
 

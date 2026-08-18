@@ -1,6 +1,8 @@
 """Dependency provider implementations."""
 
+from collections.abc import Callable
 from functools import lru_cache
+from pathlib import Path
 
 from app.chat.ollama_provider import (
     OllamaChatProvider,
@@ -16,8 +18,8 @@ from app.context_assembly.service import (
     DefaultContextAssembly,
 )
 from app.core.config.settings import settings
-from app.core.storage.abstractions import StorageProvider
 from app.core.storage.filesystem import FileSystemStorage
+from app.core.storage.locations import project_storage_directory
 from app.editing.default_provider import (
     DefaultEditingProvider,
 )
@@ -27,8 +29,8 @@ from app.editing.providers import (
 from app.editing.service import (
     EditingService,
 )
-from app.indexing.chroma_store import (
-    ChromaVectorStore,
+from app.editing.snapshot_store import (
+    SnapshotStore,
 )
 from app.indexing.indexer import (
     RepositoryIndexer,
@@ -43,8 +45,8 @@ from app.indexing.retrieval_service import (
     RetrievalService,
 )
 from app.indexing.service import IndexingService
-from app.indexing.stores import (
-    VectorStore,
+from app.indexing.store_resolver import (
+    ProjectChromaStoreResolver,
 )
 from app.projects.initialization_service import (
     ProjectInitializationService,
@@ -63,22 +65,6 @@ from app.repository.service import RepositoryService
 from app.editing.change_applier import (
     ChangeApplier,
 )
-from app.editing.snapshot_store import (
-    SnapshotStore,
-)
-
-
-@lru_cache(maxsize=1)
-def get_storage() -> StorageProvider:
-    """Return the application storage provider."""
-
-    storage = FileSystemStorage(
-        root_directory=settings.storage.root_directory,
-    )
-
-    storage.initialize()
-
-    return storage
 
 
 @lru_cache(maxsize=1)
@@ -145,11 +131,11 @@ def get_embedding_provider() -> EmbeddingProvider:
 
 
 @lru_cache(maxsize=1)
-def get_vector_store() -> VectorStore:
-    """Return the vector store."""
+def get_vector_store_resolver() -> ProjectChromaStoreResolver:
+    """Return the project-scoped vector store resolver."""
 
-    return ChromaVectorStore(
-        settings.chroma,
+    return ProjectChromaStoreResolver(
+        collection_name=settings.chroma.collection_name,
     )
 
 
@@ -159,7 +145,7 @@ def get_repository_indexer() -> RepositoryIndexer:
 
     return RepositoryIndexer(
         embedding_provider=get_embedding_provider(),
-        vector_store=get_vector_store(),
+        vector_store_resolver=get_vector_store_resolver(),
     )
 
 
@@ -182,7 +168,7 @@ def get_retrieval_service() -> RetrievalService:
 
     return RetrievalService(
         embedding_provider=get_embedding_provider(),
-        vector_store=get_vector_store(),
+        vector_store_resolver=get_vector_store_resolver(),
     )
 
 
@@ -227,7 +213,7 @@ def get_editing_service() -> EditingService:
     return EditingService(
         editing_provider=get_editing_provider(),
         change_applier=get_change_applier(),
-        snapshot_store=get_snapshot_store(),
+        snapshot_store_factory=get_snapshot_store_factory(),
     )
 
 
@@ -239,12 +225,32 @@ def get_change_applier() -> ChangeApplier:
 
 
 @lru_cache(maxsize=1)
-def get_snapshot_store() -> SnapshotStore:
-    """Return the snapshot store."""
+def get_snapshot_store_factory() -> Callable[[Path], SnapshotStore]:
+    """Return a project-scoped snapshot store factory.
 
-    return SnapshotStore(
-        storage=get_storage(),
-    )
+    Each project persists snapshots under its own canonical storage
+    directory (``<root>/.local_openclaw/snapshots``), derived from the
+    project root — never from the process working directory.
+    """
+
+    def create_snapshot_store(
+        repository_root: Path,
+    ) -> SnapshotStore:
+        """Create a snapshot store rooted at a project's storage dir."""
+
+        storage = FileSystemStorage(
+            root_directory=project_storage_directory(
+                repository_root,
+            ),
+        )
+
+        storage.initialize()
+
+        return SnapshotStore(
+            storage=storage,
+        )
+
+    return create_snapshot_store
 
 
 @lru_cache(maxsize=1)

@@ -5,6 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel
+from pydantic import ConfigDict
 
 
 class RepositoryEntry(BaseModel):
@@ -70,11 +71,15 @@ class RepositoryDocument(BaseModel):
 class RepositoryChunkMetadata(BaseModel):
     """Repository chunk metadata."""
 
+    model_config = ConfigDict(
+        frozen=True,
+    )
+
     relative_path: Path
 
-    language: str | None
+    language: str
 
-    mime_type: str | None
+    mime_type: str
 
     sha256: str
 

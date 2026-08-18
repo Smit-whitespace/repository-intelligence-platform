@@ -1,7 +1,7 @@
 # Architecture Cheat Sheet
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 > **Reading Time:** 2 minutes
 > **Audience:** All contributors
 
@@ -15,13 +15,14 @@
 |-----------|-----------|----------|----------------|
 | Project Management | `app/projects/` | `service.py`, `initialization_service.py` | Project lifecycle, validation, orchestration |
 | Repository | `app/repository/` | `service.py` | Scanning, metadata, chunking |
-| Indexing | `app/indexing/` | `service.py`, `indexer.py` | Embedding, vector persistence |
-| Retrieval | `app/indexing/` | `retrieval_service.py` | Semantic search |
+| Indexing | `app/indexing/` | `service.py`, `indexer.py`, `store_resolver.py` | Embedding, vector persistence |
+| Retrieval | `app/indexing/` | `retrieval_service.py` | Project-scoped semantic search |
 | Chat | `app/chat/` | `service.py` | Repository-aware conversation |
 | Context Assembly | `app/context_assembly/` | `service.py` | Prompt construction |
 | Editing | `app/editing/` | `service.py`, `change_applier.py` | Code modification with rollback |
-| Storage | `app/core/storage/` | `filesystem.py` | Filesystem persistence |
+| Storage | `app/core/storage/` | `filesystem.py`, `locations.py` | Filesystem persistence + canonical project layout |
 | Vector Store | `app/indexing/` | `chroma_store.py` | Vector persistence + search |
+| Vector Store Resolution | `app/indexing/` | `store_resolver.py` | Per-project vector store resolution |
 | API | `app/api/routes/` | `projects.py`, `chat.py`, etc. | REST endpoints |
 
 ### Ownership Rules
@@ -29,8 +30,8 @@
 ```
 ✓ Project Management may depend on: Repository, Indexing, Storage
 ✓ Repository may depend on: (nothing — foundational)
-✓ Indexing may depend on: Repository, Storage, EmbeddingProvider, VectorStore
-✓ Retrieval may depend on: EmbeddingProvider, VectorStore
+✓ Indexing may depend on: Repository, Storage, EmbeddingProvider, VectorStoreResolver
+✓ Retrieval may depend on: EmbeddingProvider, VectorStoreResolver
 ✓ Chat may depend on: Retrieval, ContextAssembly, ChatProvider
 ✓ Editing may depend on: Storage, ChatProvider
 ✗ Chat → Indexing (never)
@@ -46,6 +47,7 @@
 |-----------|------|-----------------|
 | `EmbeddingProvider` | `app/indexing/providers.py` | `OllamaEmbeddingProvider` |
 | `VectorStore` | `app/indexing/stores.py` | `ChromaVectorStore` |
+| `VectorStoreResolver` | `app/indexing/store_resolver.py` | `ProjectChromaStoreResolver`, `StaticVectorStoreResolver` |
 | `ChatProvider` | `app/chat/providers.py` | `OllamaChatProvider` |
 | `ContextAssembly` | `app/context_assembly/providers.py` | `DefaultContextAssembly` |
 | `EditingProvider` | `app/editing/providers.py` | `DefaultEditingProvider` |
@@ -77,23 +79,41 @@ POST /projects/open
   → Project (ready for chat)
 ```
 
+### Persistence Identity (Sprint 13)
+
+```
+opened Project
+    ↓
+Project.root_directory / Project.storage_directory
+    ↓
+<project root>/.local_openclaw/            (project.json, index/chroma/, snapshots/)
+    ↓
+same store regardless of process CWD
+```
+
+Retrieval is project-scoped: searches without `root_directory` (or for unindexed projects) return no results.
+
 ### Validation Gates
 
 ```bash
-uv run ruff check backend/
-uv run mypy backend/app/
-uv run pytest
+# from the backend/ directory
+uv run ruff check app tests scripts eval
+uv run python -m mypy app
+uv run python -m pytest tests -q
 ```
 
 ### Configuration
 
-| Setting | Default |
-|---------|---------|
-| `storage.root_directory` | `~/.local-openclaw` |
-| `ollama.base_url` | `http://localhost:11434` |
-| `ollama.embedding_model` | `nomic-embed-text` |
-| `ollama.chat_model` | `qwen3:8b` |
-| `chroma.persist_directory` | `{storage.root_directory}/chroma` |
+| Setting (env key) | Default | Notes |
+|---------|---------|-------|
+| `LOC_SERVER_HOST` / `LOC_SERVER_PORT` | `127.0.0.1` / `8000` | HTTP server |
+| `LOC_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `LOC_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model |
+| `LOC_OLLAMA_CHAT_MODEL` | `qwen3:8b` | Chat model |
+| `LOC_CHROMA_COLLECTION_NAME` | `repository_chunks` | Chroma collection name |
+| Persist directory | `<project root>/.local_openclaw/index/chroma` | Derived from the opened project — not configurable |
+
+> Legacy keys `LOC_STORAGE_ROOT_DIRECTORY` and `LOC_CHROMA_PERSIST_DIRECTORY` are ignored (kept in the sample `.env` only as historical documentation).
 
 ---
 

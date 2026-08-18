@@ -2,11 +2,11 @@
 
 > **Status:** Complete
 > **Sprint Introduced:** Sprint 12.1
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 > **Reading Time:** 3 minutes
 > **Audience:** All contributors
 > **Prerequisites:** [System Overview](system-overview.md)
-> **Related ADRs:** ADR-0011, ADR-0013, ADR-0014
+> **Related ADRs:** ADR-0011, ADR-0013, ADR-0014, ADR-0010
 
 ---
 
@@ -69,9 +69,11 @@ graph LR
 - Load document content
 - Chunk documents (AST-aware for Python, line-based for others)
 - Generate embeddings via `OllamaEmbeddingProvider`
-- Persist vectors via `ChromaVectorStore`
+- Resolve and persist vectors through `VectorStoreResolver` → `ChromaVectorStore` at `<root>/.local_openclaw/index/chroma`
 
 **Output:** `IndexingResult` (scanned, indexed, skipped, failed counts)
+
+**Persistence identity (Sprint 13):** the Chroma store is resolved from the opened project root, never from the process working directory. Starting the backend from any directory yields the same store for the same project.
 
 **Error handling:**
 - Failed files are counted but do not abort the process
@@ -127,7 +129,7 @@ sequenceDiagram
 |-------|---------|--------|-------------|------------|
 | 1. Project Open | `ProjectService` | `Project` | `.local_openclaw/project.json` | Manual delete |
 | 2. Index Build | `RepositoryService` | `RepositoryIndex` | In-memory only | Re-scan |
-| 3. Repository Index | `IndexingService` | `IndexingResult` | ChromaDB vectors | Re-index |
+| 3. Repository Index | `IndexingService` | `IndexingResult` | ChromaDB vectors at `<root>/.local_openclaw/index/chroma` | Re-index |
 | 4. Ready | — | — | All of the above | Re-open |
 
 ---

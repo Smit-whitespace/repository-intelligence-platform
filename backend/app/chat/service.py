@@ -51,9 +51,6 @@ class ChatService:
     ) -> ChatResponse:
         """Generate a repository-aware chat response."""
 
-        import logging
-        logging.warning("[INSTRUMENT] ChatService.chat() — query=%r, root_directory=%s", request.query, request.root_directory)
-
         search_response = (
             self._retrieval_service.search(
                 SearchQuery(

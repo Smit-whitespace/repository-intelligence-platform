@@ -1,7 +1,7 @@
 # Environment Setup
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 
 ---
 
@@ -19,7 +19,7 @@
 ```bash
 # Clone the repository
 git clone <repository-url>
-cd local-openclaw
+cd repository-intelligence-platform
 
 # Install Python dependencies
 uv sync
@@ -28,22 +28,32 @@ uv sync
 .venv\Scripts\activate  # Windows
 source .venv/bin/activate  # Unix
 
-# Start the backend server
-uv run uvicorn app.main:app --reload
+# Start the backend server (from the backend/ directory)
+cd backend
+uv run python -m uvicorn app.main:app --reload
 ```
+
+On Windows, if `uv` fails with `uv trampoline failed to canonicalize script path`, launch the backend through the project's virtual environment directly:
+
+```powershell
+..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```
+
+> The backend resolves all project persistence from the **opened project root** (`<project root>/.local_openclaw/`), never from the process working directory. The backend may be started from any directory.
 
 ## Configuration
 
-Configuration is managed via `app/core/config/settings.py`. The settings model loads from environment variables with sensible defaults.
+Configuration is managed via `app/core/config/models.py` (`ApplicationSettings`) and assembled from `EnvironmentSettings` in `app/core/config/provider.py`. Settings load from environment variables (prefix `LOC_`) with sensible defaults. See the [Configuration Reference](../reference/configuration.md).
 
 Key configuration:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `storage.root_directory` | `~/.local-openclaw` | Application data directory |
-| `ollama.base_url` | `http://localhost:11434` | Ollama server URL |
-| `ollama.embedding_model` | `nomic-embed-text` | Embedding model |
-| `ollama.chat_model` | `qwen3:8b` | Chat model |
+| `LOC_SERVER_HOST` / `LOC_SERVER_PORT` | `127.0.0.1` / `8000` | HTTP server |
+| `LOC_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `LOC_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model |
+| `LOC_OLLAMA_CHAT_MODEL` | `qwen3:8b` | Chat model |
+| Persist directory | `<project root>/.local_openclaw/index/chroma` | Derived from the opened project — not configurable |
 
 ## Required Ollama Models
 
@@ -63,8 +73,8 @@ npm run dev
 ## Verification
 
 ```bash
-# Backend health check
-curl http://localhost:8000/health
+# Backend health check (API is versioned under /api/v1)
+curl http://localhost:8000/api/v1/health
 
 # Expected: {"status":"healthy","application":"Repository Intelligence Platform (RIP)","version":"0.1.0"}
 ```

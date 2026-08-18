@@ -5,6 +5,7 @@ from pathlib import Path
 
 _INTERNAL_EXCLUDED_NAMES = {
     ".git",
+    ".repository-intelligence-platform",
     ".local_openclaw",
     ".venv",
     "__pycache__",

@@ -9,5 +9,14 @@ build/
 htmlcov/
 __pycache__/
 *.pyc
-.local_openclaw/
+.repository-intelligence-platform/
 .env
+# Runtime logs
+*.log
+
+# Local runtime state
+.local_openclaw/
+backend/.local_openclaw/
+
+# Local generated data
+backend/data/

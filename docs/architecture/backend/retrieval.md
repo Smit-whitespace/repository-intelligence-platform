@@ -2,11 +2,11 @@
 
 > **Status:** Complete
 > **Sprint Introduced:** Sprint 5
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 > **Reading Time:** 4 minutes
 > **Audience:** Backend contributors
 > **Prerequisites:** [Indexing](indexing.md)
-> **Related ADRs:** ADR-0004, ADR-0008
+> **Related ADRs:** ADR-0004, ADR-0008, ADR-0010
 > **Related APIs:** `POST /chat` (uses retrieval internally)
 > **Next Reading:** [Chat](chat.md)
 
@@ -43,8 +43,9 @@ The Retrieval subsystem performs semantic search over indexed repository content
 ```mermaid
 graph LR
     CS["ChatService"] --> RTRV["RetrievalService"]
+    RTRV --> VR["VectorStoreResolver"]
+    VR --> VS["VectorStore (Chroma)"]
     RTRV --> EP["EmbeddingProvider"]
-    RTRV --> VS["VectorStore"]
     EP --> EMB["Query Embedding"]
     VS --> DB[("ChromaDB")]
     VS --> RESULTS["Search Results"]
@@ -60,16 +61,27 @@ graph LR
 sequenceDiagram
     participant CS as ChatService
     participant RS as RetrievalService
+    participant VR as VectorStoreResolver
     participant EP as EmbeddingProvider
     participant VS as VectorStore
 
     CS->>RS: search(SearchQuery)
-    RS->>EP: embed(query)
-    EP-->>RS: EmbeddingVector
-    RS->>VS: find_similar(embedding, limit)
-    VS-->>RS: list[SearchHit]
-    RS->>RS: map to SearchResult
-    RS-->>CS: SearchResponse
+    alt root_directory not provided
+        RS-->>CS: SearchResponse (empty results)
+    else project not indexed
+        RS->>VR: for_project(root_directory)
+        VR-->>RS: None
+        RS-->>CS: SearchResponse (empty results)
+    else
+        RS->>VR: for_project(root_directory)
+        VR-->>RS: VectorStore
+        RS->>EP: embed(query)
+        EP-->>RS: EmbeddingVector
+        RS->>VS: find_similar(embedding, limit, where={"root_directory": ...})
+        VS-->>RS: list[SearchHit]
+        RS->>RS: map to SearchResult
+        RS-->>CS: SearchResponse
+    end
 ```
 
 ---
@@ -79,14 +91,15 @@ sequenceDiagram
 ### RetrievalService
 
 - **File:** `app/indexing/retrieval_service.py`
-- **Dependencies:** `EmbeddingProvider`, `VectorStore`
+- **Dependencies:** `EmbeddingProvider`, `VectorStoreResolver`
 - **Methods:**
-  - `search(query: SearchQuery) -> SearchResponse` — embed query, search vector store, return results
+  - `search(query: SearchQuery) -> SearchResponse` — embed query, search the project-scoped vector store, return results
+- Retrieval is project-scoped: the store is resolved from `query.root_directory`. Searches without a root directory, or for projects that have never been indexed, return empty results (no cross-project leakage).
 
 ### SearchQuery
 
 - **File:** `app/indexing/retrieval_models.py`
-- Fields: `query: str`, `limit: int` (default 10)
+- Fields: `query: str`, `root_directory: str | None` (default None), `limit: int` (default 10)
 
 ### SearchHit
 
@@ -107,9 +120,10 @@ sequenceDiagram
 > [!IMPORTANT]
 
 1. **Retrieval never indexes.** It never writes to the vector store — only reads.
-2. **Retrieval never owns vector persistence.** `VectorStore` owns persistence.
-3. `SearchHit` is a **projection**, independent of `IndexedChunk`. Changes to indexing models do not require changes to retrieval models.
-4. Retrieval does not assemble prompts or interact with chat state.
+2. **Retrieval never owns vector persistence.** `VectorStore`, resolved through `VectorStoreResolver`, owns persistence.
+3. **Retrieval is project-scoped.** A query without a `root_directory`, or for a project that has never been indexed, returns no results.
+4. `SearchHit` is a **projection**, independent of `IndexedChunk`. Changes to indexing models do not require changes to retrieval models.
+5. Retrieval does not assemble prompts or interact with chat state.
 
 ---
 
@@ -136,6 +150,7 @@ Retrieval is separated from indexing to prevent circular dependencies and to all
 - Single search strategy (pure vector similarity). No hybrid or keyword search.
 - No filtering by file path, language, or date.
 - No pagination beyond the `limit` parameter.
+- Unscoped queries (no `root_directory`) return no results by design — search requires an opened, indexed project.
 
 ---
 

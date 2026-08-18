@@ -7,6 +7,7 @@ from app.indexing.retrieval_models import (
 from app.indexing.retrieval_service import (
     RetrievalService,
 )
+from app.indexing.store_resolver import StaticVectorStoreResolver
 from app.indexing.stores import VectorStore
 from eval.metrics import (
     f1_score,
@@ -28,13 +29,22 @@ class RetrievalEvaluator:
     ----------
     retrieval_service:
         The retrieval service to evaluate.
+    root_directory:
+        Optional project root to scope every search to. When omitted,
+        searches are unscoped, which returns no results; harnesses
+        should always scope evaluation to a project.
     """
 
     def __init__(
         self,
         retrieval_service: RetrievalService,
+        root_directory: str | None = None,
     ) -> None:
+        """Initialize the evaluator."""
+
         self._retrieval_service = retrieval_service
+
+        self._root_directory = root_directory
 
     def evaluate(
         self,
@@ -92,6 +102,7 @@ class RetrievalEvaluator:
         response = self._retrieval_service.search(
             SearchQuery(
                 query=case.query,
+                root_directory=self._root_directory,
                 limit=limit,
             ),
         )
@@ -147,14 +158,18 @@ class RetrievalEvaluator:
 def create_retrieval_evaluator(
     embedding_provider: EmbeddingProvider,
     vector_store: VectorStore,
+    root_directory: str | None = None,
 ) -> RetrievalEvaluator:
     """Convenience factory for creating a RetrievalEvaluator."""
 
     service = RetrievalService(
         embedding_provider=embedding_provider,
-        vector_store=vector_store,
+        vector_store_resolver=StaticVectorStoreResolver(
+            vector_store,
+        ),
     )
 
     return RetrievalEvaluator(
         retrieval_service=service,
+        root_directory=root_directory,
     )

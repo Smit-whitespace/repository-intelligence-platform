@@ -55,13 +55,14 @@ def open_project(
 ) -> OpenProjectResponse:
     """Open a project."""
 
-    project = initialization_service.open_project(
+    project, diagnostics = initialization_service.open_project(
         request.root_directory,
     )
 
     return OpenProjectResponse(
         project=project.name,
         root_directory=project.root_directory,
+        indexing_diagnostics=diagnostics,
     )
 
 

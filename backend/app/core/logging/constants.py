@@ -1,3 +1,3 @@
 """Logging constants."""
 
-APPLICATION_LOGGER_NAME = "local_openclaw"
+APPLICATION_LOGGER_NAME = "repository-intelligence-platform"

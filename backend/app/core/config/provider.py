@@ -13,7 +13,6 @@ from app.core.config.models import (
     LoggingSettings,
     OllamaSettings,
     ServerSettings,
-    StorageSettings,
 )
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
@@ -41,10 +40,6 @@ class EnvironmentSettings(BaseSettings):
 
     logging_json_logs: bool = False
 
-    storage_root_directory: Path = Path(
-        ".local_openclaw",
-    )
-
     ollama_base_url: str = "http://localhost:11434"
 
     ollama_embedding_model: str = "nomic-embed-text"
@@ -52,10 +47,6 @@ class EnvironmentSettings(BaseSettings):
     ollama_chat_model: str = "qwen3:8b"
 
     ollama_timeout_seconds: int = 120
-
-    chroma_persist_directory: Path = Path(
-        ".local_openclaw/index/chroma",
-    )
 
     chroma_collection_name: str = "repository_chunks"
 
@@ -79,9 +70,6 @@ def get_settings() -> ApplicationSettings:
             level=environment.logging_level,
             json_logs=environment.logging_json_logs,
         ),
-        storage=StorageSettings(
-            root_directory=environment.storage_root_directory,
-        ),
         ollama=OllamaSettings(
             base_url=environment.ollama_base_url,
             embedding_model=environment.ollama_embedding_model,
@@ -89,7 +77,6 @@ def get_settings() -> ApplicationSettings:
             timeout_seconds=environment.ollama_timeout_seconds,
         ),
         chroma=ChromaSettings(
-            persist_directory=environment.chroma_persist_directory,
             collection_name=environment.chroma_collection_name,
         ),
         indexing=IndexingSettings(

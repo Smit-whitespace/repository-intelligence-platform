@@ -2,7 +2,7 @@
 
 > **Status:** Complete
 > **Sprint Introduced:** Sprint 12.1
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 > **Reading Time:** 3 minutes
 > **Audience:** All contributors
 > **Prerequisites:** [System Overview](system-overview.md)
@@ -125,9 +125,43 @@ This document traces how the architecture evolved across major milestones. Each 
 
 ---
 
-## Next: Sprint 12.2 — Chat Integration
+## Sprint 12.2 — Repository-Aware Answer Quality
 
-*Planned — see [Roadmap](../../roadmap/).*
+**Objective:** Improve the quality of repository-aware chat responses through retrieval precision, context assembly structure, prompt grounding, and a repeatable evaluation framework — with no architectural changes.
+
+**Introduced:**
+- `RetrievalService.search()` deduplication and heuristic score normalization (`1 / (1 + distance)`)
+- `DefaultContextAssembly` similarity filtering, content deduplication, file-grouped ordering, token budget (`tiktoken`), grounding instructions, no-context path
+- Standalone evaluation suite (`backend/eval/`): `RetrievalEvaluator`, metrics (precision, recall, F1, MRR), 20 golden benchmarks
+
+**Key Decisions:**
+- `similarity_score` is a heuristic ranking score, not calibrated cosine similarity
+- Evaluation stays out of the application wiring (not in CI)
+
+**See:** [Sprint 12.2 freeze report](../sprints/sprint-12.2.md)
+
+---
+
+## Sprint 13 — CWD-Independent Project Persistence
+
+**Objective:** Make persistence identity derive from the opened project root, never from the backend process working directory.
+
+**Introduced:**
+- `VectorStoreResolver` (`app/indexing/store_resolver.py`) — resolves the per-project vector store from `Project.root_directory`
+- Canonical project-local layout helpers (`app/core/storage/locations.py`): `<project root>/.local_openclaw/` with `project.json`, `index/chroma/`, `snapshots/`
+- Project-scoped retrieval: queries without a root directory, or for unindexed projects, return no results
+- Per-project snapshot stores via `EditingService` factory; repository-root validation before any storage is created
+- `ChromaVectorStore.close()` / `ProjectChromaStoreResolver.close_all()` — Windows file-handle release
+- `ChromaSettings` reduced to `collection_name`; the persist directory is intentionally non-configurable
+
+**Key Decisions:**
+- Persistence identity comes from the opened project, not the process CWD
+- `.local_openclaw` / `LOC_` remain as internal compatibility identifiers (public identity is RIP)
+- The historical `.repository-intelligence-platform/index/chroma` store is not the current index and was not migrated, rewritten, merged, or deleted
+
+**Runtime verification:** backend started from the repository root **and** from `backend/` both resolve `<project root>/.local_openclaw/index/chroma` (288 files, 1431 chunks, repository-aware chat verified in both runs).
+
+**See:** [ADR-0010 refinement](../adr/adr-0010-filesystem-persistence.md), [Sprint 13 freeze report](../sprints/sprint-13.md)
 
 ---
 
@@ -138,3 +172,5 @@ This document traces how the architecture evolved across major milestones. Each 
 | System Overview | [system-overview.md](system-overview.md) |
 | Roadmap | [roadmap/](../../roadmap/) |
 | Sprint 12.1 | [sprints/sprint-12.1.md](../../sprints/sprint-12.1.md) |
+| Sprint 12.2 | [sprints/sprint-12.2.md](../../sprints/sprint-12.2.md) |
+| Sprint 13 | [sprints/sprint-13.md](../../sprints/sprint-13.md) |

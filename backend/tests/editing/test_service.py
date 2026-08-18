@@ -186,7 +186,7 @@ def test_edit() -> None:
     service = EditingService(
         editing_provider=provider,
         change_applier=applier,
-        snapshot_store=snapshot_store,
+        snapshot_store_factory=lambda _root: snapshot_store,
     )
 
     response = service.edit(
@@ -240,7 +240,9 @@ def test_edit() -> None:
     )
 
 
-def test_apply() -> None:
+def test_apply(
+    tmp_path: Path,
+) -> None:
     """Editing service should create and return a snapshot before execution."""
 
     provider = FakeEditingProvider()
@@ -252,10 +254,10 @@ def test_apply() -> None:
     service = EditingService(
         editing_provider=provider,
         change_applier=applier,
-        snapshot_store=snapshot_store,
+        snapshot_store_factory=lambda _root: snapshot_store,
     )
 
-    repository_root = Path("/repository")
+    repository_root = tmp_path
 
     change_set = ChangeSet(
         edits=[],
@@ -294,7 +296,9 @@ def test_apply() -> None:
     )
 
 
-def test_rollback_loads_snapshot_and_restores() -> None:
+def test_rollback_loads_snapshot_and_restores(
+    tmp_path: Path,
+) -> None:
     """Rollback should load a snapshot and delegate restore."""
 
     provider = FakeEditingProvider()
@@ -306,12 +310,10 @@ def test_rollback_loads_snapshot_and_restores() -> None:
     service = EditingService(
         editing_provider=provider,
         change_applier=applier,
-        snapshot_store=snapshot_store,
+        snapshot_store_factory=lambda _root: snapshot_store,
     )
 
-    repository_root = Path(
-        "/repository",
-    )
+    repository_root = tmp_path
 
     service.rollback(
         repository_root=repository_root,

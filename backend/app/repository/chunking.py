@@ -80,6 +80,16 @@ class RepositoryChunker:
                 "Repository entry must contain SHA-256."
             )
 
+        if entry.language is None:
+            raise ValueError(
+                "Repository entry must have a language."
+            )
+
+        if entry.mime_type is None:
+            raise ValueError(
+                "Repository entry must have a MIME type."
+            )
+
         document_lines = document.content.splitlines()
 
         chunks: list[

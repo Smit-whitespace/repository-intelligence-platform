@@ -31,6 +31,13 @@ class VectorStore(ABC):
         """Return the most similar indexed chunks."""
 
     @abstractmethod
+    def get_chunk_ids(
+        self,
+        where: dict | None = None,
+    ) -> list[str]:
+        """Return chunk ids matching the filter."""
+
+    @abstractmethod
     def delete(
         self,
         chunk_ids: Sequence[str],

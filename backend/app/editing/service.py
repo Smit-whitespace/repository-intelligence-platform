@@ -1,5 +1,6 @@
 """Repository Editing service."""
 
+from collections.abc import Callable
 from pathlib import Path
 
 from app.editing.change_applier import (
@@ -32,9 +33,16 @@ class EditingService:
         self,
         editing_provider: EditingProvider,
         change_applier: ChangeApplier,
-        snapshot_store: SnapshotStore,
+        snapshot_store_factory: Callable[[Path], SnapshotStore],
     ) -> None:
-        """Initialize the editing service."""
+        """Initialize the editing service.
+
+        Snapshots are persisted per project: the snapshot store is
+        created from the repository root of each apply/rollback call,
+        so snapshots always land in that project's own storage
+        directory — never in a store chosen by the process working
+        directory.
+        """
 
         self._editing_provider = (
             editing_provider
@@ -44,8 +52,8 @@ class EditingService:
             change_applier
         )
 
-        self._snapshot_store = (
-            snapshot_store
+        self._snapshot_store_factory = (
+            snapshot_store_factory
         )
 
     def edit(
@@ -65,12 +73,20 @@ class EditingService:
     ) -> str:
         """Apply a previously generated ChangeSet."""
 
+        self._validate_repository_root(
+            repository_root,
+        )
+
+        snapshot_store = self._snapshot_store_factory(
+            repository_root,
+        )
+
         snapshot = self._create_snapshot(
             repository_root=repository_root,
             change_set=change_set,
         )
 
-        self._snapshot_store.save(
+        snapshot_store.save(
             snapshot,
         )
 
@@ -88,7 +104,15 @@ class EditingService:
     ) -> None:
         """Restore a previously captured repository snapshot."""
 
-        snapshot = self._snapshot_store.load(
+        self._validate_repository_root(
+            repository_root,
+        )
+
+        snapshot_store = self._snapshot_store_factory(
+            repository_root,
+        )
+
+        snapshot = snapshot_store.load(
             snapshot_id,
         )
 
@@ -96,6 +120,28 @@ class EditingService:
             repository_root=repository_root,
             snapshot=snapshot,
         )
+
+    @staticmethod
+    def _validate_repository_root(
+        repository_root: Path,
+    ) -> None:
+        """Reject missing or non-directory repository roots.
+
+        Validated before any project-local storage is created, so an
+        invalid root can never be materialized as a side effect.
+        """
+
+        root = repository_root.resolve()
+
+        if not root.exists():
+            raise EditingError(
+                "Repository root does not exist.",
+            )
+
+        if not root.is_dir():
+            raise EditingError(
+                "Repository root is not a directory.",
+            )
 
     def _create_snapshot(
         self,

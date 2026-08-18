@@ -24,7 +24,10 @@ def main() -> None:
     settings = get_settings()
 
     store = ChromaVectorStore(
-        settings.chroma,
+        persist_directory=Path(
+            ".local_openclaw/index/chroma",
+        ),
+        collection_name=settings.chroma.collection_name,
     )
 
     print("Clearing collection...")

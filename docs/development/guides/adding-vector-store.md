@@ -1,7 +1,7 @@
 # Guide: Adding a Vector Store
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 
 ---
 
@@ -14,52 +14,57 @@ Implement a new vector store backend for semantic search (e.g., PostgreSQL+pgvec
 ### 1. Implement the Interface
 
 ```python
-from app.indexing.stores import VectorStore
-from app.indexing.models import EmbeddingVector
+from collections.abc import Sequence
+
+from app.indexing.models import EmbeddingVector, IndexedChunk
 from app.indexing.retrieval_models import SearchHit
-from app.repository.models import RepositoryChunk
+from app.indexing.stores import VectorStore
 
 
 class MyVectorStore(VectorStore):
     """MyStore adapter."""
 
-    def __init__(self, ...) -> None:
-        """Initialize connection."""
+    def add(self, chunks: Sequence[IndexedChunk]) -> None:
+        """Store indexed chunks."""
 
-    def index(
+    def search(
         self,
-        chunks: Sequence[RepositoryChunk],
-        embeddings: Sequence[EmbeddingVector],
-    ) -> IndexingResult:
-        """Store chunks with their embeddings."""
-        # Implementation specific to MyStore
-
-    def find_similar(
-        self,
-        embedding: EmbeddingVector,
-        limit: int,
+        query_embedding: EmbeddingVector,
+        limit: int = 10,
+        where: dict | None = None,
     ) -> list[SearchHit]:
-        """Search for similar vectors."""
-        # Implementation specific to MyStore
+        """Return the most similar indexed chunks."""
+
+    def get_chunk_ids(self, where: dict | None = None) -> list[str]:
+        """Return chunk ids matching the filter."""
+
+    def delete(self, chunk_ids: Sequence[str]) -> None:
+        """Delete indexed chunks."""
+
+    def clear(self) -> None:
+        """Remove all indexed chunks."""
 ```
 
-### 2. Add Provider
+### 2. Add a Resolver
 
-In `app/dependencies/providers.py`:
+Subsystems depend on the `VectorStoreResolver` protocol (`app/indexing/store_resolver.py`), never on a concrete store. Add a resolver that returns the new store for a project root:
 
 ```python
-@lru_cache(maxsize=1)
-def get_vector_store() -> VectorStore:
-    """Return the vector store."""
+class ProjectMyStoreResolver:
+    """Resolve the project-scoped MyStore for a project root."""
 
-    return MyVectorStore(
-        # configuration
-    )
+    def for_project(
+        self,
+        root_directory: str,
+        *,
+        create: bool = False,
+    ) -> VectorStore | None:
+        """Return the store for a project, or None when unavailable."""
 ```
 
-### 3. Update the Existing Provider
+### 3. Register the Resolver
 
-Replace the ChromaVectorStore provider. The indexing and retrieval subsystems require no changes — they depend on the `VectorStore` interface, not on ChromaDB.
+In `app/dependencies/providers.py`, extend `get_vector_store_resolver()` to return a resolver producing the new store. Indexing and retrieval require no changes — they depend on the resolver and the `VectorStore` interface, not on ChromaDB.
 
 ### 4. Clear and Re-Index
 
@@ -73,7 +78,7 @@ Changing vector stores invalidates existing embeddings. Clear the old store and 
 ### 5. Verify
 
 - Indexing produces results in the new store
-- Retrieval returns results from the new store
+- Retrieval returns results from the new store (per opened project, never cross-project)
 - All existing tests pass
 
 ## Related

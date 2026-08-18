@@ -10,6 +10,8 @@ _EXTENSION_LANGUAGE_MAP = {
     ".ts": "TypeScript",
     ".tsx": "TypeScript",
     ".jsx": "JavaScript",
+    ".mjs": "JavaScript",
+    ".cjs": "JavaScript",
     ".java": "Java",
     ".kt": "Kotlin",
     ".go": "Go",

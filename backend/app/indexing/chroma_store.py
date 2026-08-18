@@ -8,7 +8,6 @@ import chromadb
 from chromadb import Collection
 from chromadb.api import ClientAPI
 
-from app.core.config.models import ChromaSettings
 from app.indexing.models import (
     EmbeddingVector,
     IndexedChunk,
@@ -23,23 +22,50 @@ from app.repository.models import (
 
 
 class ChromaVectorStore(VectorStore):
-    """Persistent ChromaDB-backed vector store."""
+    """Persistent ChromaDB-backed vector store.
+
+    The persist directory is provided explicitly by the caller and is
+    derived from the project root (``<root>/.local_openclaw/index/chroma``),
+    never from the process working directory.
+    """
 
     def __init__(
         self,
-        settings: ChromaSettings,
+        persist_directory: Path,
+        collection_name: str,
     ) -> None:
         """Initialize the ChromaDB client."""
 
         self._client: ClientAPI = chromadb.PersistentClient(
             path=str(
-                settings.persist_directory,
+                persist_directory,
             ),
         )
 
         self._collection: Collection = self._client.get_or_create_collection(
-            name=settings.collection_name,
+            name=collection_name,
         )
+
+    def close(self) -> None:
+        """Stop the ChromaDB system and release its file handles.
+
+        Chroma 1.x clients keep the persistence database open for the
+        lifetime of the process; stopping the backing system releases
+        the underlying file handles so project directories can be
+        removed or moved.
+        """
+
+        try:
+            system = getattr(
+                self._client,
+                "_system",
+                None,
+            )
+        except (KeyError, AttributeError):
+            system = None
+
+        if system is not None:
+            system.stop()
 
     def add(
         self,
@@ -77,9 +103,6 @@ class ChromaVectorStore(VectorStore):
         where: dict | None = None,
     ) -> list[SearchHit]:
         """Return the most similar indexed chunks."""
-
-        import logging
-        logging.warning("[INSTRUMENT] ChromaVectorStore.search() — collection=%r, limit=%s, where=%s", self._collection.name, limit, where)
 
         raw_result = cast(
             dict[str, Any],
@@ -128,7 +151,6 @@ class ChromaVectorStore(VectorStore):
         )
 
         if not ids or not documents or not metadatas or not distances:
-            logging.warning("[INSTRUMENT] Chroma query returned empty (no matching chunks)")
             return []
 
         batch_ids = ids[0]
@@ -173,6 +195,28 @@ class ChromaVectorStore(VectorStore):
                 strict=True,
             )
         ]
+
+    def get_chunk_ids(
+        self,
+        where: dict | None = None,
+    ) -> list[str]:
+        """Return ids of chunks matching the filter."""
+
+        result = cast(
+            dict[str, Any],
+            self._collection.get(
+                where=where,
+                include=[],
+            ),
+        )
+
+        return cast(
+            list[str],
+            result.get(
+                "ids",
+                [],
+            ),
+        )
 
     def delete(
         self,
@@ -242,11 +286,11 @@ class ChromaVectorStore(VectorStore):
                 ),
             ),
             language=cast(
-                str | None,
+                str,
                 metadata["language"],
             ),
             mime_type=cast(
-                str | None,
+                str,
                 metadata["mime_type"],
             ),
             sha256=cast(

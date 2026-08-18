@@ -17,6 +17,7 @@ from app.chat.service import ChatService
 from app.context_assembly.service import (
     DefaultContextAssembly,
 )
+from app.dependencies import providers
 from app.dependencies.providers import (
     get_chat_service,
 )
@@ -32,6 +33,7 @@ from app.indexing.retrieval_models import (
 from app.indexing.retrieval_service import (
     RetrievalService,
 )
+from app.indexing.store_resolver import StaticVectorStoreResolver
 from app.indexing.stores import VectorStore
 from app.main import app
 from app.repository.models import (
@@ -123,6 +125,14 @@ class FakeVectorStore(VectorStore):
     ) -> None:
         """Delete chunks."""
 
+    def get_chunk_ids(
+        self,
+        where: dict | None = None,
+    ) -> list[str]:
+        """Return ids of chunks matching the filter."""
+
+        return []
+
     def clear(
         self,
     ) -> None:
@@ -179,7 +189,9 @@ def create_chat_service(
     return ChatService(
         retrieval_service=RetrievalService(
             embedding_provider=embedding_provider,
-            vector_store=FakeVectorStore(),
+            vector_store_resolver=StaticVectorStoreResolver(
+                FakeVectorStore(),
+            ),
         ),
         context_assembly=DefaultContextAssembly(),
         chat_provider=chat_provider,
@@ -205,6 +217,31 @@ def test_project_management_workflow(
     )
 
     assert open_response.status_code == 200
+
+    open_data = open_response.json()
+
+    assert "indexing_diagnostics" in open_data
+
+    diagnostics = open_data[
+        "indexing_diagnostics"
+    ]
+
+    assert diagnostics is not None
+
+    assert isinstance(
+        diagnostics["total_files_discovered"],
+        int,
+    )
+
+    assert isinstance(
+        diagnostics["indexing_duration_ms"],
+        int,
+    )
+
+    assert isinstance(
+        diagnostics["failed_files_details"],
+        list,
+    )
 
     assert (tmp_path / ".local_openclaw" / "project.json").exists()
 
@@ -264,6 +301,8 @@ def test_project_info_handles_deleted_project(
     )
 
     assert open_response.status_code == 200
+
+    providers.get_vector_store_resolver().close_all()
 
     shutil.rmtree(
         tmp_path,
@@ -414,6 +453,7 @@ def test_repository_aware_chat_workflow() -> None:
         "/api/v1/chat",
         json={
             "query": "What does main.py do?",
+            "root_directory": "/projects/foo",
         },
     )
 
@@ -495,6 +535,7 @@ def test_chat_propagates_retrieval_errors() -> None:
         "/api/v1/chat",
         json={
             "query": "Explain main.py",
+            "root_directory": "/projects/foo",
         },
     )
 

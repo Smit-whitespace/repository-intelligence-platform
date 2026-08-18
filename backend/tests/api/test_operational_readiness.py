@@ -232,10 +232,10 @@ def test_environment_configuration_overrides(
         "9123",
     )
     monkeypatch.setenv(
-        "LOC_STORAGE_ROOT_DIRECTORY",
+        "LOC_CHROMA_PERSIST_DIRECTORY",
         str(
             tmp_path
-            / "storage",
+            / "legacy-relative-persist-dir",
         ),
     )
 
@@ -247,9 +247,13 @@ def test_environment_configuration_overrides(
     )
 
     assert (
-        settings.storage.root_directory
-        == tmp_path
-        / "storage"
+        settings.chroma.collection_name
+        == "repository_chunks"
+    )
+
+    assert not hasattr(
+        settings.chroma,
+        "persist_directory",
     )
 
     get_settings.cache_clear()

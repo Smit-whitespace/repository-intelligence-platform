@@ -34,8 +34,9 @@ graph TD
     CHAT --> CONTEXT["Context Assembly"]
     CHAT --> AI["AI Provider (Ollama)"]
     EDIT --> SNAPSHOT["Snapshot Store"]
-    INDEX --> VECTOR["Vector Store (ChromaDB)"]
-    RETRIEVAL --> VECTOR
+    INDEX --> VR["Vector Store Resolver"]
+    RETRIEVAL --> VR
+    VR --> VECTOR["Vector Store (ChromaDB)"]
     PM --> STORAGE["Filesystem"]
     EDIT --> STORAGE
 ```
@@ -92,6 +93,7 @@ sequenceDiagram
 4. **Retrieval never indexes.** `RetrievalService` performs search only.
 5. **Storage never contains business logic.** Storage owns persistence mechanisms only.
 6. **ProjectInitializationService orchestrates only.** It delegates all work and contains no business logic.
+7. **Persistence identity comes from the opened project.** All project-local persistence (metadata, vectors, snapshots) lives under `<project root>/.local_openclaw/` and is independent of the process working directory.
 
 ---
 

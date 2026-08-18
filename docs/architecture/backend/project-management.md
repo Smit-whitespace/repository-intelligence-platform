@@ -2,11 +2,11 @@
 
 > **Status:** Complete
 > **Sprint Introduced:** Sprint 4
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 > **Reading Time:** 4 minutes
 > **Audience:** Backend contributors
 > **Prerequisites:** [System Overview](../system-overview.md)
-> **Related ADRs:** ADR-0009, ADR-0011, ADR-0013
+> **Related ADRs:** ADR-0009, ADR-0011, ADR-0013, ADR-0010
 > **Related APIs:** `POST /projects/open`, `GET /projects/info`
 > **Next Reading:** [Repository](repository.md)
 
@@ -108,7 +108,7 @@ sequenceDiagram
 
 1. A project must be persisted **before** indexing begins. `ProjectService.open_project()` runs first.
 2. Project identity is derived from the root directory path. Two opens of the same directory produce the same project name.
-3. Storage directory is always `<root_directory>/.local_openclaw/`.
+3. Storage directory is always `<root_directory>/.local_openclaw/` — persistence identity comes from the opened project, never the process working directory.
 4. `ProjectInitializationService` must never contain business logic — only orchestration.
 
 ---

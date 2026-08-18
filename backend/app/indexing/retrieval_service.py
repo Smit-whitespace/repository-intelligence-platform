@@ -7,22 +7,29 @@ from app.indexing.retrieval_models import (
     SearchResponse,
     SearchResult,
 )
-from app.indexing.stores import VectorStore
+from app.indexing.store_resolver import VectorStoreResolver
 
 
 class RetrievalService:
-    """Semantic repository retrieval."""
+    """Semantic repository retrieval.
+
+    Retrieval is scoped to the project identified by
+    ``SearchQuery.root_directory``. The vector store is resolved from
+    the project root so retrieval never depends on the process working
+    directory. A query without a project root (no project opened) and a
+    project that has never been indexed both return no results.
+    """
 
     def __init__(
         self,
         embedding_provider: EmbeddingProvider,
-        vector_store: VectorStore,
+        vector_store_resolver: VectorStoreResolver,
     ) -> None:
         """Initialize the retrieval service."""
 
         self._embedding_provider = embedding_provider
 
-        self._vector_store = vector_store
+        self._vector_store_resolver = vector_store_resolver
 
     def search(
         self,
@@ -30,8 +37,21 @@ class RetrievalService:
     ) -> SearchResponse:
         """Perform semantic retrieval."""
 
-        import logging
-        logging.warning("[INSTRUMENT] RetrievalService.search() — query=%r, limit=%s, root_directory=%s", query.query, query.limit, query.root_directory)
+        if not query.root_directory:
+            return SearchResponse(
+                query=query.query,
+                results=[],
+            )
+
+        vector_store = self._vector_store_resolver.for_project(
+            query.root_directory,
+        )
+
+        if vector_store is None:
+            return SearchResponse(
+                query=query.query,
+                results=[],
+            )
 
         query_embedding = self._embedding_provider.embed(
             [
@@ -39,30 +59,17 @@ class RetrievalService:
             ],
         )[0]
 
-        where = (
-            {"root_directory": query.root_directory}
-            if query.root_directory is not None
-            else None
-        )
+        where = {"root_directory": query.root_directory}
 
-        search_hits = self._vector_store.search(
+        search_hits = vector_store.search(
             query_embedding=query_embedding,
             limit=query.limit,
             where=where,
         )
 
-        logging.warning("[INSTRUMENT] VectorStore returned %d raw hits (where=%s)", len(search_hits), where)
-        for i, hit in enumerate(search_hits):
-            logging.warning(
-                "[INSTRUMENT]   hit[%s]: chunk_id=%r, path=%r, score=%s",
-                i, hit.chunk_id, str(hit.metadata.relative_path), hit.vector_score,
-            )
-
         search_hits = self._deduplicate(
             search_hits,
         )
-
-        logging.warning("[INSTRUMENT] After dedup: %d hits", len(search_hits))
 
         search_results = [
             SearchResult(

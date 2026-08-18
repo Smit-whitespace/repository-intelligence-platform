@@ -3,6 +3,8 @@
 **Date:** 2026-07-27
 **Repository:** https://github.com/Smit-whitespace/repository-intelligence-platform
 
+> [!NOTE] **Sprint 13 update:** the tables below record the identifier state at the time of the branding pass. The final Sprint 13 decision is that the internal storage directory is **`.local_openclaw`** (underscore) — per opened project root — and the environment prefix is **`LOC_`**; these were intentionally retained as internal compatibility identifiers. `.repository-intelligence-platform` is **not** used by the current implementation; it exists only as a stale historical index store from the pre-Sprint-13 era (see [ADR-0010 refinement](adr/adr-0010-filesystem-persistence.md) and [Sprint 13](sprints/sprint-13.md)).
+
 ---
 
 ## 1. Executive Summary
@@ -93,26 +95,26 @@ Preserved historical references:
 
 | File | Line | Reference | Classification |
 |------|------|-----------|----------------|
-| `backend/app/projects/service.py` | 49, 66 | `.local_openclaw` | Filesystem path |
-| `backend/app/projects/schemas.py` | 77, 94 | `.local_openclaw` | Filesystem path example |
-| `backend/app/repository/ignore.py` | 8 | `.local_openclaw` | Filesystem path |
-| `backend/app/core/config/provider.py` | 23, 30, 45, 57 | `LOC_`, `.local_openclaw` | Internal implementation |
-| `backend/app/core/config/models.py` | 25, 44 | `.local_openclaw` | Internal implementation |
-| `backend/app/core/logging/constants.py` | 3 | `local_openclaw` (logger name) | Internal implementation |
+| `backend/app/projects/service.py` | 49, 66 | `.repository-intelligence-platform` | Filesystem path |
+| `backend/app/projects/schemas.py` | 77, 94 | `.repository-intelligence-platform` | Filesystem path example |
+| `backend/app/repository/ignore.py` | 8 | `.repository-intelligence-platform` | Filesystem path |
+| `backend/app/core/config/provider.py` | 23, 30, 45, 57 | `LOC_`, `.repository-intelligence-platform` | Internal implementation |
+| `backend/app/core/config/models.py` | 25, 44 | `.repository-intelligence-platform` | Internal implementation |
+| `backend/app/core/logging/constants.py` | 3 | `repository-intelligence-platform` (logger name) | Internal implementation |
 | `pyproject.toml` | 2 | `name = "local-openclaw"` | Package name (intentional legacy) |
-| `README.md` | 50 | `.local_openclaw` directory | User-facing doc (filesystem path) |
+| `README.md` | 50 | `.repository-intelligence-platform` directory | User-facing doc (filesystem path) |
 
 ### Test Fixtures (no user-facing impact)
 
 | File | Line | Reference | Classification |
 |------|------|-----------|----------------|
-| `backend/tests/repository/test_scanner.py` | 48, 50 | `.local_openclaw` | Test fixture |
+| `backend/tests/repository/test_scanner.py` | 48, 50 | `.repository-intelligence-platform` | Test fixture |
 | `backend/tests/indexing/test_service.py` | 108 | `"# Local OpenClaw"` | Test fixture (markdown heading) |
-| `backend/tests/api/test_workflows.py` | 208, 295 | `.local_openclaw` | Test fixture |
+| `backend/tests/api/test_workflows.py` | 208, 295 | `.repository-intelligence-platform` | Test fixture |
 | `backend/tests/api/test_openapi_contract.py` | 161 | `"Z:/local-openclaw/does-not-exist"` | Test fixture path |
 | `backend/tests/api/test_operational_readiness.py` | 223, 227, 258 | `LOC_SERVER_PORT`, `LOC_STORAGE_ROOT_DIRECTORY` | Test fixture (env vars) |
 | `backend/tests/api/test_frontend_readiness.py` | 85, 181 | `LOC_OLLAMA_CHAT_MODEL` | Test fixture (env vars) |
-| `frontend/src/stores/projectStore.test.ts` | 12 | `.local_openclaw` | Test fixture |
+| `frontend/src/stores/projectStore.test.ts` | 12 | `.repository-intelligence-platform` | Test fixture |
 
 ### Documentation References (intentional legacy / filesystem paths)
 
@@ -122,9 +124,9 @@ Preserved historical references:
 | `docs/reference/architecture-cheat-sheet.md` | 92 | `~/.local-openclaw` | Architecture reference (intentional legacy) |
 | `docs/development/environment.md` | 22 | `cd local-openclaw` | Development guide (clone directory name) |
 | `docs/development/environment.md` | 43 | `~/.local-openclaw` | Development guide (config default) |
-| `docs/architecture/repository-lifecycle.md` | 38, 128 | `.local_openclaw/` | Architecture doc (filesystem path) |
-| `docs/architecture/backend/project-management.md` | 51, 101, 111 | `.local_openclaw/` | Architecture doc (filesystem path) |
-| `docs/adr/adr-0010-filesystem-persistence.md` | 11, 18 | `.local_openclaw/` | ADR (filesystem path) |
+| `docs/architecture/repository-lifecycle.md` | 38, 128 | `.repository-intelligence-platform/` | Architecture doc (filesystem path) |
+| `docs/architecture/backend/project-management.md` | 51, 101, 111 | `.repository-intelligence-platform/` | Architecture doc (filesystem path) |
+| `docs/adr/adr-0010-filesystem-persistence.md` | 11, 18 | `.repository-intelligence-platform/` | ADR (filesystem path) |
 
 ---
 

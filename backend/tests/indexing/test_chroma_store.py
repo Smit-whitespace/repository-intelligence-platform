@@ -77,7 +77,10 @@ def create_store() -> tuple[
         )
 
         store = ChromaVectorStore(
-            settings,
+            persist_directory=Path(
+                "data/test-chroma",
+            ),
+            collection_name=settings.collection_name,
         )
 
     return (
@@ -454,6 +457,61 @@ def test_search_raises_when_metadata_is_missing() -> None:
             ),
         )
 
+def test_get_chunk_ids_returns_matching_ids() -> None:
+    """Return ids of chunks matching the filter."""
+
+    (
+        store,
+        _client,
+        collection,
+    ) = create_store()
+
+    collection.get.return_value = {
+        "ids": [
+            "chunk-1",
+            "chunk-2",
+        ],
+    }
+
+    ids = store.get_chunk_ids(
+        where={
+            "root_directory": "/projects/foo",
+        },
+    )
+
+    assert ids == [
+        "chunk-1",
+        "chunk-2",
+    ]
+
+    collection.get.assert_called_once_with(
+        where={
+            "root_directory": "/projects/foo",
+        },
+        include=[],
+    )
+
+
+def test_get_chunk_ids_returns_empty_for_missing_ids() -> None:
+    """Missing ids in the Chroma response should return an empty list."""
+
+    (
+        store,
+        _client,
+        collection,
+    ) = create_store()
+
+    collection.get.return_value = {}
+
+    ids = store.get_chunk_ids(
+        where={
+            "root_directory": "/projects/foo",
+        },
+    )
+
+    assert ids == []
+
+
 def test_delete_deletes_chunk_ids() -> None:
     """Delete indexed chunks."""
 
@@ -526,7 +584,10 @@ def test_clear_recreates_collection() -> None:
         )
 
         store = ChromaVectorStore(
-            settings,
+            persist_directory=Path(
+                "data/test-chroma",
+            ),
+            collection_name=settings.collection_name,
         )
 
         store.clear()

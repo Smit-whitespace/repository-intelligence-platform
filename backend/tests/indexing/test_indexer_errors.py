@@ -12,6 +12,7 @@ from app.indexing.models import (
     IndexedChunk,
 )
 from app.indexing.providers import EmbeddingProvider
+from app.indexing.store_resolver import StaticVectorStoreResolver
 from app.indexing.stores import VectorStore
 from app.indexing.retrieval_models import SearchHit
 from app.repository.models import ChunkBoundary
@@ -57,6 +58,14 @@ class FakeVectorStore(
 
         return []
 
+    def get_chunk_ids(
+        self,
+        where: dict | None = None,
+    ) -> list[str]:
+        """Return ids of chunks matching the filter."""
+
+        return []
+
     def delete(
         self,
         chunk_ids: Sequence[str],
@@ -84,6 +93,7 @@ def test_embedding_count_mismatch() -> None:
         language="Python",
         mime_type="text/x-python",
         sha256="abc",
+        root_directory="/projects/foo",
     )
 
     chunk = RepositoryChunk(
@@ -99,7 +109,9 @@ def test_embedding_count_mismatch() -> None:
 
     indexer = RepositoryIndexer(
         embedding_provider=BrokenEmbeddingProvider(),
-        vector_store=FakeVectorStore(),
+        vector_store_resolver=StaticVectorStoreResolver(
+            FakeVectorStore(),
+        ),
     )
 
     with pytest.raises(

@@ -41,6 +41,8 @@ _TEXT_EXTENSIONS = {
     ".sass",
     ".sh",
     ".ps1",
+    ".mjs",
+    ".cjs",
 }
 
 

@@ -63,10 +63,16 @@ export function ChatPage() {
     addUserMessage(trimmedQuery);
     const assistantId = startAssistantMessage();
 
+    const params: Record<string, string> = {
+      query: trimmedQuery,
+    };
+
+    if (activeProject?.root_directory) {
+      params.root_directory = activeProject.root_directory;
+    }
+
     streamRef.current = createSseClient(
-      `/chat/stream?${new URLSearchParams({
-        query: trimmedQuery,
-      }).toString()}`,
+      `/chat/stream?${new URLSearchParams(params).toString()}`,
       {
         onMessage: (message) => {
           hadContentRef.current = true;

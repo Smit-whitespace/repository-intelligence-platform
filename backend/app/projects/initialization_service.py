@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from app.indexing.models import IndexingDiagnostics
 from app.indexing.service import IndexingService
 from app.projects.models import Project
 from app.projects.service import ProjectService
@@ -26,19 +27,21 @@ class ProjectInitializationService:
     def open_project(
         self,
         root_directory: Path,
-    ) -> Project:
+    ) -> tuple[Project, IndexingDiagnostics | None]:
         """Open a project and build its index."""
 
         project = self._project_service.open_project(
             root_directory,
         )
 
+        canonical_root_directory = project.root_directory
+
         self._repository_service.build_index(
-            root_directory,
+            canonical_root_directory,
         )
 
-        self._indexing_service.index_repository(
-            root_directory,
+        result = self._indexing_service.index_repository(
+            canonical_root_directory,
         )
 
-        return project
+        return project, result.diagnostics

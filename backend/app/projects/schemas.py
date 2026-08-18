@@ -7,6 +7,8 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
+from app.indexing.models import IndexingDiagnostics
+
 
 class OpenProjectRequest(BaseModel):
     """Open project request."""
@@ -42,6 +44,11 @@ class OpenProjectResponse(BaseModel):
         examples=[
             "/home/user/projects/my-project",
         ],
+    )
+
+    indexing_diagnostics: IndexingDiagnostics | None = Field(
+        default=None,
+        description="Indexing diagnostics from the initial repository scan.",
     )
 
     model_config = ConfigDict(

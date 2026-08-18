@@ -1,7 +1,5 @@
 """Typed configuration model definitions."""
 
-from pathlib import Path
-
 from pydantic import BaseModel, Field
 
 
@@ -19,12 +17,6 @@ class LoggingSettings(BaseModel):
     json_logs: bool = False
 
 
-class StorageSettings(BaseModel):
-    """Filesystem storage configuration."""
-
-    root_directory: Path = Path(".local_openclaw")
-
-
 class OllamaSettings(BaseModel):
     """Ollama client configuration."""
 
@@ -38,11 +30,12 @@ class OllamaSettings(BaseModel):
 
 
 class ChromaSettings(BaseModel):
-    """ChromaDB configuration."""
+    """ChromaDB configuration.
 
-    persist_directory: Path = Path(
-        ".local_openclaw/index/chroma",
-    )
+    The persist directory is intentionally not configurable here: it is
+    derived from the opened project root (``<root>/.local_openclaw/index/chroma``)
+    so that storage identity never depends on the process working directory.
+    """
 
     collection_name: str = "repository_chunks"
 
@@ -63,10 +56,6 @@ class ApplicationSettings(BaseModel):
 
     logging: LoggingSettings = Field(
         default_factory=LoggingSettings,
-    )
-
-    storage: StorageSettings = Field(
-        default_factory=StorageSettings,
     )
 
     ollama: OllamaSettings = Field(

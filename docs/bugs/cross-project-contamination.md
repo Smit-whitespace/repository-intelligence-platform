@@ -1,8 +1,21 @@
 # Bug Report: Cross-Project Context Contamination in Chat
 
-**Status:** Root cause identified, fix not implemented
+**Status:** Fixed in Sprint 13
 **Report Date:** 2026-07-29
 **Reported by:** Instrumentation trace
+
+---
+
+> [!NOTE] **Resolution (Sprint 13 — CWD-Independent Project Persistence)**
+>
+> This bug is fixed. The root-dependency of the contamination was shared, CWD-dependent index resolution; Sprint 13 made persistence identity derive from the opened project root and scoped retrieval to the project:
+>
+> - Vector stores are resolved per project through `VectorStoreResolver` (`ProjectChromaStoreResolver`) at `<project root>/.local_openclaw/index/chroma` — a per-project Chroma store per opened project.
+> - Chunk metadata carries `root_directory`; retrieval applies a `where={"root_directory": ...}` filter.
+> - `SearchQuery` and the chat API accept `root_directory`; queries without a project root, or for unindexed projects, return no results — they can no longer leak other projects' content.
+> - The historical shared store at `.repository-intelligence-platform/index/chroma` is stale data from the former `local-openclaw` path — never the current RIP index — and was intentionally left untouched.
+>
+> The analysis below documents the pre-fix behavior. See [Sprint 13 freeze report](../sprints/sprint-13.md) and [ADR-0010 refinement](../adr/adr-0010-filesystem-persistence.md).
 
 ---
 
@@ -90,7 +103,7 @@ The ChromaDB `query()` call has **no `where` parameter**. Every query searches t
 The `ChromaSettings` model (`backend/app/core/config/models.py:40-47`) defines a **single collection name**:
 ```python
 class ChromaSettings(BaseModel):
-    persist_directory: Path = Path(".local_openclaw/index/chroma")
+    persist_directory: Path = Path(".repository-intelligence-platform/index/chroma")
     collection_name: str = "repository_chunks"  # ← Shared by all projects
 ```
 

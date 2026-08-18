@@ -1,7 +1,7 @@
 # Testing Guide
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 
 ---
 
@@ -22,19 +22,23 @@ backend/tests/
 
 ## Running Tests
 
+Run from the `backend/` directory:
+
 ```bash
 # All tests
-uv run pytest
+uv run python -m pytest tests -q
 
 # Specific file
-uv run pytest backend/tests/repository/test_scanner.py
+uv run python -m pytest tests/repository/test_scanner.py
 
 # Specific test
-uv run pytest backend/tests/repository/test_scanner.py::test_ignore_patterns
+uv run python -m pytest tests/repository/test_scanner.py::test_ignore_patterns
 
 # With coverage
-uv run pytest --cov=app
+uv run python -m pytest --cov=app
 ```
+
+> On Windows, invoking `uv` from the repository root can fail with `uv trampoline failed to canonicalize script path` (environment quirk). Running from `backend/` avoids it; alternatively use the virtual environment directly: `.venv\Scripts\python.exe -m pytest tests -q`.
 
 ## Test Conventions
 

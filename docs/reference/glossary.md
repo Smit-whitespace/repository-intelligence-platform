@@ -1,7 +1,7 @@
 # Glossary
 
 > **Status:** Complete
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 13
 
 ---
 
@@ -37,7 +37,7 @@ Summary of an indexing operation: `scanned_files`, `indexed_files`, `indexed_chu
 
 ### Project
 
-Persisted metadata for an opened project. Contains `name`, `root_directory`, `storage_directory`, `created_at`.
+Persisted metadata for an opened project. Contains `name`, `root_directory`, `storage_directory`, `created_at`. Persisted to `<root>/.local_openclaw/project.json`.
 
 ### ProjectInitializationService
 
@@ -86,3 +86,15 @@ Abstract interface for filesystem persistence (project metadata, snapshots, conf
 ### VectorStore
 
 Abstract interface for vector persistence and similarity search. Implemented by `ChromaVectorStore`.
+
+### VectorStoreResolver
+
+Abstract interface for resolving the `VectorStore` for a project root. Persistence identity comes from the opened project, never the process working directory. Implementations: `ProjectChromaStoreResolver` (per-project Chroma stores; returns `None` for projects that have never been indexed), `StaticVectorStoreResolver` (test helper). Defined in `app/indexing/store_resolver.py`.
+
+### ProjectChromaStoreResolver
+
+`VectorStoreResolver` implementation that maps a project root to a `ChromaVectorStore` at `<project root>/.local_openclaw/index/chroma`. Caches one store per project directory; `close_all()` stops all cached Chroma systems and releases their file handles. Defined in `app/indexing/store_resolver.py`.
+
+### Project Storage Directory
+
+The project-local persistence directory: `<project root>/.local_openclaw/`. Contains `project.json` (project metadata), `index/chroma/` (vector store), and `snapshots/` (pre-edit file state). Derived from `Project.root_directory` — see `app/core/storage/locations.py`.

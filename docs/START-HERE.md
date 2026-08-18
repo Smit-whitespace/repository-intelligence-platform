@@ -99,6 +99,7 @@ docs/
 - **Subsystem ownership** — Each subsystem owns one responsibility. Boundaries are explicit.
 - **Orchestration, not business logic** — Services like `ProjectInitializationService` delegate work, they don't implement domain rules.
 - **Dependency injection** — All services receive dependencies via constructors. Wiring is centralized in `providers.py`.
+- **Project-root persistence identity** — All project-local persistence (metadata, Chroma index, snapshots) lives under `<project root>/.local_openclaw/`, derived from the opened project — never from the process working directory.
 
 ---
 

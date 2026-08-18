@@ -47,7 +47,7 @@ Every subsystem has a public interface and at least one implementation. Componen
 
 - **100% offline** — All computation runs locally. No cloud dependency.
 - **No telemetry** — No data is sent anywhere. No analytics, no crash reports, no usage tracking.
-- **Local storage** — Indexes and configuration live in a `.local_openclaw` directory in your project root.
+- **Local storage** — Indexes, snapshots, and project metadata live in a `.local_openclaw` directory inside each opened project root. Persistence identity comes from the opened project, never from the process working directory.
 
 ## Quick Start
 
@@ -78,14 +78,20 @@ ollama pull qwen3:8b
 ### Run
 
 ```bash
-# Terminal 1: Start the backend
-uv run uvicorn backend.app.main:app --reload
+# Terminal 1: Start the backend (from the backend/ directory)
+cd backend
+uv run python -m uvicorn app.main:app --reload
+
+# On Windows, if uv fails with "uv trampoline failed to canonicalize script path":
+#   .venv\Scripts\python.exe -m uvicorn app.main:app --reload
 
 # Terminal 2: Start the frontend
 cd frontend && npm run dev
 ```
 
 Open your browser to the address shown in the terminal output.
+
+> The backend resolves all project persistence from the **opened project root** (`<project root>/.local_openclaw/`), never from the process working directory. You can start the backend from any directory.
 
 ## Documentation
 

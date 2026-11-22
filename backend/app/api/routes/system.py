@@ -9,8 +9,8 @@ from pydantic import Field
 from app.api.routes.models import (
     _PROVIDER,
     _installed_models,
+    active_chat_model,
 )
-from app.core.config import settings as runtime_settings
 
 APPLICATION_NAME = "Repository Intelligence Platform (RIP)"
 APPLICATION_VERSION = "0.1.0"
@@ -166,11 +166,13 @@ def _provider_connectivity() -> str:
 def get_system_status() -> SystemStatusResponse:
     """Return system status."""
 
+    effective = active_chat_model()
+
     return SystemStatusResponse(
         backend_health="healthy",
         provider_connectivity=_provider_connectivity(),
-        active_provider=_PROVIDER,
-        active_model=runtime_settings.settings.ollama.chat_model,
+        active_provider=effective.provider,
+        active_model=effective.model,
         project_status="not_loaded",
         repository_status="not_loaded",
         indexing_state="available",

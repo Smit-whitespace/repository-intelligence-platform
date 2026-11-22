@@ -24,13 +24,21 @@ class OllamaChatProvider(
     def __init__(
         self,
         settings: OllamaSettings,
+        model: str | None = None,
+        base_url: str | None = None,
     ) -> None:
-        """Initialize the Ollama client."""
+        """Initialize the Ollama client.
+
+        ``model`` and ``base_url`` come from the model configuration;
+        without them the ``LOC_OLLAMA_*`` settings apply.
+        """
 
         self._settings = settings
 
+        self._model = model or settings.chat_model
+
         self._client = Client(
-            host=settings.base_url,
+            host=base_url or settings.base_url,
         )
 
     def generate(
@@ -41,7 +49,7 @@ class OllamaChatProvider(
 
         try:
             response = self._client.chat(
-                model=self._settings.chat_model,
+                model=self._model,
                 messages=self._build_messages(
                     prompt,
                 ),
@@ -73,7 +81,7 @@ class OllamaChatProvider(
 
         try:
             stream = self._client.chat(
-                model=self._settings.chat_model,
+                model=self._model,
                 messages=self._build_messages(
                     prompt,
                 ),

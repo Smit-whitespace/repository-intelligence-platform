@@ -113,6 +113,18 @@ def test_openapi_contract_metadata() -> None:
         ): "rollbackChangeSet",
         (
             "GET",
+            "/api/v1/models/configuration",
+        ): "getModelConfiguration",
+        (
+            "PUT",
+            "/api/v1/models/configuration",
+        ): "updateModelConfiguration",
+        (
+            "GET",
+            "/api/v1/models/effective",
+        ): "getEffectiveModels",
+        (
+            "GET",
             "/api/v1/workspace/file",
         ): "readWorkspaceFile",
         (

@@ -8,6 +8,8 @@ export const queryKeys = {
   systemVersion: ["system", "version"] as const,
   models: ["models"] as const,
   activeModel: ["settings", "model"] as const,
+  effectiveModels: ["models", "effective"] as const,
+  modelConfiguration: ["models", "configuration"] as const,
   projectInfo: (rootDirectory: string) =>
     ["projects", "info", rootDirectory] as const,
   repositoryIndex: (rootDirectory: string) =>
@@ -49,6 +51,20 @@ export function useActiveModel() {
   });
 }
 
+export function useEffectiveModels() {
+  return useQuery({
+    queryKey: queryKeys.effectiveModels,
+    queryFn: api.effectiveModels,
+  });
+}
+
+export function useModelConfiguration() {
+  return useQuery({
+    queryKey: queryKeys.modelConfiguration,
+    queryFn: api.modelConfiguration,
+  });
+}
+
 export function useUpdateActiveModel() {
   const queryClient = useQueryClient();
 
@@ -60,6 +76,12 @@ export function useUpdateActiveModel() {
       });
       void queryClient.invalidateQueries({
         queryKey: queryKeys.systemStatus,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.effectiveModels,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.modelConfiguration,
       });
     },
   });

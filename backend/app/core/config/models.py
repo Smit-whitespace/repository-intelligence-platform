@@ -42,6 +42,13 @@ class OllamaSettings(BaseModel):
     timeout_seconds: int = 120
 
 
+class ModelsSettings(BaseModel):
+    """Where the model configuration file lives."""
+
+    config_path: str = ""
+    """Empty means the per-user default, ~/.local_openclaw/models.json."""
+
+
 class ChromaSettings(BaseModel):
     """ChromaDB configuration.
 
@@ -73,6 +80,10 @@ class ApplicationSettings(BaseModel):
 
     ollama: OllamaSettings = Field(
         default_factory=OllamaSettings,
+    )
+
+    models: ModelsSettings = Field(
+        default_factory=ModelsSettings,
     )
 
     chroma: ChromaSettings = Field(

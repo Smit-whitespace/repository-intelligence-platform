@@ -22,6 +22,7 @@ from app.projects.exceptions import (
     InvalidProjectError,
     ProjectNotFoundError,
 )
+from app.llm.exceptions import ModelConfigurationError
 from app.repository.exceptions import RepositoryScanError
 from app.workspace.exceptions import (
     FileTooLargeError,
@@ -38,6 +39,7 @@ _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
     IncompleteRevertError: 500,
     IndexIncompatibleError: 409,
     IndexingBusyError: 409,
+    ModelConfigurationError: 400,
     WorkspaceError: 400,
     UnregisteredWorkspaceError: 403,
     WorkspaceFileNotFoundError: 404,

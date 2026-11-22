@@ -33,6 +33,7 @@ Architecture Decision Records document every significant architectural decision 
 | 0015 | [Chunking Strategy](adr-0015-chunking-strategy.md) | Adopted | 4 |
 | 0016 | [Embedding Model Selection](adr-0016-embedding-model-selection.md) | Adopted | 5 |
 | 0017 | [Prompt Construction Strategy](adr-0017-prompt-construction.md) | Adopted | 6 |
+| 0018 | [Opt-In Hosted Model Providers](adr-0018-hosted-model-providers.md) | Adopted (amends 0001) | V1 |
 
 ## Template
 

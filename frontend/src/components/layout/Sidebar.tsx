@@ -2,8 +2,6 @@ import {
   Bot,
   Code2,
   FolderGit2,
-  Library,
-  PanelLeftClose,
   PenTool,
   Search,
   Settings,

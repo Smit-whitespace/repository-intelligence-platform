@@ -39,6 +39,26 @@ export type UpdateModelRequest = {
   model: string;
 };
 
+export type ModelSource = "task" | "capability" | "primary" | "embedding";
+
+export type EffectiveModel = {
+  operation: string;
+  provider: string;
+  provider_type: string;
+  model: string;
+  source: ModelSource;
+};
+
+export type EffectiveModelsResponse = {
+  models: EffectiveModel[];
+};
+
+export type ModelConfigurationView = {
+  path: string;
+  saved: boolean;
+  api_keys_present: Record<string, boolean>;
+};
+
 export type OpenProjectRequest = {
   root_directory: string;
 };

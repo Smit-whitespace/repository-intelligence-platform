@@ -1,7 +1,6 @@
 """Configuration provider implementations."""
 
 from functools import lru_cache
-import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,6 +9,7 @@ from app.core.config.models import (
     ApplicationSettings,
     ChromaSettings,
     IndexingSettings,
+    ModelsSettings,
     LoggingSettings,
     OllamaSettings,
     ServerSettings,
@@ -18,8 +18,6 @@ from app.core.config.models import (
 _PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 _ENV_FILE = _PROJECT_ROOT / ".env"
-
-_CHAT_MODEL_ENV_KEY = "LOC_OLLAMA_CHAT_MODEL"
 
 
 class EnvironmentSettings(BaseSettings):
@@ -53,6 +51,8 @@ class EnvironmentSettings(BaseSettings):
 
     chroma_collection_name: str = "repository_chunks"
 
+    model_config_path: str = ""
+
     indexing_chunk_size: int = 512
 
     indexing_chunk_overlap: int = 64
@@ -84,6 +84,9 @@ def get_settings() -> ApplicationSettings:
             chat_model=environment.ollama_chat_model,
             timeout_seconds=environment.ollama_timeout_seconds,
         ),
+        models=ModelsSettings(
+            config_path=environment.model_config_path,
+        ),
         chroma=ChromaSettings(
             collection_name=environment.chroma_collection_name,
         ),
@@ -92,59 +95,3 @@ def get_settings() -> ApplicationSettings:
             chunk_overlap=environment.indexing_chunk_overlap,
         ),
     )
-
-
-def persist_chat_model(
-    model: str,
-) -> None:
-    """Persist the active chat model in the environment configuration."""
-
-    _ENV_FILE.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
-    lines: list[str] = []
-
-    if _ENV_FILE.exists():
-        lines = _ENV_FILE.read_text(
-            encoding="utf-8",
-        ).splitlines()
-
-    assignment = f"{_CHAT_MODEL_ENV_KEY}={model}"
-
-    updated = False
-    next_lines: list[str] = []
-
-    for line in lines:
-        if line.startswith(
-            f"{_CHAT_MODEL_ENV_KEY}=",
-        ):
-            next_lines.append(
-                assignment,
-            )
-            updated = True
-
-        else:
-            next_lines.append(
-                line,
-            )
-
-    if not updated:
-        next_lines.append(
-            assignment,
-        )
-
-    _ENV_FILE.write_text(
-        "\n".join(
-            next_lines,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    os.environ[
-        _CHAT_MODEL_ENV_KEY
-    ] = model
-
-    get_settings.cache_clear()

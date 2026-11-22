@@ -131,6 +131,8 @@ def test_application_factory_registers_routes_and_openapi() -> None:
         "/api/v1/repository/summary",
         "/api/v1/models",
         "/api/v1/settings/model",
+        "/api/v1/models/configuration",
+        "/api/v1/models/effective",
         "/api/v1/system/status",
         "/api/v1/system/capabilities",
         "/api/v1/system/version",

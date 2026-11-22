@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Repository Intelligence Platform — offline-first, repository-aware AI coding assistant"
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "anthropic==2.6.0",
     "chromadb==1.0.20",
     "fastapi==0.138.1",
     "httpx==0.28.1",

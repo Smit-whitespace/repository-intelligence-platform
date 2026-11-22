@@ -1,5 +1,6 @@
 """Frontend readiness API tests."""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -7,9 +8,6 @@ from fastapi.testclient import TestClient
 
 from app.api.routes import models as model_routes
 from app.api.routes import system as system_routes
-from app.core.config import provider as config_provider
-from app.core.config import settings as runtime_settings
-from app.dependencies import providers
 from app.main import app
 
 
@@ -71,20 +69,10 @@ def test_list_models_normalizes_provider_models(
     }
 
 
-def test_get_active_model_returns_configuration(
-    monkeypatch,
+def test_get_active_model_returns_the_resolved_chat_model(
+    model_config_path: Path,
 ) -> None:
-    """Active model endpoint should return configured chat model."""
-
-    monkeypatch.setattr(
-        runtime_settings.settings.ollama,
-        "chat_model",
-        "qwen3.6",
-    )
-    monkeypatch.setenv(
-        "LOC_OLLAMA_CHAT_MODEL",
-        "qwen3.6",
-    )
+    """Active model is what chat resolves to, from the configuration."""
 
     client = TestClient(
         app,
@@ -101,59 +89,20 @@ def test_get_active_model_returns_configuration(
 
     assert response.json() == {
         "active_provider": "ollama",
-        "active_model": "qwen3.6",
+        "active_model": "qwen3:8b",
     }
 
 
-def test_update_active_model_persists_selection(
+def test_update_active_model_saves_the_primary_model(
     monkeypatch,
-    tmp_path: Path,
+    model_config_path: Path,
 ) -> None:
-    """Updating active model should validate and persist the selection."""
+    """Choosing an installed model saves it as the primary model."""
 
-    env_file = (
-        tmp_path
-        / ".env"
-    )
-
-    monkeypatch.setattr(
-        config_provider,
-        "_ENV_FILE",
-        env_file,
-    )
     monkeypatch.setattr(
         model_routes,
         "_ollama_client",
         lambda: FakeOllamaClient(),
-    )
-    monkeypatch.setattr(
-        runtime_settings.settings.ollama,
-        "chat_model",
-        "qwen3.6",
-    )
-
-    chat_provider_cleared = False
-    chat_service_cleared = False
-
-    def clear_chat_provider() -> None:
-        nonlocal chat_provider_cleared
-
-        chat_provider_cleared = True
-
-    def clear_chat_service() -> None:
-        nonlocal chat_service_cleared
-
-        chat_service_cleared = True
-
-    monkeypatch.setattr(
-        providers.get_chat_provider,
-        "cache_clear",
-        clear_chat_provider,
-    )
-    monkeypatch.setattr(
-        providers.get_chat_service,
-        "cache_clear",
-        clear_chat_service,
     )
 
     client = TestClient(
@@ -177,19 +126,21 @@ def test_update_active_model_persists_selection(
         "active_model": "llama3.2",
     }
 
-    assert (
-        "LOC_OLLAMA_CHAT_MODEL=llama3.2"
-        in env_file.read_text(
+    saved = json.loads(
+        model_config_path.read_text(
             encoding="utf-8",
-        )
+        ),
     )
 
-    assert (
-        runtime_settings.settings.ollama.chat_model
-        == "llama3.2"
+    assert saved["primary"] == {
+        "provider": "ollama",
+        "model": "llama3.2",
+    }
+
+    # The next request sees the new model without a restart.
+    assert client.get("/api/v1/settings/model").json()["active_model"] == (
+        "llama3.2"
     )
-    assert chat_provider_cleared
-    assert chat_service_cleared
 
 
 def test_update_active_model_rejects_unknown_model(
@@ -222,6 +173,7 @@ def test_update_active_model_rejects_unknown_model(
 
 def test_system_status_returns_frontend_startup_information(
     monkeypatch,
+    model_config_path: Path,
 ) -> None:
     """System status should expose frontend startup fields."""
 
@@ -230,12 +182,6 @@ def test_system_status_returns_frontend_startup_information(
         "_installed_models",
         lambda: [],
     )
-    monkeypatch.setattr(
-        runtime_settings.settings.ollama,
-        "chat_model",
-        "qwen3.6",
-    )
-
     client = TestClient(
         app,
     )
@@ -253,7 +199,7 @@ def test_system_status_returns_frontend_startup_information(
         "backend_health": "healthy",
         "provider_connectivity": "available",
         "active_provider": "ollama",
-        "active_model": "qwen3.6",
+        "active_model": "qwen3:8b",
         "project_status": "not_loaded",
         "repository_status": "not_loaded",
         "indexing_state": "available",

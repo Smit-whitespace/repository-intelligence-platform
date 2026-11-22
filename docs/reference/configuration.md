@@ -17,6 +17,12 @@ Configuration is managed by `app/core/config/models.py` (`ApplicationSettings` a
 | `LOC_SERVER_PORT` | `int` | `8000` | HTTP bind port |
 | `LOC_SERVER_ALLOWED_HOSTS` | `str` | `localhost,127.0.0.1` | Comma-separated `Host` header values the API accepts; anything else gets HTTP 400. This blocks DNS-rebinding attacks from web pages. Add a name here only if you deliberately reach the API through it. |
 
+### Models
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `LOC_MODEL_CONFIG_PATH` | `str` | `~/.local_openclaw/models.json` | Model configuration file (providers, primary model, overrides, embedding). Until it exists, the `LOC_OLLAMA_*` settings below are the configuration. See [Model Configuration](../architecture/backend/models.md). |
+
 ### Frontend
 
 | Setting | Where | Default | Description |

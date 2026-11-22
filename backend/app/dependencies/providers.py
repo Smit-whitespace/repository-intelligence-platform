@@ -4,9 +4,6 @@ from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 
-from app.chat.ollama_provider import (
-    OllamaChatProvider,
-)
 from app.chat.providers import (
     ChatProvider,
 )
@@ -35,9 +32,6 @@ from app.editing.snapshot_store import (
 from app.indexing.indexer import (
     RepositoryIndexer,
 )
-from app.indexing.ollama_provider import (
-    OllamaEmbeddingProvider,
-)
 from app.indexing.providers import (
     EmbeddingProvider,
 )
@@ -64,6 +58,21 @@ from app.repository.scanner import RepositoryScanner
 from app.repository.service import RepositoryService
 from app.editing.change_applier import (
     ChangeApplier,
+)
+from app.llm.config import (
+    ModelConfiguration,
+    Task,
+)
+from app.llm.factory import (
+    LazyEmbeddingProvider,
+    build_chat_provider,
+    build_embedding_provider,
+)
+from app.llm.resolver import ModelResolver
+from app.llm.store import (
+    ModelConfigStore,
+    configuration_from_ollama_settings,
+    default_config_path,
 )
 from app.workspace.service import (
     RepositoryWorkspace,
@@ -130,10 +139,19 @@ def get_repository_service() -> RepositoryService:
 
 @lru_cache(maxsize=1)
 def get_embedding_provider() -> EmbeddingProvider:
-    """Return the embedding provider."""
+    """Return the configured embedding provider (built on first use)."""
 
-    return OllamaEmbeddingProvider(
-        settings.ollama,
+    def build() -> EmbeddingProvider:
+        resolver = get_model_resolver()
+
+        return build_embedding_provider(
+            configuration=resolver.configuration,
+            effective=resolver.for_embedding(),
+            ollama_settings=settings.ollama,
+        )
+
+    return LazyEmbeddingProvider(
+        build,
     )
 
 
@@ -188,10 +206,16 @@ def get_context_assembly() -> ContextAssembly:
 
 @lru_cache(maxsize=1)
 def get_chat_provider() -> ChatProvider:
-    """Return the chat provider."""
+    """Return the chat provider for the chat-answer task's model."""
 
-    return OllamaChatProvider(
-        settings.ollama,
+    resolver = get_model_resolver()
+
+    return build_chat_provider(
+        configuration=resolver.configuration,
+        effective=resolver.for_task(
+            Task.CHAT_ANSWER,
+        ),
+        ollama_settings=settings.ollama,
     )
 
 
@@ -296,3 +320,58 @@ def get_workspace_opener() -> WorkspaceOpener:
         )
 
     return open_workspace
+
+
+@lru_cache(maxsize=1)
+def get_model_config_store() -> ModelConfigStore:
+    """Return the per-user model configuration store."""
+
+    path = (
+        Path(settings.models.config_path).expanduser()
+        if settings.models.config_path
+        else default_config_path()
+    )
+
+    return ModelConfigStore(
+        path=path,
+        defaults=configuration_from_ollama_settings(
+            settings.ollama,
+        ),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_model_resolver() -> ModelResolver:
+    """Return the resolver for the current model configuration."""
+
+    return ModelResolver(
+        get_model_config_store().load(),
+    )
+
+
+def apply_model_configuration(
+    configuration: ModelConfiguration,
+) -> None:
+    """Save a new model configuration and rebuild what depends on it.
+
+    Everything that captured a provider is rebuilt, so the next request
+    uses the new models. Changing the embedding model does not reindex
+    anything: searches report the mismatch until the user reindexes.
+    """
+
+    get_model_config_store().save(
+        configuration,
+    )
+
+    for cached in (
+        get_model_resolver,
+        get_chat_provider,
+        get_chat_service,
+        get_embedding_provider,
+        get_repository_indexer,
+        get_indexing_service,
+        get_retrieval_service,
+        get_project_initialization_service,
+        get_workspace_opener,
+    ):
+        cached.cache_clear()

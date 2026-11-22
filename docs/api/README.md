@@ -139,6 +139,23 @@ Read-only repository tools for external clients. Every endpoint takes `root_dire
 
 ---
 
+## Models
+
+| Method | Path | Operation ID | Description |
+|--------|------|-------------|-------------|
+| GET | `/models` | `listModels` | Models installed in the local Ollama server |
+| GET | `/settings/model` | `getActiveModel` | The model chat uses (resolved) |
+| PUT | `/settings/model` | `updateActiveModel` | Set the primary model to an installed Ollama model |
+| GET | `/models/configuration` | `getModelConfiguration` | Full configuration, file path, and which API keys are set (never their values) |
+| PUT | `/models/configuration` | `updateModelConfiguration` | Validate and save a configuration; applies on the next request |
+| GET | `/models/effective` | `getEffectiveModels` | Effective model per operation and the level it came from |
+
+A missing API key or unusable configuration returns **400** with a message naming what to fix. An invalid configuration body returns **422** and is not saved.
+
+**See:** [Model Configuration](../architecture/backend/models.md)
+
+---
+
 ## System
 
 | Method | Path | Operation ID | Description |
@@ -177,3 +194,4 @@ Domain errors return `{"detail": "<message>"}`.
 | Chat | [architecture/backend/chat.md](../architecture/backend/chat.md) |
 | Editing | [architecture/backend/editing.md](../architecture/backend/editing.md) |
 | Workspace | [architecture/backend/workspace.md](../architecture/backend/workspace.md) |
+| Model Configuration | [architecture/backend/models.md](../architecture/backend/models.md) |

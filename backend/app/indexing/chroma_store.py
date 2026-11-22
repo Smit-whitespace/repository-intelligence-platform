@@ -1,5 +1,6 @@
 """ChromaDB vector store."""
 
+import gc
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -57,8 +58,14 @@ class ChromaVectorStore(VectorStore):
         Chroma 1.x clients keep the persistence database open for the
         lifetime of the process; stopping the backing system releases
         the underlying file handles so project directories can be
-        removed or moved.
+        removed or moved. Safe to call more than once.
         """
+
+        if not hasattr(
+            self,
+            "_client",
+        ):
+            return
 
         try:
             system = getattr(
@@ -71,6 +78,15 @@ class ChromaVectorStore(VectorStore):
 
         if system is not None:
             system.stop()
+
+        # Chroma's native backend releases the SQLite file only when its
+        # client objects are freed, not when stop() returns. On Windows a
+        # lingering handle blocks deleting or moving the project, so drop
+        # the references and collect them now.
+        del self._collection
+        del self._client
+
+        gc.collect()
 
     def add(
         self,

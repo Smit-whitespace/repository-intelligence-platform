@@ -1,6 +1,6 @@
 # ADR-0001: Offline-First Architecture
 
-**Status:** Adopted
+**Status:** Adopted; amended by [ADR-0018](adr-0018-hosted-model-providers.md), which allows opt-in hosted model providers while keeping local the default
 
 **Context:**
 

@@ -1,6 +1,8 @@
 import type {
   ActiveModelResponse,
+  EffectiveModelsResponse,
   HealthResponse,
+  ModelConfigurationView,
   ModelsResponse,
   OpenProjectRequest,
   OpenProjectResponse,
@@ -22,6 +24,9 @@ export const api = {
   systemVersion: () => request<SystemVersion>("/system/version"),
   models: () => request<ModelsResponse>("/models"),
   activeModel: () => request<ActiveModelResponse>("/settings/model"),
+  effectiveModels: () => request<EffectiveModelsResponse>("/models/effective"),
+  modelConfiguration: () =>
+    request<ModelConfigurationView>("/models/configuration"),
   updateActiveModel: (body: UpdateModelRequest) =>
     request<ActiveModelResponse>("/settings/model", {
       method: "PUT",

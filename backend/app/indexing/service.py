@@ -5,10 +5,12 @@ import time
 from pathlib import Path
 
 from app.indexing.indexer import RepositoryIndexer
+from app.indexing.lock import project_index_lock
 from app.indexing.models import (
     FileFailureInfo,
     IndexingDiagnostics,
     IndexingResult,
+    IndexStatus,
 )
 from app.repository.chunking import RepositoryChunker
 from app.repository.documents import RepositoryDocumentLoader
@@ -41,9 +43,39 @@ class IndexingService:
         self,
         root_directory: Path,
     ) -> IndexingResult:
-        """Index an entire repository."""
+        """Index an entire repository.
+
+        Holds the project's inter-process index lock for the whole run,
+        so the RIP app and an MCP server never write the same index at
+        once; a concurrent attempt raises ``IndexingBusyError``.
+        """
 
         root_directory = root_directory.resolve()
+
+        with project_index_lock(
+            root_directory,
+        ):
+            return self._index_repository(
+                root_directory,
+            )
+
+    def status(
+        self,
+        root_directory: Path,
+    ) -> IndexStatus:
+        """Report whether a project is indexed, and with which model."""
+
+        return self._indexer.status(
+            str(
+                root_directory.resolve(),
+            ),
+        )
+
+    def _index_repository(
+        self,
+        root_directory: Path,
+    ) -> IndexingResult:
+        """Index a resolved repository root (the lock is held)."""
 
         root_directory_str = str(
             root_directory,

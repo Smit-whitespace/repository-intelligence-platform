@@ -7,6 +7,7 @@ from typing import Any, cast
 import chromadb
 from chromadb import Collection
 from chromadb.api import ClientAPI
+from chromadb.config import Settings as ChromaSettings
 
 from app.indexing.models import (
     EmbeddingVector,
@@ -39,6 +40,10 @@ class ChromaVectorStore(VectorStore):
         self._client: ClientAPI = chromadb.PersistentClient(
             path=str(
                 persist_directory,
+            ),
+            # Offline-first (ADR-0001): never send usage telemetry.
+            settings=ChromaSettings(
+                anonymized_telemetry=False,
             ),
         )
 

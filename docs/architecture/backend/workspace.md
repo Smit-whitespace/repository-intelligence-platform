@@ -36,7 +36,7 @@ The Workspace subsystem gives external clients (REST now, MCP next) read-only to
 ## Architecture
 
 ```
-REST routes (app/api/routes/workspace.py)    MCP adapter (V1 M2)
+REST routes (app/api/routes/workspace.py)    MCP server (app/mcp_server/)
                   \                            /
                    get_workspace_opener()  (app/dependencies/providers.py)
                                  |

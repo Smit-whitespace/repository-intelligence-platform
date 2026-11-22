@@ -15,6 +15,7 @@ from app.editing.exceptions import (
 )
 from app.indexing.exceptions import (
     IndexIncompatibleError,
+    IndexingBusyError,
     IndexingError,
 )
 from app.projects.exceptions import (
@@ -36,6 +37,7 @@ _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
     EditConflictError: 409,
     IncompleteRevertError: 500,
     IndexIncompatibleError: 409,
+    IndexingBusyError: 409,
     WorkspaceError: 400,
     UnregisteredWorkspaceError: 403,
     WorkspaceFileNotFoundError: 404,

@@ -8,6 +8,7 @@ from app.indexing.models import (
     EmbeddingVector,
     IndexedChunk,
     IndexingResult,
+    IndexStatus,
 )
 from app.indexing.providers import EmbeddingProvider
 from app.indexing.store_resolver import VectorStoreResolver
@@ -44,6 +45,42 @@ class RepositoryIndexer:
         self._pending_rebuilds: dict[str, str] = {}
         """Project roots whose index must be cleared before the next write,
         mapped to the model that built the old index (for logging)."""
+
+    def status(
+        self,
+        root_directory: str,
+    ) -> IndexStatus:
+        """Report whether a project is indexed, and with which model."""
+
+        configured = self._embedding_provider.identity
+
+        vector_store = self._vector_store_resolver.for_project(
+            root_directory=root_directory,
+        )
+
+        if vector_store is None:
+            return IndexStatus(
+                indexed=False,
+                configured_embedding_model=configured,
+                compatible=False,
+            )
+
+        metadata = vector_store.get_index_metadata() or {}
+
+        built_with = metadata.get(
+            EMBEDDING_MODEL_METADATA_KEY,
+        )
+
+        return IndexStatus(
+            indexed=True,
+            embedding_model=(
+                str(built_with)
+                if built_with is not None
+                else None
+            ),
+            configured_embedding_model=configured,
+            compatible=built_with is None or built_with == configured,
+        )
 
     def prepare(
         self,

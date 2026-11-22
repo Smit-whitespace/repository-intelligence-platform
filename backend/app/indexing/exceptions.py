@@ -20,3 +20,7 @@ class IndexIncompatibleError(IndexingError):
     usually differ in dimension), so searching such an index would
     return meaningless results. The fix is an explicit reindex.
     """
+
+
+class IndexingBusyError(IndexingError):
+    """Another process holds the project's index lock (HTTP 409)."""

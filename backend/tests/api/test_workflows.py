@@ -815,3 +815,28 @@ def test_editing_rejects_invalid_rollback_request() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_home_directory_and_drive_root_cannot_be_opened() -> None:
+    """Too-broad roots would put startup folders and keys within reach."""
+
+    client = TestClient(
+        app,
+    )
+
+    for root in (
+        Path.home(),
+        Path(Path.home().anchor),
+    ):
+        response = client.post(
+            "/api/v1/projects/open",
+            json={
+                "root_directory": str(
+                    root,
+                ),
+            },
+        )
+
+        assert response.status_code == 400
+
+        assert "home directory or a drive root" in response.json()["detail"]

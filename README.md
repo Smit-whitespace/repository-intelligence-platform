@@ -100,6 +100,7 @@ Open your browser to the address shown in the terminal output.
 - [Vision & Roadmap](docs/vision/README.md) — Project direction and future plans
 - [Development Guide](docs/development/environment.md) — Setting up a development environment
 - [API Reference](docs/api/README.md) — OpenAPI documentation
+- [MCP Server](docs/architecture/backend/mcp-server.md) — Connect Claude Code, Claude Desktop or other MCP agents to RIP
 - [Reference](docs/reference/glossary.md) — Glossary, configuration, cheat sheets
 
 ## Contributing

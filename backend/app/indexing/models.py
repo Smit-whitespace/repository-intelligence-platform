@@ -81,3 +81,20 @@ class RepositoryIndex(BaseModel):
     indexed_at: datetime
 
     result: IndexingResult
+
+
+class IndexStatus(BaseModel):
+    """Whether a project is indexed, and with which embedding model."""
+
+    indexed: bool
+
+    embedding_model: str | None = None
+    """Model recorded in the index; None if unindexed or built before
+    the model was recorded."""
+
+    configured_embedding_model: str
+
+    compatible: bool
+    """True when searching the index with the configured model is valid.
+    An index built before the model was recorded counts as compatible
+    (it is rebuilt on the next indexing run)."""

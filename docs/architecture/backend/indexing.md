@@ -152,6 +152,8 @@ Indexing is independent of retrieval by design — `RetrievalService` never inde
 - Indexing processes all text files synchronously. For very large repositories this can be slow.
 - Failed files are counted but not identified (no per-file error reporting in `IndexingResult`).
 - No incremental indexing — the entire repository is re-indexed each time.
+- Indexing holds an inter-process OS file lock (`.local_openclaw/index/index.lock`), so the RIP app and an MCP server never write one index at once; a second indexer gets `IndexingBusyError` (HTTP 409).
+- ChromaDB is created with anonymized telemetry disabled (offline-first, ADR-0001).
 - When every file fails to index (typically the embedding provider is down), stale-chunk removal is skipped, so the existing index is kept instead of being emptied.
 - Ignore rules are a fixed list of directory names (`app/repository/ignore.py`); `.gitignore` is not read, so build output such as `frontend/dist/` and lock files are indexed.
 

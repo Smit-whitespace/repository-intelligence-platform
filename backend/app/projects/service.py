@@ -43,6 +43,14 @@ class ProjectService:
                 f"{root_directory}"
             )
 
+        if _is_too_broad(
+            root_directory,
+        ):
+            raise InvalidProjectError(
+                "Refusing to open a home directory or a drive root as a "
+                "project. Open the repository folder itself.",
+            )
+
         project = Project(
             name=root_directory.name,
             root_directory=root_directory,
@@ -68,3 +76,25 @@ class ProjectService:
                 root_directory,
             ),
         )
+
+
+def _is_too_broad(
+    root_directory: Path,
+) -> bool:
+    """Return whether a directory is too broad to be a project.
+
+    Registering a project unlocks editing inside it. A home directory or
+    filesystem root would put startup folders, shell profiles and SSH
+    keys in reach of an edit, so neither can be a project.
+    """
+
+    if root_directory.parent == root_directory:
+        return True
+
+    try:
+        home = Path.home().resolve()
+
+    except RuntimeError:
+        return False
+
+    return root_directory == home

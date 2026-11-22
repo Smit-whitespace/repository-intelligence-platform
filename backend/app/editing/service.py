@@ -182,34 +182,9 @@ class EditingService:
     def _validate_repository_root(
         repository_root: Path,
     ) -> None:
-        """Reject roots that are missing or not registered RIP projects.
-
-        Validated before any project-local storage is created, so an
-        invalid root can never be materialized as a side effect. The
-        registration check is the security boundary: the caller chooses
-        the root, so without it "stay inside the repository root" would
-        not restrict anything.
-        """
-
-        root = repository_root.resolve()
-
-        if not root.exists():
-            raise EditingError(
-                "Repository root does not exist.",
-            )
-
-        if not root.is_dir():
-            raise EditingError(
-                "Repository root is not a directory.",
-            )
-
-        if not is_registered_project(
-            root,
-        ):
-            raise UnregisteredRepositoryError(
-                "Repository root is not a registered RIP project. "
-                "Initialize the project before editing it.",
-            )
+        require_registered_root(
+            repository_root,
+        )
 
     @staticmethod
     def _ensure_unchanged_since_apply(
@@ -327,3 +302,36 @@ def _sha256(
             "utf-8",
         ),
     ).hexdigest()
+
+
+def require_registered_root(
+    repository_root: Path,
+) -> None:
+    """Reject roots that are missing or not registered RIP projects.
+
+    Validated before any project-local storage is created, so an invalid
+    root can never be materialized as a side effect. The registration
+    check is the security boundary for every editing path: the caller
+    chooses the root, so without it "stay inside the repository root"
+    would not restrict anything.
+    """
+
+    root = repository_root.resolve()
+
+    if not root.exists():
+        raise EditingError(
+            "Repository root does not exist.",
+        )
+
+    if not root.is_dir():
+        raise EditingError(
+            "Repository root is not a directory.",
+        )
+
+    if not is_registered_project(
+        root,
+    ):
+        raise UnregisteredRepositoryError(
+            "Repository root is not a registered RIP project. "
+            "Initialize the project before editing it.",
+        )

@@ -56,6 +56,41 @@ graph LR
 
 ---
 
+## Proposals: the review workflow
+
+The preferred way to change code. A **proposal** is a stored, reviewable change set, applied later **by id**, so what a person reviewed is exactly what gets written; clients never re-send file contents at apply time.
+
+```
+propose (search/replace operations)        plan (instruction -> edit model)
+        \                                        /
+         build_proposal: validate paths, apply operations, unified diff
+                              |
+                 .local_openclaw/proposals/<id>.json   (status: pending)
+                              |
+        apply (snapshot, all-or-nothing) -> applied -> rollback -> rolled_back
+        reject -> rejected
+                              |
+                 validation commands (optional, after apply)
+```
+
+**Search/replace operations** are what both agents (over MCP) and RIP's own edit model produce: `{path, search, replace}`. `search` must be copied exactly from the file and occur exactly once; an empty `search` creates a file. Operations on one file apply in order. Every problem (not found, ambiguous, file exists or missing) is reported at once, per operation, so the author can fix them in one round. A search written with `\n` also matches a CRLF file, and the replacement keeps CRLF.
+
+**The edit planner** (`planner.py`) sends the named files in full plus semantic-search hits to the `edit.plan` model and parses its edit blocks:
+
+```
+<<<<<<< SEARCH path/relative/to/repository
+exact lines copied from the file
+=======
+the replacement lines
+>>>>>>> REPLACE
+```
+
+**Validation** (`validation.py`) runs the project's commands from `.local_openclaw/validation.json` after an apply, without a shell (argv lists), in the repository root, each with a timeout, keeping the last 8,000 characters of output. That file is in a protected directory, so no edit and no agent can change what gets executed; people set it in the RIP app or `PUT /editing/validation`.
+
+**Agent access** is gated by the MCP server's `--editing` flag: `off`, `propose` (default; a person applies in the RIP app) or `apply` (the agent may apply and roll back; applying runs validation commands, which execute repository code).
+
+---
+
 ## Lifecycle: Edit → Apply → Rollback
 
 ```mermaid
@@ -134,8 +169,10 @@ sequenceDiagram
 7. **Stale edits are refused.** Each `FileEdit.original_content` must equal the file's current content exactly (an empty string for a new file), or apply raises `EditConflictError` (HTTP 409).
 8. **Rollback never overwrites later work.** Snapshots record `applied_sha256` per file. Rollback accepts each file only in a state the snapshot knows: what the apply wrote, or what was there before it (absent, for a created file). That makes the snapshot named by an incomplete revert usable. Anything else raises `EditConflictError`. Snapshots from before this field skip the check.
 9. **Content is written byte for byte.** Reads and writes use `newline=""`, so line endings are never translated (the default would turn LF into CRLF on Windows).
-10. **Paths are validated before any file is read.** `EditingService` validates every target (and, on rollback, every snapshot path) before snapshotting or checking anything, so a path outside the root is never even read. Empty change sets are rejected. Paths with NUL bytes, or `:` on Windows (alternate data streams), are rejected. Non-UTF-8 targets get a clear HTTP 400.
-11. **Apply is all-or-nothing.** If a write fails, every file already written is restored from memory. If that restore also fails, `IncompleteRevertError` (HTTP 500) names the snapshot to roll back with; otherwise the unused snapshot is deleted.
+10. **File permission bits survive edits.** The atomic replacement copies the target's mode, so executable scripts stay executable.
+11. **Rollback is all-or-nothing too.** If a restore fails part-way, files already restored are put back to their pre-rollback state.
+12. **Paths are validated before any file is read.** `EditingService` validates every target (and, on rollback, every snapshot path) before snapshotting or checking anything, so a path outside the root is never even read. Empty change sets are rejected. Paths with NUL bytes, or `:` on Windows (alternate data streams), are rejected. Non-UTF-8 targets get a clear HTTP 400.
+13. **Apply is all-or-nothing.** If a write fails, every file already written is restored from memory. If that restore also fails, `IncompleteRevertError` (HTTP 500) names the snapshot to roll back with; otherwise the unused snapshot is deleted.
 
 ---
 
@@ -160,9 +197,10 @@ The three-phase design (edit → review → apply) separates AI-generated change
 - Snapshot IDs are returned to the caller but there's no endpoint to list snapshots.
 - No snapshot cleanup strategy — snapshots accumulate indefinitely.
 - `edit()` returns AI suggestions; the caller must explicitly call `apply()` to execute them.
-- The default editing provider is a placeholder: `create file <path>` produces an empty file. LLM-backed edit planning arrives in V1 M4.
-- Replacing a file through an atomic rename does not preserve its permission bits (for example, the executable bit on shell scripts).
-- Rollback is not all-or-nothing: a write failure part-way through a restore leaves the remaining files unrestored.
+- The legacy `POST /editing/edit` planner is a placeholder (`create file <path>`); use proposals (`POST /editing/proposals/plan`) instead. The legacy `POST /editing/apply` still accepts a client-supplied change set for compatibility.
+- Proposals can create and modify files but not delete or rename them.
+- A validation command that times out is stopped, but processes it started may keep running on Windows.
+- Validation output is captured whole and then truncated; a command that prints gigabytes still holds them in memory briefly.
 - Paths are validated, then written later. A local process that swaps a parent directory for a junction in between could redirect a write. This needs a concurrent attacker who can already write to the repository.
 - A `.local_openclaw` directory or `project.json` that is a symlink or junction is not treated as a registered project.
 

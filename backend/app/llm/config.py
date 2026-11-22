@@ -66,9 +66,13 @@ class Task(StrEnum):
     CHAT_ANSWER = "chat.answer"
     """Answering a repository question in chat."""
 
+    EDIT_PLAN = "edit.plan"
+    """Writing search/replace edits from an instruction."""
+
 
 TASK_CAPABILITY: dict[Task, Capability] = {
     Task.CHAT_ANSWER: Capability.CHAT,
+    Task.EDIT_PLAN: Capability.EDIT,
 }
 """The capability each task belongs to (its level-2 fallback)."""
 

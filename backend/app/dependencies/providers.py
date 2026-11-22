@@ -26,6 +26,9 @@ from app.editing.providers import (
 from app.editing.service import (
     EditingService,
 )
+from app.editing.planner import EditPlanner
+from app.editing.proposal_service import ProposalService
+from app.editing.validation import ValidationRunner
 from app.editing.snapshot_store import (
     SnapshotStore,
 )
@@ -68,7 +71,7 @@ from app.llm.factory import (
     build_chat_provider,
     build_embedding_provider,
 )
-from app.llm.resolver import ModelResolver
+from app.llm.resolver import EffectiveModel, ModelResolver
 from app.llm.store import (
     ModelConfigStore,
     configuration_from_ollama_settings,
@@ -373,5 +376,46 @@ def apply_model_configuration(
         get_retrieval_service,
         get_project_initialization_service,
         get_workspace_opener,
+        get_proposal_service,
     ):
         cached.cache_clear()
+
+
+def _edit_model() -> EffectiveModel:
+    return get_model_resolver().for_task(
+        Task.EDIT_PLAN,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_proposal_service() -> ProposalService:
+    """Return the edit proposal workflow service.
+
+    The edit model is resolved on every planning call, so a model
+    configuration change applies to the next proposal without a restart.
+    """
+
+    def build_edit_chat_provider() -> ChatProvider:
+        resolver = get_model_resolver()
+
+        return build_chat_provider(
+            configuration=resolver.configuration,
+            effective=_edit_model(),
+            ollama_settings=settings.ollama,
+        )
+
+    def edit_model_label() -> str:
+        effective = _edit_model()
+
+        return f"{effective.provider}/{effective.model}"
+
+    return ProposalService(
+        editing_service=get_editing_service(),
+        change_applier=get_change_applier(),
+        validation_runner=ValidationRunner(),
+        planner=EditPlanner(
+            chat_provider_factory=build_edit_chat_provider,
+        ),
+        workspace_opener=get_workspace_opener(),
+        edit_model_label=edit_model_label,
+    )

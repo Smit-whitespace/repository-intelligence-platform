@@ -37,3 +37,15 @@ class SnapshotNotFoundError(EditingError):
 
 class SnapshotPersistenceError(EditingError):
     """Snapshot persistence failed."""
+
+
+class ProposalNotFoundError(EditingError):
+    """No proposal with that id exists in the project (HTTP 404)."""
+
+
+class ProposalStateError(EditingError):
+    """The proposal is not in a state that allows the action (HTTP 409)."""
+
+
+class EditingDisabledError(EditingError):
+    """This client is not allowed to perform the editing action (HTTP 403)."""

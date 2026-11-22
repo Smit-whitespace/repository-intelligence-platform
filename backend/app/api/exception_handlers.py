@@ -7,8 +7,11 @@ from app.chat.exceptions import ChatException
 from app.core.storage.exceptions import StorageError
 from app.editing.exceptions import (
     EditConflictError,
+    EditingDisabledError,
     EditingError,
     IncompleteRevertError,
+    ProposalNotFoundError,
+    ProposalStateError,
     SnapshotNotFoundError,
     SnapshotPersistenceError,
     UnregisteredRepositoryError,
@@ -37,6 +40,9 @@ _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
     UnregisteredRepositoryError: 403,
     EditConflictError: 409,
     IncompleteRevertError: 500,
+    ProposalNotFoundError: 404,
+    ProposalStateError: 409,
+    EditingDisabledError: 403,
     IndexIncompatibleError: 409,
     IndexingBusyError: 409,
     ModelConfigurationError: 400,

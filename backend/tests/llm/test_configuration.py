@@ -250,6 +250,7 @@ def test_effective_models_lists_every_operation() -> None:
         "chat",
         "edit",
         "chat.answer",
+        "edit.plan",
         "embedding",
     ]
 

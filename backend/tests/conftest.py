@@ -62,6 +62,7 @@ def model_config_path(
             providers.get_retrieval_service,
             providers.get_project_initialization_service,
             providers.get_workspace_opener,
+            providers.get_proposal_service,
         ):
             cached.cache_clear()
 

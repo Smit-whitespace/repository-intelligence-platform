@@ -2,7 +2,7 @@
 
 Usage::
 
-    python -m app.mcp_server --root <repository>
+    python -m app.mcp_server --root <repository> [--editing off|propose|apply]
 
 The repository is fixed for the life of the process, so an agent can
 never point the tools at another directory. Stdout carries the MCP
@@ -19,9 +19,13 @@ from app.core.storage.locations import is_registered_project
 from app.dependencies.providers import (
     get_indexing_service,
     get_project_service,
+    get_proposal_service,
     get_workspace_opener,
 )
-from app.mcp_server.server import build_server
+from app.mcp_server.server import (
+    EditingMode,
+    build_server,
+)
 from app.projects.exceptions import InvalidProjectError
 
 
@@ -33,6 +37,19 @@ def main(
     parser = argparse.ArgumentParser(
         prog="python -m app.mcp_server",
         description="Serve one repository's RIP tools over MCP (stdio).",
+    )
+
+    parser.add_argument(
+        "--editing",
+        choices=[
+            mode.value
+            for mode in EditingMode
+        ],
+        default=EditingMode.PROPOSE.value,
+        help="off: no editing tools. propose (default): the agent proposes "
+        "edits and a person applies them in the RIP app. apply: the agent "
+        "may also apply and roll back, which runs the project's validation "
+        "commands.",
     )
 
     parser.add_argument(
@@ -80,6 +97,10 @@ def main(
     build_server(
         workspace=workspace,
         indexing_service=get_indexing_service(),
+        proposal_service=get_proposal_service(),
+        editing_mode=EditingMode(
+            arguments.editing,
+        ),
     ).run(
         "stdio",
     )

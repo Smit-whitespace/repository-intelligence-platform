@@ -9,6 +9,11 @@ from pydantic import Field
 from app.editing.models import (
     ChangeSet,
 )
+from app.editing.proposals import (
+    EditOperation,
+    EditProposalView,
+)
+from app.editing.validation import ValidationConfig
 
 
 class ApplyRequest(BaseModel):
@@ -87,3 +92,76 @@ class RollbackRequest(BaseModel):
             },
         },
     )
+
+
+class ProposeEditsRequest(BaseModel):
+    """Search/replace operations to turn into a proposal."""
+
+    repository_root: Path = Field(
+        description="Absolute path of a registered RIP project root.",
+    )
+
+    edits: list[EditOperation] = Field(
+        min_length=1,
+        description="Operations; those on the same file apply in order.",
+    )
+
+    description: str = Field(
+        default="",
+        description="What the change is for, shown to reviewers.",
+    )
+
+
+class PlanEditRequest(BaseModel):
+    """An instruction for RIP's edit model."""
+
+    repository_root: Path = Field(
+        description="Absolute path of a registered RIP project root.",
+    )
+
+    instruction: str = Field(
+        min_length=1,
+        description="The change to make, in plain language.",
+        examples=[
+            "Add a docstring to the apply method in editing/service.py",
+        ],
+    )
+
+    files: list[str] = Field(
+        default_factory=list,
+        description="Repository-relative files the change involves "
+        "(sent to the model in full). Semantic search adds context.",
+    )
+
+
+class ProposalActionRequest(BaseModel):
+    """Identifies the project a proposal belongs to."""
+
+    repository_root: Path = Field(
+        description="Absolute path of a registered RIP project root.",
+    )
+
+
+class ApplyProposalRequest(ProposalActionRequest):
+    """Apply options."""
+
+    validate_after: bool = Field(
+        default=True,
+        description="Run the project's validation commands after applying.",
+    )
+
+
+class ProposalListResponse(BaseModel):
+    """Proposals, newest first."""
+
+    proposals: list[EditProposalView]
+
+
+class ValidationConfigRequest(BaseModel):
+    """A project's validation commands."""
+
+    repository_root: Path = Field(
+        description="Absolute path of a registered RIP project root.",
+    )
+
+    config: ValidationConfig

@@ -1,6 +1,7 @@
 """Repository ChangeSet application."""
 
 import os
+import stat
 import tempfile
 from pathlib import Path
 
@@ -218,7 +219,11 @@ class ChangeApplier:
         repository_root: Path,
         snapshot: Snapshot,
     ) -> None:
-        """Restore files captured by a snapshot."""
+        """Restore files captured by a snapshot, all or nothing.
+
+        If a write fails part-way, files already restored are put back to
+        the state they were in before the rollback started.
+        """
 
         repository_root = (
             repository_root.resolve()
@@ -229,20 +234,58 @@ class ChangeApplier:
             snapshot=snapshot,
         )
 
-        for file in snapshot.files:
-            target_path = (
-                repository_root
-                / file.relative_path
-            ).resolve()
+        targets = [
+            (
+                (repository_root / file.relative_path).resolve(),
+                file,
+            )
+            for file in snapshot.files
+        ]
 
-            if file.existed:
-                self._write_file_atomic(
-                    target_path=target_path,
-                    content=file.content,
+        current_states = [
+            read_text_for_edit(
+                target_path,
+                file.relative_path,
+            )
+            for target_path, file in targets
+        ]
+
+        changed: list[tuple[Path, str | None]] = []
+
+        try:
+            for (target_path, file), current in zip(
+                targets,
+                current_states,
+            ):
+                if file.existed:
+                    self._write_file_atomic(
+                        target_path=target_path,
+                        content=file.content,
+                    )
+
+                elif target_path.exists():
+                    target_path.unlink()
+
+                else:
+                    continue
+
+                changed.append(
+                    (
+                        target_path,
+                        current,
+                    ),
                 )
 
-            elif target_path.exists():
-                target_path.unlink()
+        except Exception as error:
+            self._revert(
+                repository_root,
+                changed,
+                error,
+            )
+
+            raise EditingError(
+                "Failed to roll back; every restored file was put back.",
+            ) from error
 
     def _revert(
         self,
@@ -452,6 +495,16 @@ class ChangeApplier:
                 temporary_file.flush()
                 os.fsync(
                     temporary_file.fileno(),
+                )
+
+            # Keep the target's permission bits (e.g. an executable
+            # script); a fresh temporary file would otherwise reset them.
+            if target_path.exists():
+                os.chmod(
+                    temporary_path,
+                    stat.S_IMODE(
+                        target_path.stat().st_mode,
+                    ),
                 )
 
             temporary_path.replace(

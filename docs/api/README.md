@@ -115,6 +115,22 @@ Initiates the full project initialization pipeline (validate → persist → sca
 
 **Response:** `204 No Content`
 
+### Proposals (preferred)
+
+| Method | Path | Operation ID | Description |
+|--------|------|-------------|-------------|
+| POST | `/editing/proposals` | `proposeEdits` | Store search/replace operations as a proposal with a diff |
+| POST | `/editing/proposals/plan` | `planEditProposal` | Let the edit model write the edits from an instruction |
+| GET | `/editing/proposals` | `listEditProposals` | Proposals, newest first |
+| GET | `/editing/proposals/{id}` | `getEditProposal` | Diff, status, validation results |
+| POST | `/editing/proposals/{id}/apply` | `applyEditProposal` | Apply by id (snapshot, all-or-nothing), then validate |
+| POST | `/editing/proposals/{id}/reject` | `rejectEditProposal` | Reject a pending proposal |
+| POST | `/editing/proposals/{id}/rollback` | `rollbackEditProposal` | Undo an applied proposal |
+| GET / PUT | `/editing/validation` | `getValidationConfig` / `updateValidationConfig` | The project's validation commands |
+| POST | `/editing/validation/run` | `runValidation` | Run validation commands now |
+
+Proposal errors: `400` for operations that do not apply (the message lists each one), `404` unknown proposal, `409` wrong state (for example applying twice) or a file changed since the proposal was made.
+
 **Errors:** `403` for a root that is not a registered RIP project; `409` when a file no longer matches the edit's `original_content` (apply) or changed after the apply (rollback); `500` when a failed apply could not be fully reverted (the message names the snapshot to roll back with).
 
 **See:** [Editing Architecture](../architecture/backend/editing.md)

@@ -69,7 +69,8 @@ Each provider also accepts `timeout_seconds` (default 120).
 | Name | Level | Used by |
 |------|-------|---------|
 | `chat` | Capability | Repository chat |
-| `edit` | Capability | Reserved for LLM-backed code editing |
+| `edit` | Capability | Code editing |
+| `edit.plan` | Task (under `edit`) | Writing search/replace edits from an instruction |
 | `chat.answer` | Task (under `chat`) | Answering a chat question |
 | `embedding` | Separate setting | Indexing and semantic search |
 
@@ -109,6 +110,6 @@ Changing generation models never touches the index.
 
 ## Known Limitations
 
-- Chat has a single LLM call (`chat.answer`); `edit` is configurable but has no LLM call until LLM-backed editing lands.
+- Each capability has one LLM call so far (`chat.answer`, `edit.plan`), so task overrides only matter once a capability has more than one.
 - No native Gemini adapter; use Gemini's OpenAI-compatible endpoint.
 - The Settings page shows the effective models and lets you pick the primary Ollama model. Editing hosted providers and overrides is done in the file or through the API.

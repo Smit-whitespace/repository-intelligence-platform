@@ -112,6 +112,46 @@ def test_openapi_contract_metadata() -> None:
             "/api/v1/editing/rollback",
         ): "rollbackChangeSet",
         (
+            "POST",
+            "/api/v1/editing/proposals",
+        ): "proposeEdits",
+        (
+            "GET",
+            "/api/v1/editing/proposals",
+        ): "listEditProposals",
+        (
+            "POST",
+            "/api/v1/editing/proposals/plan",
+        ): "planEditProposal",
+        (
+            "GET",
+            "/api/v1/editing/proposals/{proposal_id}",
+        ): "getEditProposal",
+        (
+            "POST",
+            "/api/v1/editing/proposals/{proposal_id}/apply",
+        ): "applyEditProposal",
+        (
+            "POST",
+            "/api/v1/editing/proposals/{proposal_id}/reject",
+        ): "rejectEditProposal",
+        (
+            "POST",
+            "/api/v1/editing/proposals/{proposal_id}/rollback",
+        ): "rollbackEditProposal",
+        (
+            "GET",
+            "/api/v1/editing/validation",
+        ): "getValidationConfig",
+        (
+            "PUT",
+            "/api/v1/editing/validation",
+        ): "updateValidationConfig",
+        (
+            "POST",
+            "/api/v1/editing/validation/run",
+        ): "runValidation",
+        (
             "GET",
             "/api/v1/models/configuration",
         ): "getModelConfiguration",

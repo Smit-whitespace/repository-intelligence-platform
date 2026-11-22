@@ -24,7 +24,7 @@ from app.indexing.models import (
     IndexStatus,
 )
 from app.indexing.service import IndexingService
-from app.mcp_server.server import build_server
+from app.mcp_server.server import EditingMode, build_server
 from app.workspace.service import RepositoryWorkspace
 from app.workspace.symbols import PythonSymbolExtractor
 
@@ -38,6 +38,18 @@ EXPECTED_TOOLS = {
     "search_semantic",
     "index_status",
     "reindex",
+}
+
+
+PROPOSE_TOOLS = {
+    "propose_edit",
+    "get_proposal",
+    "list_proposals",
+}
+
+APPLY_TOOLS = {
+    "apply_proposal",
+    "rollback_proposal",
 }
 
 
@@ -361,7 +373,8 @@ async def test_stdio_server_registers_root_and_serves_tools(
             {},
         )
 
-    assert tools == EXPECTED_TOOLS
+    # Started without --editing, the server is in "propose" mode.
+    assert tools == EXPECTED_TOOLS | PROPOSE_TOOLS
 
     assert symbols.structured_content["symbols"][0]["path"] == "main.py"
 
@@ -397,3 +410,197 @@ def test_stdio_server_refuses_a_home_directory_root() -> None:
 
     # Nothing but protocol may ever appear on stdout.
     assert result.stdout == ""
+
+
+# --- Editing modes -------------------------------------------------------
+
+
+def _editing_client(
+    project: Path,
+    indexing: MagicMock,
+    mode: EditingMode,
+) -> Client:
+    from app.dependencies.providers import get_snapshot_store_factory
+    from app.editing.change_applier import ChangeApplier
+    from app.editing.default_provider import DefaultEditingProvider
+    from app.editing.planner import EditPlanner
+    from app.editing.proposal_service import ProposalService
+    from app.editing.service import EditingService
+    from app.editing.validation import ValidationRunner
+
+    def open_workspace(
+        root: Path,
+    ) -> RepositoryWorkspace:
+        return RepositoryWorkspace.open(
+            root,
+            MagicMock(),
+            PythonSymbolExtractor(),
+        )
+
+    proposal_service = ProposalService(
+        editing_service=EditingService(
+            editing_provider=DefaultEditingProvider(),
+            change_applier=ChangeApplier(),
+            snapshot_store_factory=get_snapshot_store_factory(),
+        ),
+        change_applier=ChangeApplier(),
+        validation_runner=ValidationRunner(),
+        planner=EditPlanner(chat_provider_factory=MagicMock()),
+        workspace_opener=open_workspace,
+        edit_model_label=lambda: "ollama/qwen3:8b",
+    )
+
+    return Client(
+        build_server(
+            workspace=open_workspace(project),
+            indexing_service=indexing,
+            proposal_service=proposal_service,
+            editing_mode=mode,
+        ),
+    )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    ("mode", "expected"),
+    [
+        ("off", EXPECTED_TOOLS),
+        ("propose", EXPECTED_TOOLS | PROPOSE_TOOLS),
+        ("apply", EXPECTED_TOOLS | PROPOSE_TOOLS | APPLY_TOOLS),
+    ],
+)
+async def test_editing_mode_controls_which_tools_exist(
+    project: Path,
+    indexing: MagicMock,
+    mode: str,
+    expected: set[str],
+) -> None:
+    async with _editing_client(
+        project,
+        indexing,
+        EditingMode(mode),
+    ) as client:
+        tools = {
+            tool.name: tool
+            for tool in (await client.list_tools()).tools
+        }
+
+    assert set(tools) == expected
+
+    if "apply_proposal" in tools:
+        annotations = tools["apply_proposal"].annotations
+
+        assert annotations is not None and annotations.destructive_hint
+
+
+@pytest.mark.anyio
+async def test_propose_mode_creates_proposals_without_writing(
+    project: Path,
+    indexing: MagicMock,
+) -> None:
+    async with _editing_client(
+        project,
+        indexing,
+        EditingMode.PROPOSE,
+    ) as client:
+        result = await client.call_tool(
+            "propose_edit",
+            {
+                "edits": [
+                    {
+                        "path": "app.py",
+                        "search": "return 'TODO'",
+                        "replace": "return 'done'",
+                    },
+                ],
+                "description": "finish the TODO",
+            },
+        )
+
+        bad = await client.call_tool(
+            "propose_edit",
+            {
+                "edits": [
+                    {
+                        "path": "app.py",
+                        "search": "not there",
+                        "replace": "x",
+                    },
+                ],
+                "description": "broken",
+            },
+        )
+
+        apply_attempt = await client.call_tool(
+            "apply_proposal",
+            {
+                "proposal_id": result.structured_content["proposal_id"],
+            },
+        )
+
+    assert not result.is_error
+
+    assert "+        return 'done'" in result.structured_content["diff"]
+
+    assert b"TODO" in (project / "app.py").read_bytes()
+
+    assert bad.is_error
+
+    assert "was not found" in bad.content[0].text
+
+    # The tool does not exist in propose mode.
+    assert apply_attempt.is_error
+
+
+@pytest.mark.anyio
+async def test_apply_mode_applies_and_rolls_back(
+    project: Path,
+    indexing: MagicMock,
+) -> None:
+    original = (project / "app.py").read_bytes()
+
+    async with _editing_client(
+        project,
+        indexing,
+        EditingMode.APPLY,
+    ) as client:
+        proposal = await client.call_tool(
+            "propose_edit",
+            {
+                "edits": [
+                    {
+                        "path": "app.py",
+                        "search": "return 'TODO'",
+                        "replace": "return 'done'",
+                    },
+                ],
+                "description": "finish the TODO",
+            },
+        )
+
+        proposal_id = proposal.structured_content["proposal_id"]
+
+        applied = await client.call_tool(
+            "apply_proposal",
+            {
+                "proposal_id": proposal_id,
+            },
+        )
+
+        assert applied.structured_content["status"] == "applied"
+
+        # No validation commands configured: reported, not silently skipped.
+        assert applied.structured_content["validation"]["ran"] is False
+
+        assert b"'done'" in (project / "app.py").read_bytes()
+
+        rolled_back = await client.call_tool(
+            "rollback_proposal",
+            {
+                "proposal_id": proposal_id,
+            },
+        )
+
+    assert rolled_back.structured_content["status"] == "rolled_back"
+
+    assert (project / "app.py").read_bytes() == original

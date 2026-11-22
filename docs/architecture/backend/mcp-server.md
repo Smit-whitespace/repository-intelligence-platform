@@ -24,7 +24,21 @@ RIP can run as a [Model Context Protocol](https://modelcontextprotocol.io) serve
 | `find_symbols` | Where Python classes, functions and methods are defined | No |
 | `search_semantic` | Code ranked by meaning ("where are edits applied?") | No |
 | `index_status` | Whether the repository is indexed, with which embedding model | No |
-| `reindex` | Rebuilds the semantic index | RIP's own index only, never repository files |
+| `reindex` | Updates the semantic index (changed files only) | RIP's own index only, never repository files |
+| `propose_edit` | Stores search/replace edits as a reviewable proposal with a diff | No (a proposal in RIP's storage) |
+| `get_proposal`, `list_proposals` | Proposal diff, status and validation results | No |
+| `apply_proposal` | Writes a proposal (snapshot, all-or-nothing), then runs validation | **Yes**, only with `--editing apply` |
+| `rollback_proposal` | Undoes an applied proposal | **Yes**, only with `--editing apply` |
+
+**Editing modes** (`--editing`, default `propose`):
+
+| Mode | Edit tools | Who applies |
+|------|-----------|-------------|
+| `off` | none | Nobody, through RIP |
+| `propose` | `propose_edit`, `get_proposal`, `list_proposals` | A person, in the RIP app's Editing page |
+| `apply` | all of the above, plus `apply_proposal`, `rollback_proposal` | The agent |
+
+Tools a mode does not allow are not registered at all. `apply` is an explicit opt-in because applying runs the project's validation commands, which execute repository code (that is what tests do).
 
 Every tool returns structured JSON (with an output schema) and is annotated with MCP's read-only hints, so clients can approve read-only tools more freely. The server also sends usage instructions that tell the agent which tool fits which question.
 
@@ -91,6 +105,8 @@ Open **Settings → Developer → Edit Config**, which opens `%APPDATA%\Claude\c
 
 Quit Claude Desktop completely and start it again. If the server does not appear, its logs (and RIP's stderr) are in `%APPDATA%\Claude\logs\`.
 
+To let the agent apply its own edits, add `--editing apply` after `--root "<REPO>"`.
+
 ### A first session
 
 Ask the agent something like: *"Use the rip tools: check index_status, reindex if needed, then find where file edits are applied and explain the safety checks."* On first use, the server registers `<REPO>` as a RIP project (metadata only, in `<REPO>\.local_openclaw\`). Nothing is indexed until `reindex` is called.
@@ -123,7 +139,7 @@ RepositoryWorkspace (read tools)   IndexingService (index_status, reindex)
 
 - **Only the stdio transport.** That is what local agents use. A Streamable HTTP endpoint for remote agents would need authentication first.
 - **The semantic index goes stale as the agent edits files** until `reindex` runs. Reindexing only embeds changed files, so the server instructions tell agents to reindex after editing.
-- **No editing tools yet.** Agents use their own editing tools; RIP's controlled editing over MCP is planned.
+- **Edits cannot delete or rename files.** Agents with their own file tools can still do so outside RIP.
 - **Concurrent reads of one ChromaDB directory from two processes** (the app and an MCP server) are expected to work, but only writes are locked.
 
 ---

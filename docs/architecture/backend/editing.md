@@ -2,7 +2,7 @@
 
 > **Status:** Complete
 > **Sprint Introduced:** Sprint 8
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** V1 M0 (editing safety)
 > **Reading Time:** 4 minutes
 > **Audience:** Backend contributors
 > **Prerequisites:** [System Overview](../system-overview.md)
@@ -129,6 +129,12 @@ sequenceDiagram
 2. **All modifications are reversible.** Every `apply()` call creates a snapshot before making changes.
 3. **Snapshot content is captured before modification.** If a file doesn't exist, snapshot stores empty content.
 4. Editing never performs repository analysis — it only modifies.
+5. **Only registered projects can be edited.** `EditingService` rejects any root without `.local_openclaw/project.json` (`UnregisteredRepositoryError`, HTTP 403). The caller chooses the root, so without this check "stay inside the repository root" would restrict nothing.
+6. **Protected directories are never written.** `.git/` (writing `.git/hooks` is code execution) and `.local_openclaw/` (index and snapshots) are rejected at any depth, case-insensitively, and through symlinks. The list lives in `app/core/storage/locations.py` and is shared with the Workspace tools.
+7. **Stale edits are refused.** Each `FileEdit.original_content` must equal the file's current content exactly (an empty string for a new file), or apply raises `EditConflictError` (HTTP 409).
+8. **Rollback never overwrites later work.** Snapshots record `applied_sha256` per file; rollback raises `EditConflictError` if a file changed or disappeared after the apply. Snapshots from before this field skip the check.
+9. **Content is written byte for byte.** Reads and writes use `newline=""`, so line endings are never translated (the default would turn LF into CRLF on Windows).
+10. **Apply is all-or-nothing.** If a write fails, every file already written is restored from memory. If that restore also fails, `IncompleteRevertError` (HTTP 500) names the snapshot to roll back with; otherwise the unused snapshot is deleted.
 
 ---
 
@@ -153,6 +159,9 @@ The three-phase design (edit → review → apply) separates AI-generated change
 - Snapshot IDs are returned to the caller but there's no endpoint to list snapshots.
 - No snapshot cleanup strategy — snapshots accumulate indefinitely.
 - `edit()` returns AI suggestions; the caller must explicitly call `apply()` to execute them.
+- The default editing provider is a placeholder: `create file <path>` produces an empty file. LLM-backed edit planning arrives in V1 M4.
+- Replacing a file through an atomic rename does not preserve its permission bits (for example, the executable bit on shell scripts).
+- Rollback is not all-or-nothing: a write failure part-way through a restore leaves the remaining files unrestored.
 
 ---
 

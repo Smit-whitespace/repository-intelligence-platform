@@ -22,6 +22,13 @@ from app.projects.exceptions import (
     ProjectNotFoundError,
 )
 from app.repository.exceptions import RepositoryScanError
+from app.workspace.exceptions import (
+    FileTooLargeError,
+    NotATextFileError,
+    UnregisteredWorkspaceError,
+    WorkspaceError,
+    WorkspaceFileNotFoundError,
+)
 
 
 _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
@@ -29,6 +36,11 @@ _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
     EditConflictError: 409,
     IncompleteRevertError: 500,
     IndexIncompatibleError: 409,
+    WorkspaceError: 400,
+    UnregisteredWorkspaceError: 403,
+    WorkspaceFileNotFoundError: 404,
+    FileTooLargeError: 413,
+    NotATextFileError: 415,
 }
 """Specific subclasses that need a different status than their base.
 

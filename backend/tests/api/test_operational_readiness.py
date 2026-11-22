@@ -138,6 +138,11 @@ def test_application_factory_registers_routes_and_openapi() -> None:
         "/api/v1/editing/edit",
         "/api/v1/editing/apply",
         "/api/v1/editing/rollback",
+        "/api/v1/workspace/file",
+        "/api/v1/workspace/tree",
+        "/api/v1/workspace/search/text",
+        "/api/v1/workspace/symbols",
+        "/api/v1/workspace/search/semantic",
     }
 
 

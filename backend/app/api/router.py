@@ -23,6 +23,9 @@ from app.api.routes.repository import (
 from app.api.routes.system import (
     router as system_router,
 )
+from app.api.routes.workspace import (
+    router as workspace_router,
+)
 
 api_router = APIRouter(
     prefix="/api/v1",
@@ -54,4 +57,8 @@ api_router.include_router(
 
 api_router.include_router(
     editing_router,
+)
+
+api_router.include_router(
+    workspace_router,
 )

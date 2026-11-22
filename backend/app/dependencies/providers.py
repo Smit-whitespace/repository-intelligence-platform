@@ -65,6 +65,13 @@ from app.repository.service import RepositoryService
 from app.editing.change_applier import (
     ChangeApplier,
 )
+from app.workspace.service import (
+    RepositoryWorkspace,
+    WorkspaceOpener,
+)
+from app.workspace.symbols import (
+    PythonSymbolExtractor,
+)
 
 
 @lru_cache(maxsize=1)
@@ -262,3 +269,30 @@ def get_project_initialization_service() -> ProjectInitializationService:
         repository_service=get_repository_service(),
         indexing_service=get_indexing_service(),
     )
+
+
+@lru_cache(maxsize=1)
+def get_symbol_extractor() -> PythonSymbolExtractor:
+    """Return the shared symbol extractor (its parse cache is process-wide)."""
+
+    return PythonSymbolExtractor()
+
+
+@lru_cache(maxsize=1)
+def get_workspace_opener() -> WorkspaceOpener:
+    """Return a function that opens a workspace on a project root.
+
+    Opening validates that the root is a registered project, so every
+    caller (REST today, MCP next) gets the same path-security boundary.
+    """
+
+    def open_workspace(
+        root_directory: str | Path,
+    ) -> RepositoryWorkspace:
+        return RepositoryWorkspace.open(
+            root_directory=root_directory,
+            retrieval_service=get_retrieval_service(),
+            symbol_extractor=get_symbol_extractor(),
+        )
+
+    return open_workspace

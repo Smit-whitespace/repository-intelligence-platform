@@ -30,6 +30,21 @@ CHROMA_RELATIVE_DIRECTORY = Path("index/chroma")
 
 SNAPSHOTS_RELATIVE_DIRECTORY = Path("snapshots")
 
+PROTECTED_DIRECTORY_NAMES = frozenset(
+    {
+        ".git",
+        PROJECT_STORAGE_DIRECTORY_NAME,
+    },
+)
+"""Directory names that repository tools never read from or write into.
+
+``.git`` because writing ``.git/hooks/*`` is arbitrary code execution
+(and its internals are noise to an agent); ``.local_openclaw`` because
+it holds RIP's own index and the snapshots that rollback depends on.
+Compared case-insensitively, because Windows and macOS file systems are
+case-insensitive by default.
+"""
+
 
 def project_storage_directory(
     root_directory: str | Path,
@@ -76,4 +91,30 @@ def project_snapshots_directory(
     return (
         project_storage_directory(root_directory)
         / SNAPSHOTS_RELATIVE_DIRECTORY
+    )
+
+
+def is_registered_project(
+    root_directory: str | Path,
+) -> bool:
+    """Return whether a directory is a registered RIP project.
+
+    A project is registered once its metadata file exists. Tools that
+    read or modify a repository only accept registered roots, so a
+    caller cannot point them at an arbitrary directory.
+    """
+
+    return project_metadata_path(
+        root_directory,
+    ).is_file()
+
+
+def is_protected_path(
+    relative_path: Path,
+) -> bool:
+    """Return whether a repository-relative path is in a protected directory."""
+
+    return any(
+        part.casefold() in PROTECTED_DIRECTORY_NAMES
+        for part in relative_path.parts
     )

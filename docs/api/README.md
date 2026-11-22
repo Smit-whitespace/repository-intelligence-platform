@@ -115,7 +115,27 @@ Initiates the full project initialization pipeline (validate → persist → sca
 
 **Response:** `204 No Content`
 
+**Errors:** `403` for a root that is not a registered RIP project; `409` when a file no longer matches the edit's `original_content` (apply) or changed after the apply (rollback); `500` when a failed apply could not be fully reverted (the message names the snapshot to roll back with).
+
 **See:** [Editing Architecture](../architecture/backend/editing.md)
+
+---
+
+## Workspace
+
+Read-only repository tools for external clients. Every endpoint takes `root_directory` (a registered project root) and repository-relative paths.
+
+| Method | Path | Operation ID | Description |
+|--------|------|-------------|-------------|
+| GET | `/workspace/file` | `readWorkspaceFile` | Line range of a text file (max 2,000 lines per call) |
+| GET | `/workspace/tree` | `listWorkspaceTree` | Paginated directory tree, ignored and protected directories skipped |
+| GET | `/workspace/search/text` | `searchWorkspaceText` | Literal or regex line search, optional `path_glob` |
+| GET | `/workspace/symbols` | `findWorkspaceSymbols` | Class, function and method definitions (Python only) |
+| GET | `/workspace/search/semantic` | `searchWorkspaceSemantic` | Indexed chunks ranked by similarity |
+
+**Errors:** `400` invalid argument, path outside the root, protected path, or secret-like file; `403` unregistered root; `404` missing file or directory; `413` file over 1 MB; `415` binary or non-UTF-8 file; `409` (semantic search) index built with a different embedding model.
+
+**See:** [Workspace Architecture](../architecture/backend/workspace.md)
 
 ---
 
@@ -133,11 +153,15 @@ Initiates the full project initialization pipeline (validate → persist → sca
 
 All endpoints return standardized error responses:
 
-- **400 Bad Request** — validation error
+- **400 Bad Request** — the request is well-formed but cannot be processed
+- **403 Forbidden** — the root is not a registered RIP project
 - **404 Not Found** — resource not found
+- **409 Conflict** — stale edit, unsafe rollback, or incompatible index
+- **413 / 415** — file too large / not text (Workspace)
+- **422 Unprocessable Entity** — request validation failed (FastAPI's default format)
 - **500 Server Error** — unexpected failure
 
-Error bodies follow FastAPI's default validation format.
+Domain errors return `{"detail": "<message>"}`.
 
 ---
 
@@ -150,3 +174,4 @@ Error bodies follow FastAPI's default validation format.
 | Repository | [architecture/backend/repository.md](../architecture/backend/repository.md) |
 | Chat | [architecture/backend/chat.md](../architecture/backend/chat.md) |
 | Editing | [architecture/backend/editing.md](../architecture/backend/editing.md) |
+| Workspace | [architecture/backend/workspace.md](../architecture/backend/workspace.md) |

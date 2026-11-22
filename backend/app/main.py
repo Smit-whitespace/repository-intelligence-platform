@@ -41,6 +41,13 @@ OPENAPI_TAGS = [
         "description": "Planning, apply, snapshot, and rollback endpoints.",
     },
     {
+        "name": "Workspace",
+        "description": (
+            "Read-only repository tools for external clients: read files, "
+            "list the tree, text search, symbol lookup, semantic search."
+        ),
+    },
+    {
         "name": "Models",
         "description": "Model discovery and active model management endpoints.",
     },

@@ -4,7 +4,7 @@ import hashlib
 from collections.abc import Callable
 from pathlib import Path
 
-from app.core.storage.locations import project_metadata_path
+from app.core.storage.locations import is_registered_project
 from app.editing.change_applier import (
     ChangeApplier,
     read_text_exact,
@@ -183,9 +183,9 @@ class EditingService:
                 "Repository root is not a directory.",
             )
 
-        if not project_metadata_path(
+        if not is_registered_project(
             root,
-        ).is_file():
+        ):
             raise UnregisteredRepositoryError(
                 "Repository root is not a registered RIP project. "
                 "Initialize the project before editing it.",

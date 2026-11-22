@@ -4,7 +4,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from app.core.storage.locations import PROJECT_STORAGE_DIRECTORY_NAME
+from app.core.storage.locations import is_protected_path
 from app.editing.exceptions import (
     EditConflictError,
     EditingError,
@@ -16,20 +16,6 @@ from app.editing.models import (
 from app.editing.snapshot_models import (
     Snapshot,
 )
-
-PROTECTED_DIRECTORY_NAMES = frozenset(
-    {
-        ".git",
-        PROJECT_STORAGE_DIRECTORY_NAME,
-    },
-)
-"""Directory names that edits may never write into, at any depth.
-
-``.git`` because writing ``.git/hooks/*`` is arbitrary code execution;
-``.local_openclaw`` because it holds RIP's own index and the snapshots
-that rollback depends on. Compared case-insensitively, because Windows
-and macOS file systems are case-insensitive by default.
-"""
 
 
 def read_text_exact(
@@ -292,9 +278,8 @@ class ChangeApplier:
 
             # Checked on the resolved path, so a symlink that points into
             # a protected directory is rejected too.
-            if any(
-                part.casefold() in PROTECTED_DIRECTORY_NAMES
-                for part in repository_relative_path.parts
+            if is_protected_path(
+                repository_relative_path,
             ):
                 raise EditingError(
                     protected_message,

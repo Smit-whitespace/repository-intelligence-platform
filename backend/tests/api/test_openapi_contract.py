@@ -111,6 +111,26 @@ def test_openapi_contract_metadata() -> None:
             "POST",
             "/api/v1/editing/rollback",
         ): "rollbackChangeSet",
+        (
+            "GET",
+            "/api/v1/workspace/file",
+        ): "readWorkspaceFile",
+        (
+            "GET",
+            "/api/v1/workspace/tree",
+        ): "listWorkspaceTree",
+        (
+            "GET",
+            "/api/v1/workspace/search/text",
+        ): "searchWorkspaceText",
+        (
+            "GET",
+            "/api/v1/workspace/symbols",
+        ): "findWorkspaceSymbols",
+        (
+            "GET",
+            "/api/v1/workspace/search/semantic",
+        ): "searchWorkspaceSemantic",
     }
 
     for key, operation_id in expected_operation_ids.items():

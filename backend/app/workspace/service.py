@@ -31,7 +31,7 @@ from app.core.storage.locations import (
 )
 from app.indexing.retrieval_models import SearchQuery
 from app.indexing.retrieval_service import RetrievalService
-from app.repository.ignore import should_ignore
+from app.repository.ignore import RepositoryIgnoreRules
 from app.workspace.exceptions import (
     FileTooLargeError,
     NotATextFileError,
@@ -901,6 +901,11 @@ class RepositoryWorkspace:
 
         visited = 0
 
+        # Fresh per walk, so an edited .gitignore applies to the next call.
+        ignore_rules = RepositoryIgnoreRules(
+            self._root,
+        )
+
         while stack:
             children, depth = stack[-1]
 
@@ -915,6 +920,7 @@ class RepositoryWorkspace:
 
             item = self._classify(
                 entry,
+                ignore_rules,
             )
 
             if item is None:
@@ -962,16 +968,20 @@ class RepositoryWorkspace:
     def _classify(
         self,
         entry: os.DirEntry[str],
+        ignore_rules: RepositoryIgnoreRules,
     ) -> "_Entry | None":
-        """Describe one directory entry, or None if it must stay hidden."""
+        """Describe one directory entry, or None if it must stay hidden.
+
+        Hidden: protected paths, names RIP always skips, anything the
+        repository's git ignore rules exclude, and links that leave the
+        root.
+        """
 
         entry_path = Path(
             entry.path,
         )
 
-        if should_ignore(
-            entry_path,
-        ) or is_protected_path(
+        if is_protected_path(
             Path(
                 entry.name,
             ),
@@ -999,6 +1009,12 @@ class RepositoryWorkspace:
                 resolved = entry_path
 
             is_directory = resolved.is_dir()
+
+            if ignore_rules.is_ignored(
+                entry_path,
+                is_directory=is_directory,
+            ):
+                return None
 
             # A directory is only walked into when it is not a redirect.
             descend = is_directory and resolved == entry_path

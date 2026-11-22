@@ -188,3 +188,47 @@ def test_scan_file_instead_of_directory(
         scanner.scan(
             file_path,
         )
+
+def test_scan_respects_gitignore(
+    tmp_path: Path,
+) -> None:
+    """Indexing reads the scan, so ignored build output is never indexed."""
+
+    from app.repository.scanner import RepositoryScanner
+
+    (tmp_path / ".gitignore").write_text(
+        "build/\n*.min.js\n",
+        encoding="utf-8",
+    )
+
+    (tmp_path / "build").mkdir()
+
+    (tmp_path / "build" / "out.py").write_text(
+        "x = 1\n",
+        encoding="utf-8",
+    )
+
+    (tmp_path / "app.min.js").write_text(
+        "a()",
+        encoding="utf-8",
+    )
+
+    (tmp_path / "app.js").write_text(
+        "a()",
+        encoding="utf-8",
+    )
+
+    paths = {
+        entry.relative_path.as_posix()
+        for entry in RepositoryScanner().scan(
+            tmp_path,
+        )
+    }
+
+    assert "app.js" in paths
+
+    assert "build" not in paths
+
+    assert "build/out.py" not in paths
+
+    assert "app.min.js" not in paths

@@ -122,8 +122,10 @@ sequenceDiagram
 3. **Persistence identity comes from the opened project, not the process CWD.** Chroma persistence always resolves to `<project root>/.local_openclaw/index/chroma` for the indexed project.
 4. `IndexingResult` is the sole output contract — callers receive summary counts.
 5. Indexing skips directories and non-text files silently.
-6. **Every index records the embedding model that built it.** `RepositoryIndexer` stamps the Chroma collection metadata with the provider's `identity` (for example `ollama:nomic-embed-text`) and the vector dimension. The stamp lives in the collection itself, so `clear()` removes it together with the vectors.
-7. **Embedding models are never mixed.** `RepositoryIndexer.prepare()` marks an index that was built by a different model, or before the model was recorded, for rebuilding. The clear happens only after the first batch has been embedded successfully, so if the provider is down or the new model is missing, the old index survives. Chunk ids do not include the model, and Chroma's `add` keeps the existing vector for an existing id, so without the clear, unchanged chunks would keep stale vectors. Only an explicit indexing run does this; changing the configured model never reindexes on its own.
+6. **Indexing respects the repository's git ignore rules.** `RepositoryIgnoreRules` (`app/repository/ignore.py`) applies every `.gitignore` (deeper files take precedence, `!` re-includes work) and `.git/info/exclude`, on top of the names RIP always skips. Ignored directories are never entered. A file ignored after it was indexed is removed on the next run. Committed dependency lock files (`uv.lock`, `package-lock.json`, `yarn.lock`, `Cargo.lock` and similar, see `NOT_INDEXED_FILE_NAMES`) are also left out of the index, but stay listable and searchable in the workspace tools.
+7. **Unchanged content is never re-embedded.** Before embedding, the indexer fetches the chunk ids already stored for the project; chunks whose ids exist keep their vectors, and every current id is kept when stale chunks are removed. A rebuild for a new embedding model ignores the existing ids.
+8. **Every index records the embedding model that built it.** `RepositoryIndexer` stamps the Chroma collection metadata with the provider's `identity` (for example `ollama:nomic-embed-text`) and the vector dimension. The stamp lives in the collection itself, so `clear()` removes it together with the vectors.
+9. **Embedding models are never mixed.** `RepositoryIndexer.prepare()` marks an index that was built by a different model, or before the model was recorded, for rebuilding. The clear happens only after the first batch has been embedded successfully, so if the provider is down or the new model is missing, the old index survives. Chunk ids do not include the model, and Chroma's `add` keeps the existing vector for an existing id, so without the clear, unchanged chunks would keep stale vectors. Only an explicit indexing run does this; changing the configured model never reindexes on its own.
 
 ---
 
@@ -151,11 +153,11 @@ Indexing is independent of retrieval by design — `RetrievalService` never inde
 
 - Indexing processes all text files synchronously. For very large repositories this can be slow.
 - Failed files are counted but not identified (no per-file error reporting in `IndexingResult`).
-- No incremental indexing — the entire repository is re-indexed each time.
+- Every run still scans, hashes and chunks every file (cheap), but only embeds chunks not already in the index (the expensive part). Chunk ids include the file's content hash, so unchanged files are recognized without any extra bookkeeping; `IndexingResult.unchanged_files` reports them, and `indexed_chunks` counts only newly embedded chunks.
 - Indexing holds an inter-process OS file lock (`.local_openclaw/index/index.lock`), so the RIP app and an MCP server never write one index at once; a second indexer gets `IndexingBusyError` (HTTP 409).
 - ChromaDB is created with anonymized telemetry disabled (offline-first, ADR-0001).
 - When every file fails to index (typically the embedding provider is down), stale-chunk removal is skipped, so the existing index is kept instead of being emptied.
-- Ignore rules are a fixed list of directory names (`app/repository/ignore.py`); `.gitignore` is not read, so build output such as `frontend/dist/` and lock files are indexed.
+- Only the repository's own git ignore files are honored (`.gitignore` files and `.git/info/exclude`); a global `core.excludesFile` is not read.
 
 ---
 

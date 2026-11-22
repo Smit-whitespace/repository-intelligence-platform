@@ -122,7 +122,7 @@ RepositoryWorkspace (read tools)   IndexingService (index_status, reindex)
 ## Known Limitations
 
 - **Only the stdio transport.** That is what local agents use. A Streamable HTTP endpoint for remote agents would need authentication first.
-- **The semantic index goes stale as the agent edits files** until `reindex` runs, and `reindex` re-embeds every file. Changed-files-only reindexing is planned.
+- **The semantic index goes stale as the agent edits files** until `reindex` runs. Reindexing only embeds changed files, so the server instructions tell agents to reindex after editing.
 - **No editing tools yet.** Agents use their own editing tools; RIP's controlled editing over MCP is planned.
 - **Concurrent reads of one ChromaDB directory from two processes** (the app and an MCP server) are expected to work, but only writes are locked.
 

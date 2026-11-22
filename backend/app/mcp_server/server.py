@@ -50,8 +50,11 @@ Repository Intelligence Platform (RIP): read-only tools for one repository.
 - Results are bounded. When a result says truncated, narrow the query
   (path_glob, a smaller line range) instead of repeating it.
 - search_semantic needs an index. Check index_status first; call reindex
-  if the project is not indexed, the index is incompatible, or many files
-  changed since it was built.
+  if the project is not indexed or the index is incompatible, and after
+  editing files so search sees the new content. Reindexing only embeds
+  changed files, so it is cheap to repeat.
+- Files excluded by the repository's .gitignore are not listed, searched
+  or indexed, but read_file can still open them by path.
 - Secret-like files (.env, credentials, private keys) and the .git and
   .local_openclaw directories are never readable.
 """
@@ -245,11 +248,14 @@ def build_server(
         ),
     )
     async def reindex() -> IndexingResult:
-        """Rebuild the semantic search index for the repository.
+        """Bring the semantic search index up to date with the repository.
 
-        Embeds every text file, so it can take minutes on a large
-        repository. Only RIP's own index is written; repository files
-        are never modified. Fails if another process is indexing.
+        Only new or changed files are embedded; unchanged files keep their
+        vectors, and deleted or newly .gitignored files are removed. The
+        first run (or a run after the embedding model changed) embeds
+        everything and can take minutes on a large repository. Only RIP's
+        own index is written; repository files are never modified. Fails
+        if another process is indexing.
         """
 
         return await _call(

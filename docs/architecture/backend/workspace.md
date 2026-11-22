@@ -103,7 +103,7 @@ Routes are thin adapters: they translate query parameters and nothing else. Vali
 - Regular expressions use the `regex` engine (already installed with `tiktoken`) because Python's `re` cannot time out a match; a catastrophically backtracking pattern ends the search with a truncation reason instead of hanging a server thread.
 - Hard links are indistinguishable from ordinary files, so a hard link inside the repository to a file outside it is readable. Creating one requires write access to the repository already.
 - Paths containing NUL bytes, and on Windows any `:` (alternate data streams), are rejected.
-- Ignore rules are the same fixed name list the indexer uses; `.gitignore` is not read, so build output such as `frontend/dist/` is searched.
+- Listing and search use the same ignore rules as indexing: the names RIP always skips plus the repository's `.gitignore` files and `.git/info/exclude`. `read_file` can still open an ignored file by path.
 - Text search reads files on every call; there is no content cache. This is fast for repositories of a few thousand files (about 50 ms for this repository).
 
 ---

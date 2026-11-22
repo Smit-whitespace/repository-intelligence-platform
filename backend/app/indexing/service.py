@@ -13,6 +13,7 @@ from app.indexing.models import (
     IndexStatus,
 )
 from app.repository.chunking import RepositoryChunker
+from app.repository.ignore import is_indexable_file_name
 from app.repository.documents import RepositoryDocumentLoader
 from app.repository.metadata import RepositoryMetadataExtractor
 from app.repository.scanner import RepositoryScanner
@@ -87,6 +88,12 @@ class IndexingService:
             root_directory_str,
         )
 
+        existing_chunk_ids = self._indexer.existing_chunk_ids(
+            root_directory_str,
+        )
+
+        unchanged_files = 0
+
         entries = self._scanner.scan(
             root_directory,
         )
@@ -116,6 +123,13 @@ class IndexingService:
             total_files_discovered += 1
 
             scanned_files += 1
+
+            if not is_indexable_file_name(
+                entry.name,
+            ):
+                skipped_files += 1
+
+                continue
 
             relative_path = str(
                 entry.relative_path,
@@ -232,15 +246,29 @@ class IndexingService:
                     },
                 )
 
+            # Chunk ids include the file's content hash, so a chunk whose
+            # id is already indexed is unchanged and keeps its vector.
+            # Only new or edited content is embedded.
+            new_chunks = [
+                chunk
+                for chunk in chunks
+                if chunk.chunk_id not in existing_chunk_ids
+            ]
+
             try:
-                result = self._indexer.index(
-                    chunks,
-                )
+                if new_chunks:
+                    result = self._indexer.index(
+                        new_chunks,
+                    )
+
+                    indexed_chunks += result.indexed_chunks
+
+                else:
+                    unchanged_files += 1
 
                 indexed_files += 1
 
-                indexed_chunks += result.indexed_chunks
-
+                # Every current chunk is kept, embedded now or earlier.
                 indexed_chunk_ids.extend(
                     chunk.chunk_id
                     for chunk in chunks
@@ -304,10 +332,11 @@ class IndexingService:
         )
 
         logger.info(
-            "Indexed %s: %d files, %d skipped, %d failed, "
-            "%d chunks in %d ms",
+            "Indexed %s: %d files (%d unchanged), %d skipped, %d failed, "
+            "%d chunks embedded in %d ms",
             root_directory,
             indexed_files,
+            unchanged_files,
             skipped_files,
             failed_files,
             indexed_chunks,
@@ -320,5 +349,6 @@ class IndexingService:
             indexed_chunks=indexed_chunks,
             skipped_files=skipped_files,
             failed_files=failed_files,
+            unchanged_files=unchanged_files,
             diagnostics=diagnostics,
         )

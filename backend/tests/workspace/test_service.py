@@ -1200,3 +1200,66 @@ def test_symbols_inside_conditional_blocks_are_found(
     method = workspace.find_symbols("Config.conditional_method").symbols
 
     assert method[0].kind is SymbolKind.METHOD
+
+
+# --- .gitignore ----------------------------------------------------------
+
+
+def test_gitignored_paths_are_hidden_from_tree_and_search(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    _write(project, ".gitignore", b"dist/\n*.log\n!keep.log\n")
+    _write(project, "dist/bundle.js", b"TODO bundled\n")
+    _write(project, "debug.log", b"TODO in a log\n")
+    _write(project, "keep.log", b"TODO kept\n")
+
+    paths = {
+        entry.path
+        for entry in workspace.list_tree(max_depth=5).entries
+    }
+
+    assert "dist" not in paths
+
+    assert "debug.log" not in paths
+
+    assert {"keep.log", ".gitignore"} <= paths
+
+    matched = {
+        match.path
+        for match in workspace.search_text("TODO").matches
+    }
+
+    assert matched == {
+        "README.md",
+        "keep.log",
+    }
+
+
+def test_gitignored_file_can_still_be_read_directly(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    """Ignore rules decide what is listed, not what is accessible."""
+
+    _write(project, ".gitignore", b"generated/\n")
+    _write(project, "generated/schema.py", b"SCHEMA = 1\n")
+
+    assert workspace.read_file("generated/schema.py").content == "SCHEMA = 1\n"
+
+
+def test_nested_gitignore_and_info_exclude_are_honored(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    _write(project, "pkg/.gitignore", b"out/\n")
+    _write(project, "pkg/out/x.py", b"def hidden_by_nested():\n    pass\n")
+    _write(project, "out/y.py", b"def visible_at_root():\n    pass\n")
+    _write(project, ".git/info/exclude", b"scratch/\n")
+    _write(project, "scratch/z.py", b"def excluded_locally():\n    pass\n")
+
+    assert not workspace.find_symbols("hidden_by_nested").symbols
+
+    assert workspace.find_symbols("visible_at_root").symbols
+
+    assert not workspace.find_symbols("excluded_locally").symbols

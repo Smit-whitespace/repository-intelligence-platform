@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 
 from app.repository.exceptions import RepositoryScanError
-from app.repository.ignore import should_ignore
+from app.repository.ignore import RepositoryIgnoreRules
 from app.repository.models import RepositoryEntry
 
 
@@ -31,6 +31,10 @@ class RepositoryScanner:
 
         entries: list[RepositoryEntry] = []
 
+        ignore_rules = RepositoryIgnoreRules(
+            root_directory,
+        )
+
         for current_root, directories, files in os.walk(
             root_directory,
         ):
@@ -39,8 +43,9 @@ class RepositoryScanner:
             directories[:] = [
                 directory
                 for directory in directories
-                if not should_ignore(
+                if not ignore_rules.is_ignored(
                     current_path / directory,
+                    is_directory=True,
                 )
             ]
 
@@ -61,8 +66,9 @@ class RepositoryScanner:
             for file_name in files:
                 absolute_path = current_path / file_name
 
-                if should_ignore(
+                if ignore_rules.is_ignored(
                     absolute_path,
+                    is_directory=False,
                 ):
                     continue
 

@@ -70,6 +70,11 @@ class IndexingResult(BaseModel):
 
     failed_files: int
 
+    unchanged_files: int = 0
+    """Indexed files whose content had not changed, so nothing was
+    re-embedded for them. ``indexed_chunks`` counts only newly embedded
+    chunks."""
+
     diagnostics: IndexingDiagnostics | None = None
 
 

@@ -82,6 +82,35 @@ class RepositoryIndexer:
             compatible=built_with is None or built_with == configured,
         )
 
+    def existing_chunk_ids(
+        self,
+        root_directory: str,
+    ) -> set[str]:
+        """Return the ids of chunks already indexed for a project.
+
+        Empty when the project has no index yet, or when this run will
+        rebuild it (``prepare`` found a different embedding model), so
+        everything is embedded again with the configured model.
+        """
+
+        if root_directory in self._pending_rebuilds:
+            return set()
+
+        vector_store = self._vector_store_resolver.for_project(
+            root_directory=root_directory,
+        )
+
+        if vector_store is None:
+            return set()
+
+        return set(
+            vector_store.get_chunk_ids(
+                where={
+                    "root_directory": root_directory,
+                },
+            ),
+        )
+
     def prepare(
         self,
         root_directory: str,

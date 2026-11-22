@@ -4,7 +4,10 @@ import os
 import tempfile
 from pathlib import Path
 
-from app.core.storage.locations import is_protected_path
+from app.core.storage.locations import (
+    is_protected_path,
+    is_valid_path_text,
+)
 from app.editing.exceptions import (
     EditConflictError,
     EditingError,
@@ -34,6 +37,35 @@ def read_text_exact(
         return file.read()
 
 
+def read_text_for_edit(
+    path: Path,
+    relative_path: Path,
+) -> str | None:
+    """Read an edit target exactly, or ``None`` if it does not exist.
+
+    Binary, non-UTF-8 and unreadable files become a clear ``EditingError``
+    (HTTP 400) instead of an unhandled ``UnicodeDecodeError`` (HTTP 500).
+    """
+
+    if not path.exists():
+        return None
+
+    try:
+        return read_text_exact(
+            path,
+        )
+
+    except UnicodeDecodeError as error:
+        raise EditingError(
+            f"File is not UTF-8 text and cannot be edited: {relative_path.as_posix()}",
+        ) from error
+
+    except OSError as error:
+        raise EditingError(
+            f"Failed to read repository file: {relative_path.as_posix()}",
+        ) from error
+
+
 class ChangeApplier:
     """Apply repository modifications."""
 
@@ -54,24 +86,9 @@ class ChangeApplier:
             repository_root.resolve()
         )
 
-        self._validate_repository_root(
-            repository_root,
-        )
-
-        self._validate_relative_paths(
+        self.validate_change_set(
             repository_root=repository_root,
-            relative_paths=[
-                edit.relative_path
-                for edit in change_set.edits
-            ],
-            empty_path_message="ChangeSet contains an empty relative path.",
-            absolute_path_message="ChangeSet contains an absolute path.",
-            escape_message="ChangeSet contains a path outside the repository.",
-            protected_message="ChangeSet targets a protected path.",
-            duplicate_message="ChangeSet contains duplicate target paths.",
-            conflict_message="ChangeSet contains conflicting target paths.",
-            parent_message="ChangeSet target parent is not a directory.",
-            target_directory_message="ChangeSet target path is a directory.",
+            change_set=change_set,
         )
 
         targets: list[tuple[Path, str, str | None]] = []
@@ -82,12 +99,9 @@ class ChangeApplier:
                 / edit.relative_path
             ).resolve()
 
-            current_content = (
-                read_text_exact(
-                    target_path,
-                )
-                if target_path.exists()
-                else None
+            current_content = read_text_for_edit(
+                target_path,
+                edit.relative_path,
             )
 
             if (current_content or "") != edit.original_content:
@@ -122,6 +136,7 @@ class ChangeApplier:
 
         except Exception as error:
             self._revert(
+                repository_root,
                 written,
                 error,
             )
@@ -130,12 +145,48 @@ class ChangeApplier:
                 "Failed to apply ChangeSet; every written file was reverted.",
             ) from error
 
-    def restore(
+    def validate_change_set(
+        self,
+        repository_root: Path,
+        change_set: ChangeSet,
+    ) -> None:
+        """Validate every target path without touching any file.
+
+        Callers must run this before reading any target (for example to
+        snapshot it), so a path outside the root is never read at all.
+        """
+
+        repository_root = (
+            repository_root.resolve()
+        )
+
+        self._validate_repository_root(
+            repository_root,
+        )
+
+        self._validate_relative_paths(
+            repository_root=repository_root,
+            relative_paths=[
+                edit.relative_path
+                for edit in change_set.edits
+            ],
+            empty_path_message="ChangeSet contains an empty relative path.",
+            absolute_path_message="ChangeSet contains an absolute path.",
+            escape_message="ChangeSet contains a path outside the repository.",
+            protected_message="ChangeSet targets a protected path.",
+            invalid_message="ChangeSet contains an invalid path.",
+            duplicate_message="ChangeSet contains duplicate target paths.",
+            conflict_message="ChangeSet contains conflicting target paths.",
+            parent_message="ChangeSet target parent is not a directory.",
+            target_directory_message="ChangeSet target path is a directory.",
+        )
+
+    def validate_snapshot(
         self,
         repository_root: Path,
         snapshot: Snapshot,
     ) -> None:
-        """Restore files captured by a snapshot."""
+        """Validate every snapshot path without touching any file."""
 
         repository_root = (
             repository_root.resolve()
@@ -155,10 +206,27 @@ class ChangeApplier:
             absolute_path_message="Snapshot contains an absolute path.",
             escape_message="Snapshot contains a path outside the repository.",
             protected_message="Snapshot targets a protected path.",
+            invalid_message="Snapshot contains an invalid path.",
             duplicate_message="Snapshot contains duplicate target paths.",
             conflict_message="Snapshot contains conflicting target paths.",
             parent_message="Snapshot target parent is not a directory.",
             target_directory_message="Snapshot target path is a directory.",
+        )
+
+    def restore(
+        self,
+        repository_root: Path,
+        snapshot: Snapshot,
+    ) -> None:
+        """Restore files captured by a snapshot."""
+
+        repository_root = (
+            repository_root.resolve()
+        )
+
+        self.validate_snapshot(
+            repository_root=repository_root,
+            snapshot=snapshot,
         )
 
         for file in snapshot.files:
@@ -178,10 +246,15 @@ class ChangeApplier:
 
     def _revert(
         self,
+        repository_root: Path,
         written: list[tuple[Path, str | None]],
         cause: Exception,
     ) -> None:
-        """Restore files written by a failed apply, newest first."""
+        """Restore files written by a failed apply, newest first.
+
+        Reports repository-relative paths only, so error responses never
+        reveal where the repository lives on the server.
+        """
 
         unrestored: list[str] = []
 
@@ -200,9 +273,9 @@ class ChangeApplier:
 
             except Exception:
                 unrestored.append(
-                    str(
-                        target_path,
-                    ),
+                    target_path.relative_to(
+                        repository_root,
+                    ).as_posix(),
                 )
 
         if unrestored:
@@ -235,6 +308,7 @@ class ChangeApplier:
         absolute_path_message: str,
         escape_message: str,
         protected_message: str,
+        invalid_message: str,
         duplicate_message: str,
         conflict_message: str,
         parent_message: str,
@@ -257,6 +331,13 @@ class ChangeApplier:
             if relative_path.is_absolute():
                 raise EditingError(
                     absolute_path_message,
+                )
+
+            if not is_valid_path_text(
+                str(relative_path),
+            ):
+                raise EditingError(
+                    invalid_message,
                 )
 
             target_path = (

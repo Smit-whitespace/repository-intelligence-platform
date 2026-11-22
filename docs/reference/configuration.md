@@ -15,6 +15,14 @@ Configuration is managed by `app/core/config/models.py` (`ApplicationSettings` a
 |---------|------|---------|-------------|
 | `LOC_SERVER_HOST` | `str` | `127.0.0.1` | HTTP bind host |
 | `LOC_SERVER_PORT` | `int` | `8000` | HTTP bind port |
+| `LOC_SERVER_ALLOWED_HOSTS` | `str` | `localhost,127.0.0.1` | Comma-separated `Host` header values the API accepts; anything else gets HTTP 400. This blocks DNS-rebinding attacks from web pages. Add a name here only if you deliberately reach the API through it. |
+
+### Frontend
+
+| Setting | Where | Default | Description |
+|---------|-------|---------|-------------|
+| `RIP_BACKEND_URL` | shell environment for `npm run dev` | `http://127.0.0.1:8000` | Target of the Vite dev proxy for `/api` |
+| `VITE_API_BASE_URL` | `frontend/.env.local` (git-ignored) | unset (`/api/v1` through the proxy) | Full API base URL, bypassing the proxy; see `frontend/.env.example` |
 
 ## Logging
 

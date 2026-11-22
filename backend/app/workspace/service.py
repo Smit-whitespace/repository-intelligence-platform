@@ -13,16 +13,20 @@ time cap, and every result says when it was cut short.
 
 import io
 import os
-import re
+import stat
 import time
 from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from enum import StrEnum
 from fnmatch import fnmatchcase
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+import regex as regex_engine
+
 from app.core.storage.locations import (
     is_protected_path,
     is_registered_project,
+    is_valid_path_text,
     project_chroma_directory,
 )
 from app.indexing.retrieval_models import SearchQuery
@@ -57,10 +61,15 @@ from app.workspace.symbols import (
 _SECRET_FILE_NAMES = frozenset(
     {
         ".env",
-        "id_rsa",
-        "id_dsa",
-        "id_ecdsa",
-        "id_ed25519",
+        ".envrc",
+        ".netrc",
+        "_netrc",
+        ".npmrc",
+        ".pypirc",
+        ".git-credentials",
+        ".pgpass",
+        "credentials",
+        "credentials.json",
     },
 )
 
@@ -70,10 +79,19 @@ _SECRET_SUFFIXES = frozenset(
         ".key",
         ".p12",
         ".pfx",
+        ".jks",
+        ".keystore",
     },
 )
 
-_SAFE_ENV_SUFFIXES = (
+_SSH_PRIVATE_KEY_PREFIXES = (
+    "id_rsa",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+)
+
+_SAFE_TEMPLATE_SUFFIXES = (
     ".example",
     ".sample",
     ".template",
@@ -88,15 +106,76 @@ def _is_secret_like(
 
     Workspace tools may feed file content to hosted models, so files
     that conventionally hold secrets are never read or searched.
-    ``.env.example`` and similar templates stay readable.
+    Templates such as ``.env.example`` stay readable, and so do SSH
+    public keys (``id_rsa.pub``).
+
+    Callers must pass the resolved path: a symlink's own name says
+    nothing about what it points at.
     """
 
     name = path.name.casefold()
 
+    if name.endswith(_SAFE_TEMPLATE_SUFFIXES):
+        return False
+
     if name in _SECRET_FILE_NAMES or path.suffix.casefold() in _SECRET_SUFFIXES:
         return True
 
-    return name.startswith(".env.") and not name.endswith(_SAFE_ENV_SUFFIXES)
+    if name.startswith(_SSH_PRIVATE_KEY_PREFIXES) and not name.endswith(".pub"):
+        return True
+
+    return name.startswith(".env.")
+
+
+@dataclass(frozen=True)
+class _Entry:
+    """One visible entry found while walking the repository."""
+
+    path: Path
+    """Where the entry appears in the repository."""
+
+    resolved: Path
+    """What it points at (the same path unless it is a link)."""
+
+    is_directory: bool
+
+    descend: bool
+
+    size: int
+
+
+class _WalkLimitReached(Exception):
+    """Raised when a walk passes ``RepositoryWorkspace.MAX_WALK_ENTRIES``."""
+
+
+_REPARSE_POINT = getattr(
+    stat,
+    "FILE_ATTRIBUTE_REPARSE_POINT",
+    0x400,
+)
+
+
+def _is_link_entry(
+    entry: os.DirEntry[str],
+) -> bool:
+    """Return whether an entry redirects somewhere else.
+
+    Covers symlinks, Windows junctions (``is_symlink`` is False for them)
+    and any other reparse point.
+    """
+
+    if entry.is_symlink() or entry.is_junction():
+        return True
+
+    attributes = getattr(
+        entry.stat(
+            follow_symlinks=False,
+        ),
+        "st_file_attributes",
+        0,
+    )
+
+    return bool(attributes & _REPARSE_POINT)
 
 
 def _split_lines(
@@ -163,6 +242,8 @@ class RepositoryWorkspace:
     MAX_SCANNED_LINE_LENGTH = 10_000
     MAX_MATCH_TEXT_LENGTH = 300
     TEXT_SEARCH_TIME_BUDGET_SECONDS = 10.0
+    SYMBOL_SEARCH_TIME_BUDGET_SECONDS = 10.0
+    MAX_WALK_ENTRIES = 100_000
     MAX_SYMBOL_RESULTS = 500
     MAX_SEMANTIC_RESULTS = 50
 
@@ -339,37 +420,46 @@ class RepositoryWorkspace:
                 f"Directory not found: {path}",
             )
 
-        entries = [
-            TreeEntry(
-                path=self._relative(
-                    entry_path,
-                ),
-                kind=(
-                    EntryKind.DIRECTORY
-                    if is_directory
-                    else EntryKind.FILE
-                ),
-                size_bytes=None if is_directory else size,
-            )
-            for entry_path, is_directory, size in self._iter_entries(
-                directory=target,
-                depth=1,
-                max_depth=max_depth,
-            )
-        ]
+        # Only the requested page is materialized; the rest is counted.
+        page: list[TreeEntry] = []
 
-        page = entries[offset : offset + limit]
+        total_entries = 0
+
+        walk_limit_reached = False
+
+        try:
+            for entry in self._iter_entries(
+                directory=target,
+                max_depth=max_depth,
+            ):
+                if offset <= total_entries < offset + limit:
+                    page.append(
+                        TreeEntry(
+                            path=self._relative(
+                                entry.path,
+                            ),
+                            kind=(
+                                EntryKind.DIRECTORY
+                                if entry.is_directory
+                                else EntryKind.FILE
+                            ),
+                            size_bytes=None if entry.is_directory else entry.size,
+                        ),
+                    )
+
+                total_entries += 1
+
+        except _WalkLimitReached:
+            walk_limit_reached = True
 
         return TreeListing(
             path=self._relative(
                 target,
             ),
             entries=page,
-            total_entries=len(
-                entries,
-            ),
+            total_entries=total_entries,
             offset=offset,
-            truncated=offset + len(page) < len(entries),
+            truncated=walk_limit_reached or offset + len(page) < total_entries,
         )
 
     def search_text(
@@ -386,10 +476,10 @@ class RepositoryWorkspace:
         with ``fnmatch`` rules, where ``*`` also matches ``/`` (so
         ``*.py`` matches Python files in every directory).
 
-        Python's ``re`` has no match timeout, so a pathological regular
-        expression can still be slow on a single long line. Lines longer
-        than ``MAX_SCANNED_LINE_LENGTH`` are cut before matching, and the
-        search stops after ``TEXT_SEARCH_TIME_BUDGET_SECONDS``.
+        The whole search, including every single regex match, is bounded
+        by ``TEXT_SEARCH_TIME_BUDGET_SECONDS``: matching uses the
+        ``regex`` engine's per-call timeout, so a catastrophically
+        backtracking pattern (ReDoS) cannot pin a server thread.
         """
 
         self._check_query(
@@ -404,12 +494,13 @@ class RepositoryWorkspace:
         )
 
         try:
-            pattern = re.compile(
-                query if regex else re.escape(query),
-                0 if case_sensitive else re.IGNORECASE,
+            pattern = regex_engine.compile(
+                query if regex else regex_engine.escape(query),
+                regex_engine.VERSION0
+                | (0 if case_sensitive else regex_engine.IGNORECASE),
             )
 
-        except re.error as error:
+        except regex_engine.error as error:
             raise WorkspaceError(
                 f"Invalid regular expression: {error}",
             ) from error
@@ -419,13 +510,40 @@ class RepositoryWorkspace:
             + self.TEXT_SEARCH_TIME_BUDGET_SECONDS
         )
 
+        time_budget_reason = (
+            "Stopped after "
+            f"{self.TEXT_SEARCH_TIME_BUDGET_SECONDS:g} seconds; "
+            "narrow the search with path_glob or a simpler pattern."
+        )
+
         matches: list[TextMatch] = []
 
         files_searched = 0
 
-        for file_path, relative_path, text in self._iter_text_files(
+        files = self._iter_text_files(
             path_glob=path_glob,
-        ):
+        )
+
+        while True:
+            try:
+                file_path, relative_path, text = next(
+                    files,
+                )
+
+            except StopIteration:
+                break
+
+            except _WalkLimitReached:
+                return TextSearchResult(
+                    matches=matches,
+                    files_searched=files_searched,
+                    truncated=True,
+                    truncation_reason=(
+                        f"Stopped after visiting {self.MAX_WALK_ENTRIES} "
+                        "entries; narrow the search with path_glob."
+                    ),
+                )
+
             files_searched += 1
 
             for line_number, line in enumerate(
@@ -438,9 +556,24 @@ class RepositoryWorkspace:
                     "\r\n",
                 )
 
-                match = pattern.search(
-                    line[: self.MAX_SCANNED_LINE_LENGTH],
-                )
+                remaining = deadline - time.monotonic()
+
+                try:
+                    if remaining <= 0:
+                        raise TimeoutError
+
+                    match = pattern.search(
+                        line[: self.MAX_SCANNED_LINE_LENGTH],
+                        timeout=remaining,
+                    )
+
+                except TimeoutError:
+                    return TextSearchResult(
+                        matches=matches,
+                        files_searched=files_searched,
+                        truncated=True,
+                        truncation_reason=time_budget_reason,
+                    )
 
                 if match is None:
                     continue
@@ -464,18 +597,6 @@ class RepositoryWorkspace:
                         truncated=True,
                         truncation_reason=f"Stopped at the limit of {limit} matches.",
                     )
-
-            if time.monotonic() > deadline:
-                return TextSearchResult(
-                    matches=matches,
-                    files_searched=files_searched,
-                    truncated=True,
-                    truncation_reason=(
-                        "Stopped after "
-                        f"{self.TEXT_SEARCH_TIME_BUDGET_SECONDS:g} seconds; "
-                        "narrow the search with path_glob."
-                    ),
-                )
 
         return TextSearchResult(
             matches=matches,
@@ -511,35 +632,59 @@ class RepositoryWorkspace:
 
         syntax_errors: list[str] = []
 
-        for file_path, relative_path, text in self._iter_text_files(
-            suffixes=PYTHON_SUFFIXES,
-        ):
-            file_symbols = self._symbol_extractor.extract(
-                absolute_path=file_path,
-                relative_path=relative_path,
-                source=text,
+        deadline = (
+            time.monotonic()
+            + self.SYMBOL_SEARCH_TIME_BUDGET_SECONDS
+        )
+
+        stop_reason: str | None = None
+
+        try:
+            for file_path, relative_path, text in self._iter_text_files(
+                suffixes=PYTHON_SUFFIXES,
+            ):
+                if time.monotonic() > deadline:
+                    stop_reason = (
+                        "Stopped after "
+                        f"{self.SYMBOL_SEARCH_TIME_BUDGET_SECONDS:g} seconds."
+                    )
+                    break
+
+                file_symbols = self._symbol_extractor.extract(
+                    absolute_path=file_path,
+                    relative_path=relative_path,
+                    source=text,
+                )
+
+                if file_symbols is None:
+                    syntax_errors.append(
+                        relative_path,
+                    )
+                    continue
+
+                symbols.extend(
+                    symbol
+                    for symbol in file_symbols
+                    if (kind is None or symbol.kind is kind)
+                    and self._symbol_matches(
+                        symbol,
+                        query,
+                        match,
+                    )
+                )
+
+        except _WalkLimitReached:
+            stop_reason = (
+                f"Stopped after visiting {self.MAX_WALK_ENTRIES} entries."
             )
 
-            if file_symbols is None:
-                syntax_errors.append(
-                    relative_path,
-                )
-                continue
-
-            symbols.extend(
-                symbol
-                for symbol in file_symbols
-                if (kind is None or symbol.kind is kind)
-                and self._symbol_matches(
-                    symbol,
-                    query,
-                    match,
-                )
-            )
+        if stop_reason is None and len(symbols) > limit:
+            stop_reason = f"Stopped at the limit of {limit} definitions."
 
         return SymbolSearchResult(
             symbols=symbols[:limit],
-            truncated=len(symbols) > limit,
+            truncated=stop_reason is not None,
+            truncation_reason=stop_reason,
             languages=[
                 "Python",
             ],
@@ -637,6 +782,13 @@ class RepositoryWorkspace:
                 "Paths must be relative to the repository root.",
             )
 
+        if not is_valid_path_text(
+            raw,
+        ):
+            raise WorkspacePathError(
+                "Path contains characters that are not allowed.",
+            )
+
         candidate = (
             self._root
             / raw.replace(
@@ -721,105 +873,173 @@ class RepositoryWorkspace:
     def _iter_entries(
         self,
         directory: Path,
-        depth: int,
         max_depth: int | None,
-    ) -> Iterator[tuple[Path, bool, int]]:
-        """Yield (path, is_directory, size) below a directory.
+    ) -> Iterator[_Entry]:
+        """Yield every visible entry below a directory, depth first.
 
-        Symlinks are reported only when they resolve inside the root and
-        outside protected directories, and symlinked directories are
-        never descended into, which also rules out symlink cycles.
+        Entries are sorted by name within each directory. The walk:
+
+        - never descends into a directory that does not resolve to
+          itself. That covers symlinks, Windows junctions (which
+          ``is_symlink`` does not report) and other reparse points, so
+          traversal cannot leave the root and cannot loop;
+        - reports a link only when its target is inside the root and
+          outside protected directories, carrying the resolved target so
+          callers apply their policies to what will actually be read;
+        - is iterative, so a very deep tree cannot overflow the stack;
+        - stops with ``_WalkLimitReached`` after ``MAX_WALK_ENTRIES``.
         """
+
+        stack: list[tuple[Iterator[os.DirEntry[str]], int]] = [
+            (
+                self._sorted_children(
+                    directory,
+                ),
+                1,
+            ),
+        ]
+
+        visited = 0
+
+        while stack:
+            children, depth = stack[-1]
+
+            entry = next(
+                children,
+                None,
+            )
+
+            if entry is None:
+                stack.pop()
+                continue
+
+            item = self._classify(
+                entry,
+            )
+
+            if item is None:
+                continue
+
+            visited += 1
+
+            if visited > self.MAX_WALK_ENTRIES:
+                raise _WalkLimitReached
+
+            yield item
+
+            if item.descend and (max_depth is None or depth < max_depth):
+                stack.append(
+                    (
+                        self._sorted_children(
+                            item.path,
+                        ),
+                        depth + 1,
+                    ),
+                )
+
+    @staticmethod
+    def _sorted_children(
+        directory: Path,
+    ) -> Iterator[os.DirEntry[str]]:
+        """Return a directory's entries sorted by name (none if unreadable)."""
 
         try:
             with os.scandir(
                 directory,
             ) as iterator:
-                children = sorted(
-                    iterator,
-                    key=lambda entry: entry.name,
+                return iter(
+                    sorted(
+                        iterator,
+                        key=lambda entry: entry.name,
+                    ),
                 )
 
         except OSError:
-            return
-
-        for entry in children:
-            entry_path = Path(
-                entry.path,
+            return iter(
+                (),
             )
 
-            if should_ignore(
-                entry_path,
-            ) or is_protected_path(
-                Path(
-                    entry.name,
-                ),
+    def _classify(
+        self,
+        entry: os.DirEntry[str],
+    ) -> "_Entry | None":
+        """Describe one directory entry, or None if it must stay hidden."""
+
+        entry_path = Path(
+            entry.path,
+        )
+
+        if should_ignore(
+            entry_path,
+        ) or is_protected_path(
+            Path(
+                entry.name,
+            ),
+        ):
+            return None
+
+        try:
+            if _is_link_entry(
+                entry,
             ):
-                continue
-
-            try:
-                if entry.is_symlink():
-                    resolved = entry_path.resolve(
-                        strict=True,
-                    )
-
-                    relative = self._relative_path(
-                        resolved,
-                    )
-
-                    if relative is None or is_protected_path(
-                        relative,
-                    ):
-                        continue
-
-                    is_directory = resolved.is_dir()
-
-                    descend = False
-
-                else:
-                    is_directory = entry.is_dir(
-                        follow_symlinks=False,
-                    )
-
-                    descend = is_directory
-
-                size = 0 if is_directory else entry.stat().st_size
-
-            except OSError:
-                continue
-
-            yield entry_path, is_directory, size
-
-            if descend and (max_depth is None or depth < max_depth):
-                yield from self._iter_entries(
-                    directory=entry_path,
-                    depth=depth + 1,
-                    max_depth=max_depth,
+                resolved = entry_path.resolve(
+                    strict=True,
                 )
+
+                relative = self._relative_path(
+                    resolved,
+                )
+
+                if relative is None or is_protected_path(
+                    relative,
+                ):
+                    return None
+
+            else:
+                resolved = entry_path
+
+            is_directory = resolved.is_dir()
+
+            # A directory is only walked into when it is not a redirect.
+            descend = is_directory and resolved == entry_path
+
+            size = 0 if is_directory else resolved.stat().st_size
+
+        except (OSError, RuntimeError):
+            return None
+
+        return _Entry(
+            path=entry_path,
+            resolved=resolved,
+            is_directory=is_directory,
+            descend=descend,
+            size=size,
+        )
 
     def _iter_text_files(
         self,
         path_glob: str | None = None,
         suffixes: frozenset[str] | None = None,
     ) -> Iterator[tuple[Path, str, str]]:
-        """Yield (path, relative_path, text) for every searchable file.
+        """Yield (resolved_path, relative_path, text) for searchable files.
 
-        Skips secret-like, oversized, binary and non-UTF-8 files.
+        Skips secret-like, oversized, binary and non-UTF-8 files. Every
+        check runs on the resolved target, so a symlink named
+        ``notes.txt`` that points at ``.env`` is skipped too.
         """
 
-        for entry_path, is_directory, size in self._iter_entries(
+        for entry in self._iter_entries(
             directory=self._root,
-            depth=1,
             max_depth=None,
         ):
-            if is_directory or size > self.MAX_FILE_BYTES:
+            if entry.is_directory or entry.size > self.MAX_FILE_BYTES:
                 continue
 
-            if suffixes is not None and entry_path.suffix.casefold() not in suffixes:
+            if suffixes is not None and entry.resolved.suffix.casefold() not in suffixes:
                 continue
 
             relative_path = self._relative(
-                entry_path,
+                entry.path,
             )
 
             if path_glob and not fnmatchcase(
@@ -829,19 +1049,21 @@ class RepositoryWorkspace:
                 continue
 
             if _is_secret_like(
-                entry_path,
+                entry.path,
+            ) or _is_secret_like(
+                entry.resolved,
             ):
                 continue
 
             try:
                 text = _decode(
-                    entry_path.read_bytes(),
+                    entry.resolved.read_bytes(),
                 )
 
             except (OSError, NotATextFileError):
                 continue
 
-            yield entry_path, relative_path, text
+            yield entry.resolved, relative_path, text
 
     # --- Helpers ---------------------------------------------------------
 

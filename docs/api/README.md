@@ -161,6 +161,8 @@ All endpoints return standardized error responses:
 - **422 Unprocessable Entity** — request validation failed (FastAPI's default format)
 - **500 Server Error** — unexpected failure
 
+Requests whose `Host` header is not in `LOC_SERVER_ALLOWED_HOSTS` (default `localhost,127.0.0.1`) are rejected with **400** before reaching any endpoint. This blocks DNS rebinding.
+
 Domain errors return `{"detail": "<message>"}`.
 
 ---

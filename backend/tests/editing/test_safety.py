@@ -369,10 +369,45 @@ def test_rollback_refuses_to_overwrite_changes_made_after_apply(
     assert target.read_bytes() == "new\nplus later work\n".encode()
 
 
-def test_rollback_refuses_when_applied_file_was_deleted(
+def test_rollback_refuses_when_a_modified_file_was_deleted(
     tmp_path: Path,
 ) -> None:
-    """A file deleted after apply also counts as a later change."""
+    """Deleting a file that existed before the apply is a later change."""
+
+    root = _register_project(
+        tmp_path,
+    )
+
+    (root / "main.py").write_bytes(
+        b"old\n",
+    )
+
+    service = _service()
+
+    snapshot_id = service.apply(
+        repository_root=root,
+        change_set=ChangeSet(
+            edits=[
+                _edit("main.py", "old\n", "new\n"),
+            ],
+        ),
+    )
+
+    (root / "main.py").unlink()
+
+    with pytest.raises(
+        EditConflictError,
+    ):
+        service.rollback(
+            repository_root=root,
+            snapshot_id=snapshot_id,
+        )
+
+
+def test_rollback_of_a_created_file_that_is_already_gone_is_harmless(
+    tmp_path: Path,
+) -> None:
+    """A created file that is already absent is in its pre-apply state."""
 
     root = _register_project(
         tmp_path,
@@ -391,12 +426,258 @@ def test_rollback_refuses_when_applied_file_was_deleted(
 
     (root / "created.py").unlink()
 
+    service.rollback(
+        repository_root=root,
+        snapshot_id=snapshot_id,
+    )
+
+    assert not (root / "created.py").exists()
+
+
+def test_snapshot_from_incomplete_revert_can_be_rolled_back(
+    tmp_path: Path,
+) -> None:
+    """The recovery path named by IncompleteRevertError actually works.
+
+    The third write fails; reverting restores c.py's absence and b.py,
+    but a.py's revert fails, so a.py keeps the new content. Rolling back
+    with the named snapshot must then finish the job.
+    """
+
+    root = _register_project(
+        tmp_path,
+    )
+
+    (root / "a.py").write_bytes(
+        b"a\n",
+    )
+
+    (root / "b.py").write_bytes(
+        b"b\n",
+    )
+
+    class _FailThirdWriteAndRevertOfA(ChangeApplier):
+        writes = 0
+
+        def _write_file_atomic(
+            self,
+            target_path: Path,
+            content: str,
+        ) -> None:
+            type(self).writes += 1
+
+            if type(self).writes == 3 or (
+                type(self).writes > 3 and target_path.name == "a.py"
+            ):
+                raise OSError(
+                    "disk full",
+                )
+
+            super()._write_file_atomic(
+                target_path=target_path,
+                content=content,
+            )
+
     with pytest.raises(
-        EditConflictError,
-    ):
-        service.rollback(
+        IncompleteRevertError,
+    ) as error:
+        _service(
+            _FailThirdWriteAndRevertOfA(),
+        ).apply(
             repository_root=root,
-            snapshot_id=snapshot_id,
+            change_set=ChangeSet(
+                edits=[
+                    _edit("a.py", "a\n", "A\n"),
+                    _edit("b.py", "b\n", "B\n"),
+                    _edit("c.py", "", "C\n"),
+                ],
+            ),
+        )
+
+    assert (root / "a.py").read_bytes() == b"A\n"
+
+    assert (root / "b.py").read_bytes() == b"b\n"
+
+    snapshot_id = _snapshot_files(root)[0].stem
+
+    assert snapshot_id in str(error.value)
+
+    _service().rollback(
+        repository_root=root,
+        snapshot_id=snapshot_id,
+    )
+
+    assert (root / "a.py").read_bytes() == b"a\n"
+
+    assert (root / "b.py").read_bytes() == b"b\n"
+
+    assert not (root / "c.py").exists()
+
+
+def test_edit_outside_the_root_is_rejected_before_any_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Invalid paths fail validation before the snapshot reads anything."""
+
+    root = _register_project(
+        tmp_path / "repo",
+    )
+
+    (tmp_path / "outside.txt").write_bytes(
+        b"secret",
+    )
+
+    read_paths: list[Path] = []
+
+    import app.editing.change_applier as applier_module
+
+    original_read = applier_module.read_text_exact
+
+    def recording_read(
+        path: Path,
+    ) -> str:
+        read_paths.append(
+            path,
+        )
+
+        return original_read(
+            path,
+        )
+
+    monkeypatch.setattr(
+        applier_module,
+        "read_text_exact",
+        recording_read,
+    )
+
+    for bad_path in (
+        "../outside.txt",
+        ".local_openclaw/project.json",
+    ):
+        with pytest.raises(
+            EditingError,
+        ):
+            _service().apply(
+                repository_root=root,
+                change_set=ChangeSet(
+                    edits=[
+                        _edit(bad_path, "", "x"),
+                    ],
+                ),
+            )
+
+    assert read_paths == []
+
+    assert _snapshot_files(root) == []
+
+
+@pytest.mark.skipif(
+    os.name != "nt",
+    reason="Alternate data streams exist only on Windows.",
+)
+def test_alternate_data_stream_paths_are_rejected(
+    tmp_path: Path,
+) -> None:
+    root = _register_project(
+        tmp_path,
+    )
+
+    with pytest.raises(
+        EditingError,
+        match="invalid path",
+    ):
+        _service().apply(
+            repository_root=root,
+            change_set=ChangeSet(
+                edits=[
+                    _edit("notes.txt:hidden", "", "x"),
+                ],
+            ),
+        )
+
+
+def test_non_utf8_edit_target_is_a_clear_error(
+    tmp_path: Path,
+) -> None:
+    root = _register_project(
+        tmp_path,
+    )
+
+    (root / "latin1.txt").write_bytes(
+        "café".encode("latin-1"),
+    )
+
+    with pytest.raises(
+        EditingError,
+        match="not UTF-8",
+    ):
+        _service().apply(
+            repository_root=root,
+            change_set=ChangeSet(
+                edits=[
+                    _edit("latin1.txt", "café", "cafe"),
+                ],
+            ),
+        )
+
+
+def test_empty_change_set_is_rejected(
+    tmp_path: Path,
+) -> None:
+    root = _register_project(
+        tmp_path,
+    )
+
+    with pytest.raises(
+        EditingError,
+        match="no edits",
+    ):
+        _service().apply(
+            repository_root=root,
+            change_set=ChangeSet(
+                edits=[],
+            ),
+        )
+
+    assert _snapshot_files(root) == []
+
+
+def test_linked_project_storage_is_not_a_registered_project(
+    tmp_path: Path,
+) -> None:
+    """A .local_openclaw that is a link would redirect RIP's writes."""
+
+    root = tmp_path / "repo"
+
+    root.mkdir()
+
+    elsewhere = _register_project(
+        tmp_path / "elsewhere",
+    )
+
+    try:
+        os.symlink(
+            elsewhere / ".local_openclaw",
+            root / ".local_openclaw",
+            target_is_directory=True,
+        )
+
+    except (OSError, NotImplementedError):
+        pytest.skip(
+            "Creating symlinks is not permitted on this system.",
+        )
+
+    with pytest.raises(
+        UnregisteredRepositoryError,
+    ):
+        _service().apply(
+            repository_root=root,
+            change_set=ChangeSet(
+                edits=[
+                    _edit("x.txt", "", "x"),
+                ],
+            ),
         )
 
 

@@ -11,6 +11,9 @@ __pycache__/
 *.pyc
 .repository-intelligence-platform/
 .env
+# Machine-specific env overrides (Vite convention)
+.env.local
+.env.*.local
 # Runtime logs
 *.log
 

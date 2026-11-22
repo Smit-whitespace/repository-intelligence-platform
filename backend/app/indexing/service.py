@@ -241,10 +241,22 @@ class IndexingService:
 
                 continue
 
-        self._indexer.remove_stale_chunks(
-            root_directory=root_directory_str,
-            keep_chunk_ids=indexed_chunk_ids,
-        )
+        # When every file failed (typically: the embedding provider is
+        # down), the keep-list is empty only because nothing could be
+        # embedded, not because the files are gone. Removing "stale"
+        # chunks then would wipe the whole existing index.
+        if indexed_files > 0 or failed_files == 0:
+            self._indexer.remove_stale_chunks(
+                root_directory=root_directory_str,
+                keep_chunk_ids=indexed_chunk_ids,
+            )
+
+        else:
+            logger.warning(
+                "Kept the existing index for %s: all %d files failed to index",
+                root_directory,
+                failed_files,
+            )
 
         elapsed_ms = int(
             (time.monotonic() - start_time)

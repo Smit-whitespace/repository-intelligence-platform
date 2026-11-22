@@ -8,6 +8,7 @@ from app.core.storage.locations import is_registered_project
 from app.editing.change_applier import (
     ChangeApplier,
     read_text_exact,
+    read_text_for_edit,
 )
 from app.editing.exceptions import (
     EditConflictError,
@@ -87,6 +88,18 @@ class EditingService:
             repository_root,
         )
 
+        if not change_set.edits:
+            raise EditingError(
+                "ChangeSet has no edits to apply.",
+            )
+
+        # Validate every path before any file is read: the snapshot below
+        # reads each target, and must never read outside the repository.
+        self._change_applier.validate_change_set(
+            repository_root=repository_root,
+            change_set=change_set,
+        )
+
         snapshot_store = self._snapshot_store_factory(
             repository_root,
         )
@@ -148,6 +161,13 @@ class EditingService:
             snapshot_id,
         )
 
+        # Snapshot files live on disk and could have been tampered with,
+        # so their paths are validated before any of them is read.
+        self._change_applier.validate_snapshot(
+            repository_root=repository_root,
+            snapshot=snapshot,
+        )
+
         self._ensure_unchanged_since_apply(
             repository_root=repository_root,
             snapshot=snapshot,
@@ -196,7 +216,15 @@ class EditingService:
         repository_root: Path,
         snapshot: Snapshot,
     ) -> None:
-        """Refuse a rollback that would overwrite later changes."""
+        """Refuse a rollback that would overwrite later changes.
+
+        Each file must be in one of the two states this snapshot knows
+        about: what the apply wrote, or what was there before the apply
+        (for a new file: absent). The second state matters after an
+        incomplete revert, where some files are already back to their
+        original content and the snapshot is the documented way back.
+        Anything else means someone changed the file, so stop.
+        """
 
         root = repository_root.resolve()
 
@@ -209,18 +237,36 @@ class EditingService:
                 / file.relative_path
             ).resolve()
 
-            current_content = (
-                read_text_exact(
-                    target_path,
+            try:
+                current_content = (
+                    read_text_exact(
+                        target_path,
+                    )
+                    if target_path.is_file()
+                    else None
                 )
-                if target_path.is_file()
-                else None
-            )
 
-            if (
-                current_content is None
-                or _sha256(current_content) != file.applied_sha256
-            ):
+            except (OSError, UnicodeDecodeError):
+                current_content = ""
+
+                current_is_unreadable = True
+
+            else:
+                current_is_unreadable = False
+
+            if current_is_unreadable:
+                matches_known_state = False
+
+            elif current_content is None:
+                matches_known_state = not file.existed
+
+            else:
+                matches_known_state = (
+                    _sha256(current_content) == file.applied_sha256
+                    or (file.existed and current_content == file.content)
+                )
+
+            if not matches_known_state:
                 raise EditConflictError(
                     "File changed after the edit was applied: "
                     f"{file.relative_path.as_posix()}. Rolling back "
@@ -246,21 +292,14 @@ class EditingService:
                 / edit.relative_path
             ).resolve()
 
-            existed = target_path.exists()
+            current_content = read_text_for_edit(
+                target_path,
+                edit.relative_path,
+            )
 
-            if existed:
-                try:
-                    content = read_text_exact(
-                        target_path,
-                    )
+            existed = current_content is not None
 
-                except OSError as error:
-                    raise EditingError(
-                        "Failed to read repository file while creating snapshot.",
-                    ) from error
-
-            else:
-                content = ""
+            content = current_content or ""
 
             files.append(
                 SnapshotFile(

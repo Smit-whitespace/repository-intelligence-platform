@@ -300,3 +300,68 @@ def test_ollama_identity_follows_the_configured_model() -> None:
     )
 
     assert provider.identity == "ollama:mxbai-embed-large"
+
+
+class DownEmbedder(FakeEmbedder):
+    """An embedder whose provider is unreachable."""
+
+    def embed(
+        self,
+        texts: Sequence[str],
+    ) -> list[EmbeddingVector]:
+        from app.indexing.exceptions import EmbeddingError
+
+        raise EmbeddingError(
+            "connection refused",
+        )
+
+
+def test_failed_reindex_with_new_model_keeps_the_old_index(
+    project: Path,
+    resolver: ProjectChromaStoreResolver,
+) -> None:
+    """If the new model is unreachable, nothing is destroyed for nothing."""
+
+    old_embedder = FakeEmbedder("fake:model-a", 4)
+
+    _index(
+        project,
+        old_embedder,
+        resolver,
+    )
+
+    _index(
+        project,
+        DownEmbedder("fake:model-b", 8),
+        resolver,
+    )
+
+    assert (
+        _metadata(project, resolver)[EMBEDDING_MODEL_METADATA_KEY]
+        == "fake:model-a"
+    )
+
+    assert _search(project, old_embedder, resolver) > 0
+
+
+def test_failed_reindex_with_same_model_keeps_the_index(
+    project: Path,
+    resolver: ProjectChromaStoreResolver,
+) -> None:
+    """All files failing must not be read as "all files were deleted"."""
+
+    embedder = FakeEmbedder("fake:model-a", 4)
+
+    _index(
+        project,
+        embedder,
+        resolver,
+    )
+
+    _index(
+        project,
+        DownEmbedder("fake:model-a", 4),
+        resolver,
+    )
+
+    assert _search(project, embedder, resolver) > 0

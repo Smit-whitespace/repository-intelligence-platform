@@ -132,9 +132,10 @@ sequenceDiagram
 5. **Only registered projects can be edited.** `EditingService` rejects any root without `.local_openclaw/project.json` (`UnregisteredRepositoryError`, HTTP 403). The caller chooses the root, so without this check "stay inside the repository root" would restrict nothing.
 6. **Protected directories are never written.** `.git/` (writing `.git/hooks` is code execution) and `.local_openclaw/` (index and snapshots) are rejected at any depth, case-insensitively, and through symlinks. The list lives in `app/core/storage/locations.py` and is shared with the Workspace tools.
 7. **Stale edits are refused.** Each `FileEdit.original_content` must equal the file's current content exactly (an empty string for a new file), or apply raises `EditConflictError` (HTTP 409).
-8. **Rollback never overwrites later work.** Snapshots record `applied_sha256` per file; rollback raises `EditConflictError` if a file changed or disappeared after the apply. Snapshots from before this field skip the check.
+8. **Rollback never overwrites later work.** Snapshots record `applied_sha256` per file. Rollback accepts each file only in a state the snapshot knows: what the apply wrote, or what was there before it (absent, for a created file). That makes the snapshot named by an incomplete revert usable. Anything else raises `EditConflictError`. Snapshots from before this field skip the check.
 9. **Content is written byte for byte.** Reads and writes use `newline=""`, so line endings are never translated (the default would turn LF into CRLF on Windows).
-10. **Apply is all-or-nothing.** If a write fails, every file already written is restored from memory. If that restore also fails, `IncompleteRevertError` (HTTP 500) names the snapshot to roll back with; otherwise the unused snapshot is deleted.
+10. **Paths are validated before any file is read.** `EditingService` validates every target (and, on rollback, every snapshot path) before snapshotting or checking anything, so a path outside the root is never even read. Empty change sets are rejected. Paths with NUL bytes, or `:` on Windows (alternate data streams), are rejected. Non-UTF-8 targets get a clear HTTP 400.
+11. **Apply is all-or-nothing.** If a write fails, every file already written is restored from memory. If that restore also fails, `IncompleteRevertError` (HTTP 500) names the snapshot to roll back with; otherwise the unused snapshot is deleted.
 
 ---
 
@@ -162,6 +163,8 @@ The three-phase design (edit → review → apply) separates AI-generated change
 - The default editing provider is a placeholder: `create file <path>` produces an empty file. LLM-backed edit planning arrives in V1 M4.
 - Replacing a file through an atomic rename does not preserve its permission bits (for example, the executable bit on shell scripts).
 - Rollback is not all-or-nothing: a write failure part-way through a restore leaves the remaining files unrestored.
+- Paths are validated, then written later. A local process that swaps a parent directory for a junction in between could redirect a write. This needs a concurrent attacker who can already write to the repository.
+- A `.local_openclaw` directory or `project.json` that is a symlink or junction is not treated as a registered project.
 
 ---
 

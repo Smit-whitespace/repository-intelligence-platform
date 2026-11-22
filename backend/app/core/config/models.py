@@ -9,6 +9,19 @@ class ServerSettings(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
 
+    allowed_hosts: list[str] = Field(
+        default_factory=lambda: [
+            "localhost",
+            "127.0.0.1",
+        ],
+    )
+    """Host header values the API accepts.
+
+    Rejecting other Host headers blocks DNS rebinding: a web page on an
+    attacker's domain that re-resolves to 127.0.0.1 would otherwise be
+    able to call this API as same-origin.
+    """
+
 
 class LoggingSettings(BaseModel):
     """Logging configuration."""

@@ -123,7 +123,7 @@ sequenceDiagram
 4. `IndexingResult` is the sole output contract — callers receive summary counts.
 5. Indexing skips directories and non-text files silently.
 6. **Every index records the embedding model that built it.** `RepositoryIndexer` stamps the Chroma collection metadata with the provider's `identity` (for example `ollama:nomic-embed-text`) and the vector dimension. The stamp lives in the collection itself, so `clear()` removes it together with the vectors.
-7. **Embedding models are never mixed.** Before writing, `RepositoryIndexer.prepare()` clears an index that was built by a different model or before the model was recorded. Chunk ids do not include the model, and Chroma's `add` keeps the existing vector for an existing id, so without the clear, unchanged chunks would keep stale vectors. Only an explicit indexing run does this; changing the configured model never reindexes on its own.
+7. **Embedding models are never mixed.** `RepositoryIndexer.prepare()` marks an index that was built by a different model, or before the model was recorded, for rebuilding. The clear happens only after the first batch has been embedded successfully, so if the provider is down or the new model is missing, the old index survives. Chunk ids do not include the model, and Chroma's `add` keeps the existing vector for an existing id, so without the clear, unchanged chunks would keep stale vectors. Only an explicit indexing run does this; changing the configured model never reindexes on its own.
 
 ---
 
@@ -152,6 +152,7 @@ Indexing is independent of retrieval by design — `RetrievalService` never inde
 - Indexing processes all text files synchronously. For very large repositories this can be slow.
 - Failed files are counted but not identified (no per-file error reporting in `IndexingResult`).
 - No incremental indexing — the entire repository is re-indexed each time.
+- When every file fails to index (typically the embedding provider is down), stale-chunk removal is skipped, so the existing index is kept instead of being emptied.
 - Ignore rules are a fixed list of directory names (`app/repository/ignore.py`); `.gitignore` is not read, so build output such as `frontend/dist/` and lock files are indexed.
 
 ---

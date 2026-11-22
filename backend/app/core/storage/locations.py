@@ -18,6 +18,7 @@ directory name. No competing names (``.repository-intelligence-platform``,
 ``.local_rip``, ``.rip``) are used for the same purpose.
 """
 
+import os
 from pathlib import Path
 
 PROJECT_STORAGE_DIRECTORY_NAME = ".local_openclaw"
@@ -102,11 +103,50 @@ def is_registered_project(
     A project is registered once its metadata file exists. Tools that
     read or modify a repository only accept registered roots, so a
     caller cannot point them at an arbitrary directory.
+
+    A storage directory or metadata file that is a symlink or junction is
+    not accepted: RIP would then write its index and snapshots wherever
+    the link points.
     """
 
-    return project_metadata_path(
+    storage_directory = project_storage_directory(
         root_directory,
-    ).is_file()
+    )
+
+    metadata_path = storage_directory / PROJECT_METADATA_FILE_NAME
+
+    if is_link(storage_directory) or is_link(metadata_path):
+        return False
+
+    return metadata_path.is_file()
+
+
+def is_link(
+    path: Path,
+) -> bool:
+    """Return whether a path is a symlink or a Windows junction.
+
+    ``Path.is_symlink`` is False for junctions, which Windows users can
+    create without admin rights, so both must be checked.
+    """
+
+    return path.is_symlink() or path.is_junction()
+
+
+def is_valid_path_text(
+    path_text: str,
+) -> bool:
+    """Reject path text that the filesystem would misinterpret.
+
+    NUL bytes make path functions raise. On Windows, ``:`` outside the
+    drive prefix addresses an alternate data stream (``file.txt:hidden``),
+    which no repository file legitimately uses.
+    """
+
+    if "\x00" in path_text:
+        return False
+
+    return os.name != "nt" or ":" not in path_text
 
 
 def is_protected_path(

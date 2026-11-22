@@ -41,22 +41,35 @@ class RepositoryIndexer:
 
         self._vector_store_resolver = vector_store_resolver
 
+        self._pending_rebuilds: dict[str, str] = {}
+        """Project roots whose index must be cleared before the next write,
+        mapped to the model that built the old index (for logging)."""
+
     def prepare(
         self,
         root_directory: str,
     ) -> None:
-        """Make a project's index safe to write with the current model.
+        """Decide whether this indexing run must rebuild the index.
 
         If the index was built by a different embedding model, or before
-        the model was recorded (so it cannot be verified), it is cleared
-        and rebuilt by this indexing run. Its vectors would otherwise mix
-        with incomparable ones, and because chunk ids do not include the
-        model, unchanged chunks would keep their old vectors forever.
+        the model was recorded (so it cannot be verified), this run
+        rebuilds it. Its vectors would otherwise mix with incomparable
+        ones, and because chunk ids do not include the model, unchanged
+        chunks would keep their old vectors forever.
 
-        Indexing re-embeds every chunk anyway, so clearing first costs
-        nothing extra. Only an explicit indexing run calls this; changing
-        the configured model never triggers a reindex by itself.
+        The clear itself is deferred until the first batch has been
+        embedded successfully (see ``index``). If the embedding provider
+        is down or the new model is missing, the old index survives
+        intact instead of being destroyed for nothing.
+
+        Only an explicit indexing run calls this; changing the configured
+        model never triggers a reindex by itself.
         """
+
+        self._pending_rebuilds.pop(
+            root_directory,
+            None,
+        )
 
         vector_store = self._vector_store_resolver.for_project(
             root_directory=root_directory,
@@ -77,14 +90,9 @@ class RepositoryIndexer:
         if built_with == self._embedding_provider.identity:
             return
 
-        logger.warning(
-            "Rebuilding index for %s: built with %s, configured model is %s",
-            root_directory,
+        self._pending_rebuilds[root_directory] = str(
             built_with or "an unrecorded embedding model",
-            self._embedding_provider.identity,
         )
-
-        vector_store.clear()
 
     def index(
         self,
@@ -147,6 +155,21 @@ class RepositoryIndexer:
                 embeddings,
             )
         ]
+
+        old_model = self._pending_rebuilds.pop(
+            root_directory,
+            None,
+        )
+
+        if old_model is not None:
+            logger.warning(
+                "Rebuilding index for %s: built with %s, configured model is %s",
+                root_directory,
+                old_model,
+                self._embedding_provider.identity,
+            )
+
+            vector_store.clear()
 
         vector_store.add(
             indexed_chunks,

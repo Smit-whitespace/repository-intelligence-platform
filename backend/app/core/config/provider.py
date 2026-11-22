@@ -36,6 +36,9 @@ class EnvironmentSettings(BaseSettings):
 
     server_port: int = 8000
 
+    server_allowed_hosts: str = "localhost,127.0.0.1"
+    """Comma-separated Host header values the API accepts."""
+
     logging_level: str = "INFO"
 
     logging_json_logs: bool = False
@@ -65,6 +68,11 @@ def get_settings() -> ApplicationSettings:
         server=ServerSettings(
             host=environment.server_host,
             port=environment.server_port,
+            allowed_hosts=[
+                host.strip()
+                for host in environment.server_allowed_hosts.split(",")
+                if host.strip()
+            ],
         ),
         logging=LoggingSettings(
             level=environment.logging_level,

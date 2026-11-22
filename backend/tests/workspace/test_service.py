@@ -918,3 +918,285 @@ def test_semantic_search_returns_hits_ranked_by_score(
     assert query.root_directory == str(project.resolve())
 
     assert query.limit == 5
+
+
+# --- Hardening from the security review ----------------------------------
+
+
+def _make_junction(
+    link: Path,
+    target: Path,
+) -> None:
+    """Create a Windows directory junction, or skip the test."""
+
+    if os.name != "nt":
+        pytest.skip(
+            "Junctions exist only on Windows.",
+        )
+
+    import subprocess
+
+    result = subprocess.run(
+        [
+            "cmd",
+            "/c",
+            "mklink",
+            "/J",
+            str(link),
+            str(target),
+        ],
+        capture_output=True,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        pytest.skip(
+            "Could not create a junction on this system.",
+        )
+
+
+def test_traversal_does_not_follow_junctions_out_of_the_root(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    """Junctions are not symlinks to Python, but must be treated as links."""
+
+    outside = project.parent / "outside_dir"
+
+    _write(outside, "credentials.txt", b"AWS_SECRET=topsecret\n")
+
+    _write(outside, "evil.py", b"def outside_function():\n    pass\n")
+
+    _make_junction(
+        project / "linkdir",
+        outside,
+    )
+
+    paths = [
+        entry.path
+        for entry in workspace.list_tree(max_depth=5).entries
+    ]
+
+    assert not any(path.startswith("linkdir") for path in paths)
+
+    assert not workspace.search_text("topsecret").matches
+
+    assert not workspace.find_symbols("outside_function").symbols
+
+    with pytest.raises(
+        WorkspacePathError,
+    ):
+        workspace.read_file(
+            "linkdir/credentials.txt",
+        )
+
+
+def test_junction_inside_the_root_is_listed_but_not_walked(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    _make_junction(
+        project / "alias",
+        project / "app",
+    )
+
+    paths = [
+        entry.path
+        for entry in workspace.list_tree(max_depth=5).entries
+    ]
+
+    assert "alias" in paths
+
+    assert not any(path.startswith("alias/") for path in paths)
+
+
+def test_secret_file_behind_an_innocent_symlink_name_is_not_searched(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    try:
+        os.symlink(
+            project / ".env",
+            project / "notes.txt",
+        )
+
+    except (OSError, NotImplementedError):
+        pytest.skip(
+            "Creating symlinks is not permitted on this system.",
+        )
+
+    assert not workspace.search_text("SECRET=TODO").matches
+
+    with pytest.raises(
+        WorkspacePathError,
+        match="secrets",
+    ):
+        workspace.read_file(
+            "notes.txt",
+        )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "README.md\x00.txt",
+        pytest.param(
+            "README.md:hidden",
+            marks=pytest.mark.skipif(
+                os.name != "nt",
+                reason="Alternate data streams exist only on Windows.",
+            ),
+        ),
+    ],
+)
+def test_paths_with_nul_bytes_or_data_streams_are_rejected(
+    workspace: RepositoryWorkspace,
+    path: str,
+) -> None:
+    with pytest.raises(
+        WorkspacePathError,
+        match="not allowed",
+    ):
+        workspace.read_file(
+            path,
+        )
+
+
+def test_catastrophic_regex_is_stopped_by_the_time_budget(
+    workspace: RepositoryWorkspace,
+    project: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ReDoS: a backtracking pattern cannot hang the search."""
+
+    import time
+
+    monkeypatch.setattr(
+        RepositoryWorkspace,
+        "TEXT_SEARCH_TIME_BUDGET_SECONDS",
+        0.5,
+    )
+
+    _write(project, "redos.txt", b"a" * 60 + b"b\n")
+
+    started = time.monotonic()
+
+    result = workspace.search_text(
+        r"(a|aa)+$",
+        regex=True,
+    )
+
+    assert time.monotonic() - started < 5
+
+    assert result.truncated
+
+    assert "seconds" in (result.truncation_reason or "")
+
+
+def test_walk_limit_truncates_every_tool(
+    workspace: RepositoryWorkspace,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        RepositoryWorkspace,
+        "MAX_WALK_ENTRIES",
+        2,
+    )
+
+    tree = workspace.list_tree()
+
+    assert tree.truncated
+
+    assert tree.total_entries == 2
+
+    text = workspace.search_text(
+        "TODO",
+    )
+
+    assert text.truncated
+
+    assert "entries" in (text.truncation_reason or "")
+
+    symbols = workspace.find_symbols(
+        "helper",
+    )
+
+    assert symbols.truncated
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        ".npmrc",
+        ".git-credentials",
+        ".netrc",
+        "id_rsa_work",
+        "keys/release.jks",
+        ".env.production",
+    ],
+)
+def test_more_credential_files_are_refused(
+    workspace: RepositoryWorkspace,
+    project: Path,
+    path: str,
+) -> None:
+    _write(project, path, b"token")
+
+    with pytest.raises(
+        WorkspacePathError,
+        match="secrets",
+    ):
+        workspace.read_file(
+            path,
+        )
+
+
+def test_public_keys_and_templates_stay_readable(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    _write(project, "id_rsa.pub", b"ssh-rsa AAAA\n")
+
+    _write(project, ".npmrc.example", b"registry=https://example.test\n")
+
+    assert workspace.read_file("id_rsa.pub").content == "ssh-rsa AAAA\n"
+
+    assert workspace.read_file(".npmrc.example").total_lines == 1
+
+
+def test_symbols_inside_conditional_blocks_are_found(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    _write(
+        project,
+        "compat.py",
+        b"from typing import TYPE_CHECKING\n"
+        b"\n"
+        b"if TYPE_CHECKING:\n"
+        b"    class OnlyForTypes:\n"
+        b"        pass\n"
+        b"\n"
+        b"try:\n"
+        b"    from fast import parse\n"
+        b"except ImportError:\n"
+        b"    def parse(text):\n"
+        b"        return text\n"
+        b"\n"
+        b"class Config:\n"
+        b"    if True:\n"
+        b"        def conditional_method(self):\n"
+        b"            pass\n",
+    )
+
+    assert workspace.find_symbols("OnlyForTypes").symbols
+
+    fallback = workspace.find_symbols("parse").symbols
+
+    assert [symbol.start_line for symbol in fallback] == [
+        10,
+    ]
+
+    method = workspace.find_symbols("Config.conditional_method").symbols
+
+    assert method[0].kind is SymbolKind.METHOD

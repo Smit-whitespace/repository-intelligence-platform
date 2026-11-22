@@ -1,5 +1,6 @@
 """Chat endpoints."""
 
+import re
 from collections.abc import Iterator
 
 from fastapi import APIRouter
@@ -120,4 +121,28 @@ def _stream_response(
     """Convert chat chunks into Server-Sent Events."""
 
     for chunk in chunks:
-        yield f"data: {chunk.content}\n\n"
+        yield _sse_event(
+            chunk.content,
+        )
+
+
+def _sse_event(
+    content: str,
+) -> str:
+    """Encode text as one SSE event, preserving line breaks.
+
+    A line break inside a ``data:`` field ends that field, so multi-line
+    content must be sent as one ``data:`` line per line; clients join
+    them back with ``\\n``. Without this, a chunk containing a line
+    break was cut off or split.
+    """
+
+    lines = re.split(
+        r"\r\n|\r|\n",
+        content,
+    )
+
+    return "".join(
+        f"data: {line}\n"
+        for line in lines
+    ) + "\n"

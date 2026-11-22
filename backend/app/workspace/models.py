@@ -145,6 +145,8 @@ class SymbolSearchResult(BaseModel):
 
     truncated: bool
 
+    truncation_reason: str | None = None
+
     languages: list[str] = Field(
         description="Languages whose definitions are searched.",
     )

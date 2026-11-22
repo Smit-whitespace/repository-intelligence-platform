@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -186,8 +187,12 @@ def test_health_endpoint_is_ready_after_startup() -> None:
     }
 
 
-def test_no_custom_middleware_is_registered() -> None:
-    """Middleware stack should remain explicit and unchanged."""
+def test_middleware_stack_is_explicit() -> None:
+    """Middleware stack should remain explicit: CORS, then trusted hosts.
+
+    ``user_middleware`` lists the most recently added first, and
+    TrustedHostMiddleware is added first so it is the outermost check.
+    """
 
     application = main.create_application()
 
@@ -198,6 +203,7 @@ def test_no_custom_middleware_is_registered() -> None:
 
     assert middleware_classes == [
         CORSMiddleware,
+        TrustedHostMiddleware,
     ]
 
 

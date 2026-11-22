@@ -106,3 +106,61 @@ def test_chat_stream() -> None:
             "data: !\n\n"
         )
     )
+
+
+def test_multiline_chunks_are_encoded_as_one_event_per_chunk() -> None:
+    """Line breaks inside a chunk must not split or truncate the event."""
+
+    from app.api.routes.chat import _sse_event
+
+    assert _sse_event("plain") == "data: plain\n\n"
+
+    assert _sse_event("def f():\n    return 1") == (
+        "data: def f():\ndata:     return 1\n\n"
+    )
+
+    assert _sse_event("a\r\nb\rc") == "data: a\ndata: b\ndata: c\n\n"
+
+    # A chunk that is only a newline still reaches the client as "\n".
+    assert _sse_event("\n") == "data: \ndata: \n\n"
+
+
+def _parse_sse(
+    stream: str,
+) -> list[str]:
+    """Decode an SSE stream the way a browser's EventSource does."""
+
+    events: list[str] = []
+
+    for block in stream.split("\n\n"):
+        if not block:
+            continue
+
+        events.append(
+            "\n".join(
+                line[len("data: ") :]
+                for line in block.split("\n")
+                if line.startswith("data:")
+            ),
+        )
+
+    return events
+
+
+def test_multiline_chunks_round_trip_through_an_sse_parser() -> None:
+    """What the client reassembles equals what the model streamed."""
+
+    from app.api.routes.chat import _sse_event
+
+    chunks = [
+        "Here is code:\n",
+        "```python\nprint('hi')\n```",
+        " done",
+    ]
+
+    stream = "".join(
+        _sse_event(chunk)
+        for chunk in chunks
+    )
+
+    assert _parse_sse(stream) == chunks

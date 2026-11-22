@@ -23,6 +23,42 @@ PYTHON_SUFFIXES = frozenset(
 )
 
 
+def _conditional_bodies(
+    node: ast.stmt,
+) -> list[list[ast.stmt]]:
+    """Return the statement blocks of an if/try/with statement, else []."""
+
+    if isinstance(
+        node,
+        ast.If,
+    ):
+        return [
+            node.body,
+            node.orelse,
+        ]
+
+    if isinstance(
+        node,
+        (ast.Try, ast.TryStar),
+    ):
+        return [
+            node.body,
+            *(handler.body for handler in node.handlers),
+            node.orelse,
+            node.finalbody,
+        ]
+
+    if isinstance(
+        node,
+        (ast.With, ast.AsyncWith),
+    ):
+        return [
+            node.body,
+        ]
+
+    return []
+
+
 @dataclass(frozen=True)
 class _CacheKey:
     path: Path
@@ -107,9 +143,28 @@ class PythonSymbolExtractor:
 
         Functions nested inside functions are skipped: they cannot be
         referenced from outside, so they are rarely what a lookup wants.
+        Definitions inside ``if``, ``try`` and ``with`` blocks at module or
+        class level (``if TYPE_CHECKING:``, import fallbacks) are found,
+        because they define names of that module or class.
         """
 
         for node in nodes:
+            nested_blocks = _conditional_bodies(
+                node,
+            )
+
+            if nested_blocks:
+                for block in nested_blocks:
+                    self._visit(
+                        nodes=block,
+                        prefix=prefix,
+                        inside_class=inside_class,
+                        relative_path=relative_path,
+                        symbols=symbols,
+                    )
+
+                continue
+
             if isinstance(
                 node,
                 ast.ClassDef,

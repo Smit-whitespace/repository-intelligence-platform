@@ -292,7 +292,15 @@ def test_apply(
     )
 
     change_set = ChangeSet(
-        edits=[],
+        edits=[
+            FileEdit(
+                relative_path=Path(
+                    "main.py",
+                ),
+                original_content="",
+                updated_content="new",
+            ),
+        ],
     )
 
     snapshot_id = service.apply(
@@ -314,8 +322,10 @@ def test_apply(
         len(
             snapshot_store.snapshot.files,
         )
-        == 0
+        == 1
     )
+
+    assert not snapshot_store.snapshot.files[0].existed
 
     assert (
         applier.repository_root

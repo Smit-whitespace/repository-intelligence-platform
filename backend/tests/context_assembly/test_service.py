@@ -487,3 +487,108 @@ class TestDefaultContextAssembly:
         assert "a" in context
 
         assert "hello world foo bar baz" not in context
+
+    def test_oversized_file_does_not_block_later_smaller_file(
+        self,
+    ) -> None:
+        """A file that exceeds the budget should not block later files."""
+
+        assembly = DefaultContextAssembly(
+            max_context_tokens=20,
+        )
+
+        response = assembly.assemble(
+            ContextAssemblyRequest(
+                query="test",
+                results=[
+                    create_result(
+                        chunk_id="large",
+                        content=" ".join(["oversized"] * 100),
+                        relative_path="large.py",
+                        similarity=0.9,
+                    ),
+                    create_result(
+                        chunk_id="small",
+                        content="small relevant snippet",
+                        relative_path="small.py",
+                        similarity=0.8,
+                    ),
+                ],
+            ),
+        )
+
+        context = response.prompt.messages[_CONTEXT_MSG_INDEX].content
+
+        assert "oversized" not in context
+        assert "small relevant snippet" in context
+
+    def test_repository_context_stays_within_token_budget(
+        self,
+    ) -> None:
+        """Formatted repository context should respect the token budget."""
+
+        max_tokens = 20
+        assembly = DefaultContextAssembly(
+            max_context_tokens=max_tokens,
+        )
+
+        response = assembly.assemble(
+            ContextAssemblyRequest(
+                query="test",
+                results=[
+                    create_result(
+                        chunk_id="chunk-1",
+                        content="def calculate_total(price, tax): return price + tax",
+                        relative_path="src/calculator.py",
+                        similarity=0.9,
+                    ),
+                ],
+            ),
+        )
+
+        context = response.prompt.messages[_CONTEXT_MSG_INDEX].content
+
+        assert assembly._count_tokens(context) <= max_tokens
+
+    def test_context_budget_with_multiple_files_and_chunks(
+        self,
+    ) -> None:
+        """Multiple formatted file blocks must stay within the budget."""
+
+        max_tokens = 40
+        assembly = DefaultContextAssembly(
+            max_context_tokens=max_tokens,
+        )
+
+        response = assembly.assemble(
+            ContextAssemblyRequest(
+                query="find calculation logic",
+                results=[
+                    create_result(
+                        chunk_id="calc-1",
+                        content="def calculate_total(price): return price",
+                        relative_path="src/calculator.py",
+                        start_line=1,
+                        similarity=0.95,
+                    ),
+                    create_result(
+                        chunk_id="calc-2",
+                        content="def apply_tax(total, rate): return total * rate",
+                        relative_path="src/calculator.py",
+                        start_line=10,
+                        similarity=0.90,
+                    ),
+                    create_result(
+                        chunk_id="test-1",
+                        content="def test_calculate_total(): assert calculate_total(5) == 5",
+                        relative_path="tests/test_calculator.py",
+                        start_line=1,
+                        similarity=0.85,
+                    ),
+                ],
+            ),
+        )
+
+        context = response.prompt.messages[_CONTEXT_MSG_INDEX].content
+
+        assert assembly._count_tokens(context) <= max_tokens

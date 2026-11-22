@@ -3,6 +3,9 @@
 from pathlib import Path
 from typing import Any
 
+from app.core.storage.locations import (
+    project_metadata_path,
+)
 from app.core.storage.abstractions import (
     StorageProvider,
 )
@@ -174,8 +177,33 @@ class FakeSnapshotStore(
         )
 
 
-def test_edit() -> None:
+def _register_project(
+    root: Path,
+) -> None:
+    """Mark a directory as a registered RIP project."""
+
+    metadata_path = project_metadata_path(
+        root,
+    )
+
+    metadata_path.parent.mkdir(
+        parents=True,
+    )
+
+    metadata_path.write_text(
+        "{}",
+        encoding="utf-8",
+    )
+
+
+def test_edit(
+    tmp_path: Path,
+) -> None:
     """Editing service should delegate to the provider."""
+
+    _register_project(
+        tmp_path,
+    )
 
     provider = FakeEditingProvider()
 
@@ -191,7 +219,7 @@ def test_edit() -> None:
 
     response = service.edit(
         EditRequest(
-            repository_root=Path("."),
+            repository_root=tmp_path,
             instruction="Rename function.",
         ),
     )
@@ -259,6 +287,10 @@ def test_apply(
 
     repository_root = tmp_path
 
+    _register_project(
+        repository_root,
+    )
+
     change_set = ChangeSet(
         edits=[],
     )
@@ -314,6 +346,10 @@ def test_rollback_loads_snapshot_and_restores(
     )
 
     repository_root = tmp_path
+
+    _register_project(
+        repository_root,
+    )
 
     service.rollback(
         repository_root=repository_root,

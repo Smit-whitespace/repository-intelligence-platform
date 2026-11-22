@@ -4,8 +4,11 @@ import os
 import tempfile
 from pathlib import Path
 
+from app.core.storage.locations import PROJECT_STORAGE_DIRECTORY_NAME
 from app.editing.exceptions import (
+    EditConflictError,
     EditingError,
+    IncompleteRevertError,
 )
 from app.editing.models import (
     ChangeSet,
@@ -13,6 +16,36 @@ from app.editing.models import (
 from app.editing.snapshot_models import (
     Snapshot,
 )
+
+PROTECTED_DIRECTORY_NAMES = frozenset(
+    {
+        ".git",
+        PROJECT_STORAGE_DIRECTORY_NAME,
+    },
+)
+"""Directory names that edits may never write into, at any depth.
+
+``.git`` because writing ``.git/hooks/*`` is arbitrary code execution;
+``.local_openclaw`` because it holds RIP's own index and the snapshots
+that rollback depends on. Compared case-insensitively, because Windows
+and macOS file systems are case-insensitive by default.
+"""
+
+
+def read_text_exact(
+    path: Path,
+) -> str:
+    """Read a UTF-8 text file without translating line endings.
+
+    ``Path.read_text`` uses universal newlines and turns ``\\r\\n`` into
+    ``\\n``, which would make CRLF files compare and snapshot wrongly.
+    """
+
+    with path.open(
+        encoding="utf-8",
+        newline="",
+    ) as file:
+        return file.read()
 
 
 class ChangeApplier:
@@ -23,7 +56,13 @@ class ChangeApplier:
         repository_root: Path,
         change_set: ChangeSet,
     ) -> None:
-        """Apply every file modification."""
+        """Apply every file modification, or none of them.
+
+        Each edit's ``original_content`` must still match the file on
+        disk (an empty string for a file that does not exist yet). If a
+        write fails part-way, files already written are restored to
+        their original content before the error is raised.
+        """
 
         repository_root = (
             repository_root.resolve()
@@ -42,11 +81,14 @@ class ChangeApplier:
             empty_path_message="ChangeSet contains an empty relative path.",
             absolute_path_message="ChangeSet contains an absolute path.",
             escape_message="ChangeSet contains a path outside the repository.",
+            protected_message="ChangeSet targets a protected path.",
             duplicate_message="ChangeSet contains duplicate target paths.",
             conflict_message="ChangeSet contains conflicting target paths.",
             parent_message="ChangeSet target parent is not a directory.",
             target_directory_message="ChangeSet target path is a directory.",
         )
+
+        targets: list[tuple[Path, str, str | None]] = []
 
         for edit in change_set.edits:
             target_path = (
@@ -54,10 +96,53 @@ class ChangeApplier:
                 / edit.relative_path
             ).resolve()
 
-            self._write_file_atomic(
-                target_path=target_path,
-                content=edit.updated_content,
+            current_content = (
+                read_text_exact(
+                    target_path,
+                )
+                if target_path.exists()
+                else None
             )
+
+            if (current_content or "") != edit.original_content:
+                raise EditConflictError(
+                    "File changed since the edit was planned: "
+                    f"{edit.relative_path.as_posix()}",
+                )
+
+            targets.append(
+                (
+                    target_path,
+                    edit.updated_content,
+                    current_content,
+                ),
+            )
+
+        written: list[tuple[Path, str | None]] = []
+
+        try:
+            for target_path, updated_content, original_content in targets:
+                self._write_file_atomic(
+                    target_path=target_path,
+                    content=updated_content,
+                )
+
+                written.append(
+                    (
+                        target_path,
+                        original_content,
+                    ),
+                )
+
+        except Exception as error:
+            self._revert(
+                written,
+                error,
+            )
+
+            raise EditingError(
+                "Failed to apply ChangeSet; every written file was reverted.",
+            ) from error
 
     def restore(
         self,
@@ -83,6 +168,7 @@ class ChangeApplier:
             empty_path_message="Snapshot contains an empty relative path.",
             absolute_path_message="Snapshot contains an absolute path.",
             escape_message="Snapshot contains a path outside the repository.",
+            protected_message="Snapshot targets a protected path.",
             duplicate_message="Snapshot contains duplicate target paths.",
             conflict_message="Snapshot contains conflicting target paths.",
             parent_message="Snapshot target parent is not a directory.",
@@ -103,6 +189,41 @@ class ChangeApplier:
 
             elif target_path.exists():
                 target_path.unlink()
+
+    def _revert(
+        self,
+        written: list[tuple[Path, str | None]],
+        cause: Exception,
+    ) -> None:
+        """Restore files written by a failed apply, newest first."""
+
+        unrestored: list[str] = []
+
+        for target_path, original_content in reversed(written):
+            try:
+                if original_content is None:
+                    target_path.unlink(
+                        missing_ok=True,
+                    )
+
+                else:
+                    self._write_file_atomic(
+                        target_path=target_path,
+                        content=original_content,
+                    )
+
+            except Exception:
+                unrestored.append(
+                    str(
+                        target_path,
+                    ),
+                )
+
+        if unrestored:
+            raise IncompleteRevertError(
+                "Failed to apply ChangeSet, and these files could not be "
+                f"reverted: {', '.join(unrestored)}.",
+            ) from cause
 
     def _validate_repository_root(
         self,
@@ -127,6 +248,7 @@ class ChangeApplier:
         empty_path_message: str,
         absolute_path_message: str,
         escape_message: str,
+        protected_message: str,
         duplicate_message: str,
         conflict_message: str,
         parent_message: str,
@@ -167,6 +289,16 @@ class ChangeApplier:
                 raise EditingError(
                     escape_message,
                 ) from error
+
+            # Checked on the resolved path, so a symlink that points into
+            # a protected directory is rejected too.
+            if any(
+                part.casefold() in PROTECTED_DIRECTORY_NAMES
+                for part in repository_relative_path.parts
+            ):
+                raise EditingError(
+                    protected_message,
+                )
 
             if (
                 repository_relative_path
@@ -223,7 +355,11 @@ class ChangeApplier:
         target_path: Path,
         content: str,
     ) -> None:
-        """Write file content using an atomic replacement."""
+        """Write file content using an atomic replacement.
+
+        ``newline=""`` writes the content byte-for-byte; the default
+        would turn every ``\\n`` into ``\\r\\n`` on Windows.
+        """
 
         target_path.parent.mkdir(
             parents=True,
@@ -236,19 +372,20 @@ class ChangeApplier:
             with tempfile.NamedTemporaryFile(
                 mode="w",
                 encoding="utf-8",
+                newline="",
                 dir=target_path.parent,
                 delete=False,
             ) as temporary_file:
+                temporary_path = Path(
+                    temporary_file.name,
+                )
+
                 temporary_file.write(
                     content,
                 )
                 temporary_file.flush()
                 os.fsync(
                     temporary_file.fileno(),
-                )
-
-                temporary_path = Path(
-                    temporary_file.name,
                 )
 
             temporary_path.replace(

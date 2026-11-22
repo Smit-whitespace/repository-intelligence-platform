@@ -6,11 +6,17 @@ from fastapi.responses import JSONResponse
 from app.chat.exceptions import ChatException
 from app.core.storage.exceptions import StorageError
 from app.editing.exceptions import (
+    EditConflictError,
     EditingError,
+    IncompleteRevertError,
     SnapshotNotFoundError,
     SnapshotPersistenceError,
+    UnregisteredRepositoryError,
 )
-from app.indexing.exceptions import IndexingError
+from app.indexing.exceptions import (
+    IndexIncompatibleError,
+    IndexingError,
+)
 from app.projects.exceptions import (
     InvalidProjectError,
     ProjectNotFoundError,
@@ -18,10 +24,32 @@ from app.projects.exceptions import (
 from app.repository.exceptions import RepositoryScanError
 
 
+_STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
+    UnregisteredRepositoryError: 403,
+    EditConflictError: 409,
+    IncompleteRevertError: 500,
+    IndexIncompatibleError: 409,
+}
+"""Specific subclasses that need a different status than their base.
+
+Starlette resolves handlers along the exception's MRO, so these win over
+the broader ``EditingError`` (400) and ``IndexingError`` (500) handlers
+regardless of registration order.
+"""
+
+
 def register_exception_handlers(
     application: FastAPI,
 ) -> None:
     """Register application exception handlers."""
+
+    for exception_type, status_code in _STATUS_BY_EXCEPTION.items():
+        application.add_exception_handler(
+            exception_type,
+            _detail_handler(
+                status_code,
+            ),
+        )
 
     @application.exception_handler(
         InvalidProjectError,
@@ -148,3 +176,22 @@ def register_exception_handlers(
                 "detail": str(exception),
             },
         )
+
+
+def _detail_handler(
+    status_code: int,
+):
+    """Return a handler that reports the exception message as detail."""
+
+    async def handle(
+        request,
+        exception: Exception,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "detail": str(exception),
+            },
+        )
+
+    return handle

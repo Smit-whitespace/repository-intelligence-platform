@@ -28,6 +28,14 @@ class OllamaEmbeddingProvider(
             host=settings.base_url,
         )
 
+    @property
+    def identity(
+        self,
+    ) -> str:
+        """Return ``ollama:<model>`` for the configured embedding model."""
+
+        return f"ollama:{self._settings.embedding_model}"
+
     def embed(
         self,
         texts: Sequence[str],

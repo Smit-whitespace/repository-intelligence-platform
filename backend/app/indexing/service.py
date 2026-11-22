@@ -51,6 +51,10 @@ class IndexingService:
 
         start_time = time.monotonic()
 
+        self._indexer.prepare(
+            root_directory_str,
+        )
+
         entries = self._scanner.scan(
             root_directory,
         )

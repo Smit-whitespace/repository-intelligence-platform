@@ -18,6 +18,14 @@ class SnapshotFile(BaseModel):
 
     content: str
 
+    applied_sha256: str | None = None
+    """SHA-256 of the content written by the apply.
+
+    Rollback compares it with the file's current content so it never
+    overwrites changes made after the apply. ``None`` for snapshots
+    written before this field existed; those skip the check.
+    """
+
 
 class Snapshot(BaseModel):
     """ChangeSet-scoped repository snapshot."""

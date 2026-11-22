@@ -246,6 +246,33 @@ class ChromaVectorStore(VectorStore):
             name=self._collection.name,
         )
 
+    def get_index_metadata(
+        self,
+    ) -> dict[str, str | int | float | bool]:
+        """Return the collection metadata (empty for legacy indexes).
+
+        Kept in the collection itself rather than a side file, so
+        ``clear()`` (which recreates the collection) can never leave a
+        stamp that describes vectors that no longer exist.
+        """
+
+        return dict(
+            self._collection.metadata or {},
+        )
+
+    def set_index_metadata(
+        self,
+        metadata: dict[str, str | int | float | bool],
+    ) -> None:
+        """Merge ``metadata`` into the collection metadata."""
+
+        self._collection.modify(
+            metadata={
+                **self.get_index_metadata(),
+                **metadata,
+            },
+        )
+
     def _create_search_hit(
         self,
         chunk_id: str,

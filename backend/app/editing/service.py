@@ -1,13 +1,19 @@
 """Repository Editing service."""
 
+import hashlib
 from collections.abc import Callable
 from pathlib import Path
 
+from app.core.storage.locations import project_metadata_path
 from app.editing.change_applier import (
     ChangeApplier,
+    read_text_exact,
 )
 from app.editing.exceptions import (
+    EditConflictError,
     EditingError,
+    IncompleteRevertError,
+    UnregisteredRepositoryError,
 )
 from app.editing.models import (
     ChangeSet,
@@ -62,6 +68,10 @@ class EditingService:
     ) -> EditResponse:
         """Generate repository modifications."""
 
+        self._validate_repository_root(
+            request.repository_root,
+        )
+
         return self._editing_provider.edit(
             request,
         )
@@ -90,10 +100,32 @@ class EditingService:
             snapshot,
         )
 
-        self._change_applier.apply(
-            repository_root=repository_root,
-            change_set=change_set,
-        )
+        try:
+            self._change_applier.apply(
+                repository_root=repository_root,
+                change_set=change_set,
+            )
+
+        except IncompleteRevertError as error:
+            # The repository is in a partial state; the snapshot is the
+            # way back, so keep it and tell the caller its id.
+            raise IncompleteRevertError(
+                f"{error} The pre-apply state is saved in snapshot "
+                f"{snapshot.snapshot_id}; roll back with it.",
+            ) from error
+
+        except Exception:
+            # Nothing was changed (or every change was reverted), so the
+            # snapshot would only be clutter.
+            try:
+                snapshot_store.delete(
+                    snapshot.snapshot_id,
+                )
+
+            except EditingError:
+                pass
+
+            raise
 
         return snapshot.snapshot_id
 
@@ -116,6 +148,11 @@ class EditingService:
             snapshot_id,
         )
 
+        self._ensure_unchanged_since_apply(
+            repository_root=repository_root,
+            snapshot=snapshot,
+        )
+
         self._change_applier.restore(
             repository_root=repository_root,
             snapshot=snapshot,
@@ -125,10 +162,13 @@ class EditingService:
     def _validate_repository_root(
         repository_root: Path,
     ) -> None:
-        """Reject missing or non-directory repository roots.
+        """Reject roots that are missing or not registered RIP projects.
 
         Validated before any project-local storage is created, so an
-        invalid root can never be materialized as a side effect.
+        invalid root can never be materialized as a side effect. The
+        registration check is the security boundary: the caller chooses
+        the root, so without it "stay inside the repository root" would
+        not restrict anything.
         """
 
         root = repository_root.resolve()
@@ -142,6 +182,50 @@ class EditingService:
             raise EditingError(
                 "Repository root is not a directory.",
             )
+
+        if not project_metadata_path(
+            root,
+        ).is_file():
+            raise UnregisteredRepositoryError(
+                "Repository root is not a registered RIP project. "
+                "Initialize the project before editing it.",
+            )
+
+    @staticmethod
+    def _ensure_unchanged_since_apply(
+        repository_root: Path,
+        snapshot: Snapshot,
+    ) -> None:
+        """Refuse a rollback that would overwrite later changes."""
+
+        root = repository_root.resolve()
+
+        for file in snapshot.files:
+            if file.applied_sha256 is None:
+                continue
+
+            target_path = (
+                root
+                / file.relative_path
+            ).resolve()
+
+            current_content = (
+                read_text_exact(
+                    target_path,
+                )
+                if target_path.is_file()
+                else None
+            )
+
+            if (
+                current_content is None
+                or _sha256(current_content) != file.applied_sha256
+            ):
+                raise EditConflictError(
+                    "File changed after the edit was applied: "
+                    f"{file.relative_path.as_posix()}. Rolling back "
+                    "would overwrite those changes.",
+                )
 
     def _create_snapshot(
         self,
@@ -166,8 +250,8 @@ class EditingService:
 
             if existed:
                 try:
-                    content = target_path.read_text(
-                        encoding="utf-8",
+                    content = read_text_exact(
+                        target_path,
                     )
 
                 except OSError as error:
@@ -183,9 +267,24 @@ class EditingService:
                     relative_path=edit.relative_path,
                     existed=existed,
                     content=content,
+                    applied_sha256=_sha256(
+                        edit.updated_content,
+                    ),
                 ),
             )
 
         return Snapshot(
             files=files,
         )
+
+
+def _sha256(
+    content: str,
+) -> str:
+    """Return the SHA-256 hex digest of UTF-8 text."""
+
+    return hashlib.sha256(
+        content.encode(
+            "utf-8",
+        ),
+    ).hexdigest()

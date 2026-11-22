@@ -7,6 +7,7 @@ import shutil
 
 from fastapi.testclient import TestClient
 
+from app.core.storage.locations import project_metadata_path
 from app.chat.models import (
     ChatChunk,
     ChatPrompt,
@@ -548,10 +549,35 @@ def test_chat_propagates_retrieval_errors() -> None:
     }
 
 
+def _register_project(
+    root: Path,
+) -> None:
+    """Mark a directory as a registered RIP project (editing requires it)."""
+
+    metadata_path = project_metadata_path(
+        root,
+    )
+
+    metadata_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    metadata_path.write_text(
+        "{}",
+        encoding="utf-8",
+    )
+
+
 def test_complete_editing_apply_rollback_workflow(
     tmp_path: Path,
 ) -> None:
     """Editing should plan, apply, snapshot, and rollback through the API."""
+
+    _register_project(
+        tmp_path,
+    )
+
 
     readme_path = tmp_path / "README.md"
 
@@ -633,6 +659,11 @@ def test_editing_rejects_repository_boundary_escape(
 ) -> None:
     """Planning should reject file paths outside the repository root."""
 
+    _register_project(
+        tmp_path,
+    )
+
+
     client = TestClient(
         app,
     )
@@ -691,6 +722,11 @@ def test_editing_rejects_invalid_snapshot_id(
 ) -> None:
     """Rollback should reject unknown snapshot identifiers."""
 
+    _register_project(
+        tmp_path,
+    )
+
+
     client = TestClient(
         app,
     )
@@ -712,6 +748,11 @@ def test_editing_rollback_rejects_invalid_repository(
     tmp_path: Path,
 ) -> None:
     """Rollback should reject missing repository roots."""
+
+    _register_project(
+        tmp_path,
+    )
+
 
     repository_file = tmp_path / "README.md"
 

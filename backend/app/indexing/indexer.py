@@ -1,5 +1,6 @@
 """Repository indexing service."""
 
+import logging
 from collections.abc import Sequence
 
 from app.indexing.exceptions import EmbeddingError
@@ -10,7 +11,14 @@ from app.indexing.models import (
 )
 from app.indexing.providers import EmbeddingProvider
 from app.indexing.store_resolver import VectorStoreResolver
+from app.indexing.stores import (
+    EMBEDDING_DIMENSION_METADATA_KEY,
+    EMBEDDING_MODEL_METADATA_KEY,
+    VectorStore,
+)
 from app.repository.models import RepositoryChunk
+
+logger = logging.getLogger(__name__)
 
 
 class RepositoryIndexer:
@@ -32,6 +40,51 @@ class RepositoryIndexer:
         self._embedding_provider = embedding_provider
 
         self._vector_store_resolver = vector_store_resolver
+
+    def prepare(
+        self,
+        root_directory: str,
+    ) -> None:
+        """Make a project's index safe to write with the current model.
+
+        If the index was built by a different embedding model, or before
+        the model was recorded (so it cannot be verified), it is cleared
+        and rebuilt by this indexing run. Its vectors would otherwise mix
+        with incomparable ones, and because chunk ids do not include the
+        model, unchanged chunks would keep their old vectors forever.
+
+        Indexing re-embeds every chunk anyway, so clearing first costs
+        nothing extra. Only an explicit indexing run calls this; changing
+        the configured model never triggers a reindex by itself.
+        """
+
+        vector_store = self._vector_store_resolver.for_project(
+            root_directory=root_directory,
+        )
+
+        if vector_store is None:
+            return
+
+        metadata = vector_store.get_index_metadata()
+
+        if metadata is None:
+            return
+
+        built_with = metadata.get(
+            EMBEDDING_MODEL_METADATA_KEY,
+        )
+
+        if built_with == self._embedding_provider.identity:
+            return
+
+        logger.warning(
+            "Rebuilding index for %s: built with %s, configured model is %s",
+            root_directory,
+            built_with or "an unrecorded embedding model",
+            self._embedding_provider.identity,
+        )
+
+        vector_store.clear()
 
     def index(
         self,
@@ -99,12 +152,43 @@ class RepositoryIndexer:
             indexed_chunks,
         )
 
+        self._record_embedding_model(
+            vector_store=vector_store,
+            dimension=len(
+                embeddings[0].values,
+            ),
+        )
+
         return IndexingResult(
             scanned_files=0,
             indexed_files=0,
             indexed_chunks=len(indexed_chunks),
             skipped_files=0,
             failed_files=0,
+        )
+
+    def _record_embedding_model(
+        self,
+        vector_store: VectorStore,
+        dimension: int,
+    ) -> None:
+        """Stamp the index with the embedding model that wrote it."""
+
+        metadata = vector_store.get_index_metadata()
+
+        if metadata is None:
+            return
+
+        identity = self._embedding_provider.identity
+
+        if metadata.get(EMBEDDING_MODEL_METADATA_KEY) == identity:
+            return
+
+        vector_store.set_index_metadata(
+            {
+                EMBEDDING_MODEL_METADATA_KEY: identity,
+                EMBEDDING_DIMENSION_METADATA_KEY: dimension,
+            },
         )
 
     def remove_stale_chunks(

@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+import httpx
 from ollama import Client
 from ollama import ResponseError
 
@@ -32,8 +33,10 @@ class OllamaEmbeddingProvider(
 
         self._model = model or settings.embedding_model
 
+        self._host = base_url or settings.base_url
+
         self._client = Client(
-            host=base_url or settings.base_url,
+            host=self._host,
         )
 
     @property
@@ -63,6 +66,13 @@ class OllamaEmbeddingProvider(
                 str(
                     error,
                 ),
+            ) from error
+
+        except (ConnectionError, httpx.HTTPError) as error:
+            # The client raises the built-in ConnectionError when Ollama is
+            # not running; left unhandled it became a bare HTTP 500.
+            raise EmbeddingError(
+                f"Could not reach Ollama at {self._host}. Is it running?",
             ) from error
 
         return [

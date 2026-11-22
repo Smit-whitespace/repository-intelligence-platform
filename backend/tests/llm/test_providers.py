@@ -583,3 +583,43 @@ def test_lazy_embedding_provider_builds_only_when_used() -> None:
                 "x",
             ],
         )
+
+
+# --- Ollama unreachable --------------------------------------------------
+
+
+UNREACHABLE = OllamaSettings(
+    base_url="http://127.0.0.1:9",
+)
+
+
+def test_ollama_chat_reports_an_unreachable_server_clearly() -> None:
+    """Regression: the client's ConnectionError used to escape as HTTP 500."""
+
+    provider = OllamaChatProvider(
+        UNREACHABLE,
+    )
+
+    for call in (
+        lambda: provider.generate(PROMPT),
+        lambda: list(provider.stream(PROMPT)),
+    ):
+        with pytest.raises(
+            ChatProviderError,
+            match="Could not reach Ollama at http://127.0.0.1:9",
+        ):
+            call()
+
+
+def test_ollama_embeddings_report_an_unreachable_server_clearly() -> None:
+    with pytest.raises(
+        EmbeddingError,
+        match="Could not reach Ollama",
+    ):
+        OllamaEmbeddingProvider(
+            UNREACHABLE,
+        ).embed(
+            [
+                "x",
+            ],
+        )

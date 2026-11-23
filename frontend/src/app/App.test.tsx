@@ -30,6 +30,29 @@ const responses: Record<string, unknown> = {
     active_provider: "ollama",
     active_model: "qwen3.6",
   },
+  "/api/v1/models/effective": {
+    models: [
+      {
+        operation: "chat",
+        provider: "ollama",
+        provider_type: "ollama",
+        model: "qwen3.6",
+        source: "primary",
+      },
+      {
+        operation: "embedding",
+        provider: "ollama",
+        provider_type: "ollama",
+        model: "nomic-embed-text",
+        source: "embedding",
+      },
+    ],
+  },
+  "/api/v1/models/configuration": {
+    path: "~/.local_openclaw/models.json",
+    saved: false,
+    api_keys_present: {},
+  },
 };
 
 beforeEach(() => {
@@ -84,11 +107,22 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(await screen.findByText("qwen3.6")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("link", { name: "Projects" }));
+    // The effective-model table resolves operations to models.
+    expect(await screen.findByText("nomic-embed-text")).toBeInTheDocument();
+
+    // The project page is labelled "Repository" in the sidebar.
+    fireEvent.click(screen.getByRole("link", { name: "Repository" }));
 
     expect(
-      await screen.findByRole("heading", { name: "Projects" }),
+      await screen.findByRole("heading", { name: "Repository" }),
     ).toBeInTheDocument();
     expect(screen.getByLabelText("Project root directory")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("link", { name: "Editing" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Editing" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No project open")).toBeInTheDocument();
   });
 });

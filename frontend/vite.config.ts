@@ -24,6 +24,11 @@ export default defineConfig({
     },
   },
   test: {
+    // Tests assert the default relative API path; a developer's
+    // frontend/.env.local must not change what they see.
+    env: {
+      VITE_API_BASE_URL: "/api/v1",
+    },
     environment: "jsdom",
     globals: true,
     setupFiles: "./src/test/setup.ts",

@@ -5,12 +5,15 @@ import time
 from pathlib import Path
 
 from app.indexing.indexer import RepositoryIndexer
+from app.indexing.lock import project_index_lock
 from app.indexing.models import (
     FileFailureInfo,
     IndexingDiagnostics,
     IndexingResult,
+    IndexStatus,
 )
 from app.repository.chunking import RepositoryChunker
+from app.repository.ignore import is_indexable_file_name
 from app.repository.documents import RepositoryDocumentLoader
 from app.repository.metadata import RepositoryMetadataExtractor
 from app.repository.scanner import RepositoryScanner
@@ -41,15 +44,62 @@ class IndexingService:
         self,
         root_directory: Path,
     ) -> IndexingResult:
-        """Index an entire repository."""
+        """Index an entire repository.
+
+        Holds the project's inter-process index lock for the whole run,
+        so the RIP app and an MCP server never write the same index at
+        once; a concurrent attempt raises ``IndexingBusyError``.
+        """
 
         root_directory = root_directory.resolve()
+
+        with project_index_lock(
+            root_directory,
+        ):
+            return self._index_repository(
+                root_directory,
+            )
+
+    def status(
+        self,
+        root_directory: Path,
+    ) -> IndexStatus:
+        """Report whether a project is indexed, and with which model."""
+
+        return self._indexer.status(
+            str(
+                root_directory.resolve(),
+            ),
+        )
+
+    def _index_repository(
+        self,
+        root_directory: Path,
+    ) -> IndexingResult:
+        """Index a resolved repository root (the lock is held)."""
 
         root_directory_str = str(
             root_directory,
         )
 
         start_time = time.monotonic()
+
+        self._indexer.prepare(
+            root_directory_str,
+        )
+
+        existing_chunk_ids = self._indexer.existing_chunk_ids(
+            root_directory_str,
+        )
+
+        # A file that fails this run (locked, temporarily unreadable,
+        # provider hiccup) keeps the chunks it already had, instead of
+        # having its valid vectors removed as "stale".
+        existing_by_path = self._indexer.existing_chunk_ids_by_path(
+            root_directory_str,
+        )
+
+        unchanged_files = 0
 
         entries = self._scanner.scan(
             root_directory,
@@ -80,6 +130,13 @@ class IndexingService:
             total_files_discovered += 1
 
             scanned_files += 1
+
+            if not is_indexable_file_name(
+                entry.name,
+            ):
+                skipped_files += 1
+
+                continue
 
             relative_path = str(
                 entry.relative_path,
@@ -123,6 +180,13 @@ class IndexingService:
 
                 failed_files += 1
 
+                indexed_chunk_ids.extend(
+                    existing_by_path.get(
+                        relative_path,
+                        (),
+                    ),
+                )
+
                 continue
 
             try:
@@ -154,6 +218,13 @@ class IndexingService:
                 )
 
                 failed_files += 1
+
+                indexed_chunk_ids.extend(
+                    existing_by_path.get(
+                        relative_path,
+                        (),
+                    ),
+                )
 
                 continue
 
@@ -187,6 +258,13 @@ class IndexingService:
 
                 failed_files += 1
 
+                indexed_chunk_ids.extend(
+                    existing_by_path.get(
+                        relative_path,
+                        (),
+                    ),
+                )
+
                 continue
 
             for chunk in chunks:
@@ -196,15 +274,29 @@ class IndexingService:
                     },
                 )
 
+            # Chunk ids include the file's content hash, so a chunk whose
+            # id is already indexed is unchanged and keeps its vector.
+            # Only new or edited content is embedded.
+            new_chunks = [
+                chunk
+                for chunk in chunks
+                if chunk.chunk_id not in existing_chunk_ids
+            ]
+
             try:
-                result = self._indexer.index(
-                    chunks,
-                )
+                if new_chunks:
+                    result = self._indexer.index(
+                        new_chunks,
+                    )
+
+                    indexed_chunks += result.indexed_chunks
+
+                else:
+                    unchanged_files += 1
 
                 indexed_files += 1
 
-                indexed_chunks += result.indexed_chunks
-
+                # Every current chunk is kept, embedded now or earlier.
                 indexed_chunk_ids.extend(
                     chunk.chunk_id
                     for chunk in chunks
@@ -235,12 +327,31 @@ class IndexingService:
 
                 failed_files += 1
 
+                indexed_chunk_ids.extend(
+                    existing_by_path.get(
+                        relative_path,
+                        (),
+                    ),
+                )
+
                 continue
 
-        self._indexer.remove_stale_chunks(
-            root_directory=root_directory_str,
-            keep_chunk_ids=indexed_chunk_ids,
-        )
+        # When every file failed (typically: the embedding provider is
+        # down), the keep-list is empty only because nothing could be
+        # embedded, not because the files are gone. Removing "stale"
+        # chunks then would wipe the whole existing index.
+        if indexed_files > 0 or failed_files == 0:
+            self._indexer.remove_stale_chunks(
+                root_directory=root_directory_str,
+                keep_chunk_ids=indexed_chunk_ids,
+            )
+
+        else:
+            logger.warning(
+                "Kept the existing index for %s: all %d files failed to index",
+                root_directory,
+                failed_files,
+            )
 
         elapsed_ms = int(
             (time.monotonic() - start_time)
@@ -256,10 +367,11 @@ class IndexingService:
         )
 
         logger.info(
-            "Indexed %s: %d files, %d skipped, %d failed, "
-            "%d chunks in %d ms",
+            "Indexed %s: %d files (%d unchanged), %d skipped, %d failed, "
+            "%d chunks embedded in %d ms",
             root_directory,
             indexed_files,
+            unchanged_files,
             skipped_files,
             failed_files,
             indexed_chunks,
@@ -272,5 +384,6 @@ class IndexingService:
             indexed_chunks=indexed_chunks,
             skipped_files=skipped_files,
             failed_files=failed_files,
+            unchanged_files=unchanged_files,
             diagnostics=diagnostics,
         )

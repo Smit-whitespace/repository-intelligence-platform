@@ -1,13 +1,20 @@
 """Repository Editing service."""
 
+import hashlib
 from collections.abc import Callable
 from pathlib import Path
 
+from app.core.storage.locations import is_registered_project
 from app.editing.change_applier import (
     ChangeApplier,
+    read_text_exact,
+    read_text_for_edit,
 )
 from app.editing.exceptions import (
+    EditConflictError,
     EditingError,
+    IncompleteRevertError,
+    UnregisteredRepositoryError,
 )
 from app.editing.models import (
     ChangeSet,
@@ -62,6 +69,10 @@ class EditingService:
     ) -> EditResponse:
         """Generate repository modifications."""
 
+        self._validate_repository_root(
+            request.repository_root,
+        )
+
         return self._editing_provider.edit(
             request,
         )
@@ -77,6 +88,18 @@ class EditingService:
             repository_root,
         )
 
+        if not change_set.edits:
+            raise EditingError(
+                "ChangeSet has no edits to apply.",
+            )
+
+        # Validate every path before any file is read: the snapshot below
+        # reads each target, and must never read outside the repository.
+        self._change_applier.validate_change_set(
+            repository_root=repository_root,
+            change_set=change_set,
+        )
+
         snapshot_store = self._snapshot_store_factory(
             repository_root,
         )
@@ -90,10 +113,32 @@ class EditingService:
             snapshot,
         )
 
-        self._change_applier.apply(
-            repository_root=repository_root,
-            change_set=change_set,
-        )
+        try:
+            self._change_applier.apply(
+                repository_root=repository_root,
+                change_set=change_set,
+            )
+
+        except IncompleteRevertError as error:
+            # The repository is in a partial state; the snapshot is the
+            # way back, so keep it and tell the caller its id.
+            raise IncompleteRevertError(
+                f"{error} The pre-apply state is saved in snapshot "
+                f"{snapshot.snapshot_id}; roll back with it.",
+            ) from error
+
+        except Exception:
+            # Nothing was changed (or every change was reverted), so the
+            # snapshot would only be clutter.
+            try:
+                snapshot_store.delete(
+                    snapshot.snapshot_id,
+                )
+
+            except EditingError:
+                pass
+
+            raise
 
         return snapshot.snapshot_id
 
@@ -116,6 +161,18 @@ class EditingService:
             snapshot_id,
         )
 
+        # Snapshot files live on disk and could have been tampered with,
+        # so their paths are validated before any of them is read.
+        self._change_applier.validate_snapshot(
+            repository_root=repository_root,
+            snapshot=snapshot,
+        )
+
+        self._ensure_unchanged_since_apply(
+            repository_root=repository_root,
+            snapshot=snapshot,
+        )
+
         self._change_applier.restore(
             repository_root=repository_root,
             snapshot=snapshot,
@@ -125,23 +182,71 @@ class EditingService:
     def _validate_repository_root(
         repository_root: Path,
     ) -> None:
-        """Reject missing or non-directory repository roots.
+        require_registered_root(
+            repository_root,
+        )
 
-        Validated before any project-local storage is created, so an
-        invalid root can never be materialized as a side effect.
+    @staticmethod
+    def _ensure_unchanged_since_apply(
+        repository_root: Path,
+        snapshot: Snapshot,
+    ) -> None:
+        """Refuse a rollback that would overwrite later changes.
+
+        Each file must be in one of the two states this snapshot knows
+        about: what the apply wrote, or what was there before the apply
+        (for a new file: absent). The second state matters after an
+        incomplete revert, where some files are already back to their
+        original content and the snapshot is the documented way back.
+        Anything else means someone changed the file, so stop.
         """
 
         root = repository_root.resolve()
 
-        if not root.exists():
-            raise EditingError(
-                "Repository root does not exist.",
-            )
+        for file in snapshot.files:
+            if file.applied_sha256 is None:
+                continue
 
-        if not root.is_dir():
-            raise EditingError(
-                "Repository root is not a directory.",
-            )
+            target_path = (
+                root
+                / file.relative_path
+            ).resolve()
+
+            try:
+                current_content = (
+                    read_text_exact(
+                        target_path,
+                    )
+                    if target_path.is_file()
+                    else None
+                )
+
+            except (OSError, UnicodeDecodeError):
+                current_content = ""
+
+                current_is_unreadable = True
+
+            else:
+                current_is_unreadable = False
+
+            if current_is_unreadable:
+                matches_known_state = False
+
+            elif current_content is None:
+                matches_known_state = not file.existed
+
+            else:
+                matches_known_state = (
+                    _sha256(current_content) == file.applied_sha256
+                    or (file.existed and current_content == file.content)
+                )
+
+            if not matches_known_state:
+                raise EditConflictError(
+                    "File changed after the edit was applied: "
+                    f"{file.relative_path.as_posix()}. Rolling back "
+                    "would overwrite those changes.",
+                )
 
     def _create_snapshot(
         self,
@@ -162,30 +267,71 @@ class EditingService:
                 / edit.relative_path
             ).resolve()
 
-            existed = target_path.exists()
+            current_content = read_text_for_edit(
+                target_path,
+                edit.relative_path,
+            )
 
-            if existed:
-                try:
-                    content = target_path.read_text(
-                        encoding="utf-8",
-                    )
+            existed = current_content is not None
 
-                except OSError as error:
-                    raise EditingError(
-                        "Failed to read repository file while creating snapshot.",
-                    ) from error
-
-            else:
-                content = ""
+            content = current_content or ""
 
             files.append(
                 SnapshotFile(
                     relative_path=edit.relative_path,
                     existed=existed,
                     content=content,
+                    applied_sha256=_sha256(
+                        edit.updated_content,
+                    ),
                 ),
             )
 
         return Snapshot(
             files=files,
+        )
+
+
+def _sha256(
+    content: str,
+) -> str:
+    """Return the SHA-256 hex digest of UTF-8 text."""
+
+    return hashlib.sha256(
+        content.encode(
+            "utf-8",
+        ),
+    ).hexdigest()
+
+
+def require_registered_root(
+    repository_root: Path,
+) -> None:
+    """Reject roots that are missing or not registered RIP projects.
+
+    Validated before any project-local storage is created, so an invalid
+    root can never be materialized as a side effect. The registration
+    check is the security boundary for every editing path: the caller
+    chooses the root, so without it "stay inside the repository root"
+    would not restrict anything.
+    """
+
+    root = repository_root.resolve()
+
+    if not root.exists():
+        raise EditingError(
+            "Repository root does not exist.",
+        )
+
+    if not root.is_dir():
+        raise EditingError(
+            "Repository root is not a directory.",
+        )
+
+    if not is_registered_project(
+        root,
+    ):
+        raise UnregisteredRepositoryError(
+            "Repository root is not a registered RIP project. "
+            "Initialize the project before editing it.",
         )

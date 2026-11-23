@@ -5,6 +5,7 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 from app.api import api_router
 from app.core.logging.factory import get_logger
@@ -39,6 +40,13 @@ OPENAPI_TAGS = [
     {
         "name": "Editing",
         "description": "Planning, apply, snapshot, and rollback endpoints.",
+    },
+    {
+        "name": "Workspace",
+        "description": (
+            "Read-only repository tools for external clients: read files, "
+            "list the tree, text search, symbol lookup, semantic search."
+        ),
     },
     {
         "name": "Models",
@@ -85,6 +93,11 @@ def create_application() -> FastAPI:
         ),
         openapi_tags=OPENAPI_TAGS,
         lifespan=lifespan,
+    )
+
+    application.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=settings.server.allowed_hosts,
     )
 
     application.add_middleware(

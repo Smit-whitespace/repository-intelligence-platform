@@ -63,6 +63,10 @@ def create_service() -> tuple[
         spec=VectorStore,
     )
 
+    # A spec'd mock would return a truthy MagicMock here; ``None`` is the
+    # "store does not track index metadata" contract.
+    vector_store.get_index_metadata.return_value = None
+
     service = RetrievalService(
         embedding_provider=embedding_provider,
         vector_store_resolver=StaticVectorStoreResolver(

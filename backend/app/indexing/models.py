@@ -70,6 +70,11 @@ class IndexingResult(BaseModel):
 
     failed_files: int
 
+    unchanged_files: int = 0
+    """Indexed files whose content had not changed, so nothing was
+    re-embedded for them. ``indexed_chunks`` counts only newly embedded
+    chunks."""
+
     diagnostics: IndexingDiagnostics | None = None
 
 
@@ -81,3 +86,20 @@ class RepositoryIndex(BaseModel):
     indexed_at: datetime
 
     result: IndexingResult
+
+
+class IndexStatus(BaseModel):
+    """Whether a project is indexed, and with which embedding model."""
+
+    indexed: bool
+
+    embedding_model: str | None = None
+    """Model recorded in the index; None if unindexed or built before
+    the model was recorded."""
+
+    configured_embedding_model: str
+
+    compatible: bool
+    """True when searching the index with the configured model is valid.
+    An index built before the model was recorded counts as compatible
+    (it is rebuilt on the next indexing run)."""

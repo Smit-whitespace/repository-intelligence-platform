@@ -1,5 +1,6 @@
 """ChromaDB vector store."""
 
+import gc
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -7,6 +8,7 @@ from typing import Any, cast
 import chromadb
 from chromadb import Collection
 from chromadb.api import ClientAPI
+from chromadb.config import Settings as ChromaSettings
 
 from app.indexing.models import (
     EmbeddingVector,
@@ -40,6 +42,10 @@ class ChromaVectorStore(VectorStore):
             path=str(
                 persist_directory,
             ),
+            # Offline-first (ADR-0001): never send usage telemetry.
+            settings=ChromaSettings(
+                anonymized_telemetry=False,
+            ),
         )
 
         self._collection: Collection = self._client.get_or_create_collection(
@@ -52,8 +58,14 @@ class ChromaVectorStore(VectorStore):
         Chroma 1.x clients keep the persistence database open for the
         lifetime of the process; stopping the backing system releases
         the underlying file handles so project directories can be
-        removed or moved.
+        removed or moved. Safe to call more than once.
         """
+
+        if not hasattr(
+            self,
+            "_client",
+        ):
+            return
 
         try:
             system = getattr(
@@ -66,6 +78,15 @@ class ChromaVectorStore(VectorStore):
 
         if system is not None:
             system.stop()
+
+        # Chroma's native backend releases the SQLite file only when its
+        # client objects are freed, not when stop() returns. On Windows a
+        # lingering handle blocks deleting or moving the project, so drop
+        # the references and collect them now.
+        del self._collection
+        del self._client
+
+        gc.collect()
 
     def add(
         self,
@@ -196,6 +217,44 @@ class ChromaVectorStore(VectorStore):
             )
         ]
 
+    def get_chunk_ids_by_path(
+        self,
+        where: dict | None = None,
+    ) -> dict[str, set[str]]:
+        """Group chunk ids by the ``relative_path`` stored with them."""
+
+        result = cast(
+            dict[str, Any],
+            self._collection.get(
+                where=where,
+                include=[
+                    "metadatas",
+                ],
+            ),
+        )
+
+        grouped: dict[str, set[str]] = {}
+
+        for chunk_id, metadata in zip(
+            result.get("ids", []),
+            result.get("metadatas") or [],
+        ):
+            path = str(
+                (metadata or {}).get(
+                    "relative_path",
+                    "",
+                ),
+            )
+
+            grouped.setdefault(
+                path,
+                set(),
+            ).add(
+                chunk_id,
+            )
+
+        return grouped
+
     def get_chunk_ids(
         self,
         where: dict | None = None,
@@ -244,6 +303,33 @@ class ChromaVectorStore(VectorStore):
 
         self._collection = self._client.get_or_create_collection(
             name=self._collection.name,
+        )
+
+    def get_index_metadata(
+        self,
+    ) -> dict[str, str | int | float | bool]:
+        """Return the collection metadata (empty for legacy indexes).
+
+        Kept in the collection itself rather than a side file, so
+        ``clear()`` (which recreates the collection) can never leave a
+        stamp that describes vectors that no longer exist.
+        """
+
+        return dict(
+            self._collection.metadata or {},
+        )
+
+    def set_index_metadata(
+        self,
+        metadata: dict[str, str | int | float | bool],
+    ) -> None:
+        """Merge ``metadata`` into the collection metadata."""
+
+        self._collection.modify(
+            metadata={
+                **self.get_index_metadata(),
+                **metadata,
+            },
         )
 
     def _create_search_hit(

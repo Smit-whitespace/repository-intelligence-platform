@@ -1,5 +1,8 @@
 """Semantic retrieval service."""
 
+import logging
+
+from app.indexing.exceptions import IndexIncompatibleError
 from app.indexing.providers import EmbeddingProvider
 from app.indexing.retrieval_models import (
     SearchHit,
@@ -8,6 +11,12 @@ from app.indexing.retrieval_models import (
     SearchResult,
 )
 from app.indexing.store_resolver import VectorStoreResolver
+from app.indexing.stores import (
+    EMBEDDING_MODEL_METADATA_KEY,
+    VectorStore,
+)
+
+logger = logging.getLogger(__name__)
 
 
 class RetrievalService:
@@ -53,6 +62,11 @@ class RetrievalService:
                 results=[],
             )
 
+        self._ensure_compatible(
+            vector_store=vector_store,
+            root_directory=query.root_directory,
+        )
+
         query_embedding = self._embedding_provider.embed(
             [
                 query.query,
@@ -90,6 +104,46 @@ class RetrievalService:
             query=query.query,
             results=search_results,
         )
+
+    def _ensure_compatible(
+        self,
+        vector_store: VectorStore,
+        root_directory: str,
+    ) -> None:
+        """Refuse to search an index built by another embedding model.
+
+        Never falls back silently: a mismatch is an explicit error that
+        names both models and the fix. An index built before the model
+        was recorded is still searched (it is rebuilt on the next
+        indexing run), with a warning.
+        """
+
+        metadata = vector_store.get_index_metadata()
+
+        if metadata is None:
+            return
+
+        built_with = metadata.get(
+            EMBEDDING_MODEL_METADATA_KEY,
+        )
+
+        configured = self._embedding_provider.identity
+
+        if built_with is None:
+            logger.warning(
+                "Index for %s does not record its embedding model; "
+                "reindex the project to enable compatibility checks.",
+                root_directory,
+            )
+            return
+
+        if built_with != configured:
+            raise IndexIncompatibleError(
+                f"This project's index was built with embedding model "
+                f"'{built_with}', but the configured embedding model is "
+                f"'{configured}'. Reindex the project to search it with "
+                f"'{configured}'.",
+            )
 
     @staticmethod
     def _normalize_score(

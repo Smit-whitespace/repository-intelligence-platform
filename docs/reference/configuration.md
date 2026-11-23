@@ -15,6 +15,26 @@ Configuration is managed by `app/core/config/models.py` (`ApplicationSettings` a
 |---------|------|---------|-------------|
 | `LOC_SERVER_HOST` | `str` | `127.0.0.1` | HTTP bind host |
 | `LOC_SERVER_PORT` | `int` | `8000` | HTTP bind port |
+| `LOC_SERVER_ALLOWED_HOSTS` | `str` | `localhost,127.0.0.1` | Comma-separated `Host` header values the API accepts; anything else gets HTTP 400. This blocks DNS-rebinding attacks from web pages. Add a name here only if you deliberately reach the API through it. |
+
+### Models
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `LOC_MODEL_CONFIG_PATH` | `str` | `~/.local_openclaw/models.json` | Model configuration file (providers, primary model, overrides, embedding). Until it exists, the `LOC_OLLAMA_*` settings below are the configuration. See [Model Configuration](../architecture/backend/models.md). |
+
+### Security
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `LOC_INTEGRITY_KEY_PATH` | `str` | `~/.local_openclaw/integrity.key` | Key that signs proposals, snapshots and validation commands ([ADR-0019](../adr/adr-0019-signed-project-state.md)). Created on first use. |
+
+### Frontend
+
+| Setting | Where | Default | Description |
+|---------|-------|---------|-------------|
+| `RIP_BACKEND_URL` | shell environment for `npm run dev` | `http://127.0.0.1:8000` | Target of the Vite dev proxy for `/api` |
+| `VITE_API_BASE_URL` | `frontend/.env.local` (git-ignored) | unset (`/api/v1` through the proxy) | Full API base URL, bypassing the proxy; see `frontend/.env.example` |
 
 ## Logging
 

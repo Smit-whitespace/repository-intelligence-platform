@@ -111,6 +111,78 @@ def test_openapi_contract_metadata() -> None:
             "POST",
             "/api/v1/editing/rollback",
         ): "rollbackChangeSet",
+        (
+            "POST",
+            "/api/v1/editing/proposals",
+        ): "proposeEdits",
+        (
+            "GET",
+            "/api/v1/editing/proposals",
+        ): "listEditProposals",
+        (
+            "POST",
+            "/api/v1/editing/proposals/plan",
+        ): "planEditProposal",
+        (
+            "GET",
+            "/api/v1/editing/proposals/{proposal_id}",
+        ): "getEditProposal",
+        (
+            "POST",
+            "/api/v1/editing/proposals/{proposal_id}/apply",
+        ): "applyEditProposal",
+        (
+            "POST",
+            "/api/v1/editing/proposals/{proposal_id}/reject",
+        ): "rejectEditProposal",
+        (
+            "POST",
+            "/api/v1/editing/proposals/{proposal_id}/rollback",
+        ): "rollbackEditProposal",
+        (
+            "GET",
+            "/api/v1/editing/validation",
+        ): "getValidationConfig",
+        (
+            "PUT",
+            "/api/v1/editing/validation",
+        ): "updateValidationConfig",
+        (
+            "POST",
+            "/api/v1/editing/validation/run",
+        ): "runValidation",
+        (
+            "GET",
+            "/api/v1/models/configuration",
+        ): "getModelConfiguration",
+        (
+            "PUT",
+            "/api/v1/models/configuration",
+        ): "updateModelConfiguration",
+        (
+            "GET",
+            "/api/v1/models/effective",
+        ): "getEffectiveModels",
+        (
+            "GET",
+            "/api/v1/workspace/file",
+        ): "readWorkspaceFile",
+        (
+            "GET",
+            "/api/v1/workspace/tree",
+        ): "listWorkspaceTree",
+        (
+            "GET",
+            "/api/v1/workspace/search/text",
+        ): "searchWorkspaceText",
+        (
+            "GET",
+            "/api/v1/workspace/symbols",
+        ): "findWorkspaceSymbols",
+        (
+            "GET",
+            "/api/v1/workspace/search/semantic",
+        ): "searchWorkspaceSemantic",
     }
 
     for key, operation_id in expected_operation_ids.items():

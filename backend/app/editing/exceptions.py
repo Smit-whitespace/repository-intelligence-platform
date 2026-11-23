@@ -8,9 +8,52 @@ class EditingError(Exception):
 class InvalidRepositoryError(EditingError):
     """Repository root is invalid."""
 
+
+class UnregisteredRepositoryError(EditingError):
+    """Repository root is not a registered RIP project.
+
+    Editing operations only act on roots that contain project metadata
+    (``<root>/.local_openclaw/project.json``). Without this check, any
+    caller could choose an arbitrary directory as the "repository" and
+    write anywhere on disk.
+    """
+
+
+class EditConflictError(EditingError):
+    """A file changed between planning and apply, or after apply.
+
+    Raised instead of silently overwriting changes that the edit plan or
+    snapshot did not account for.
+    """
+
+
+class IncompleteRevertError(EditingError):
+    """A failed apply could not restore every file it had written."""
+
+
 class SnapshotNotFoundError(EditingError):
     """Snapshot could not be found."""
 
 
 class SnapshotPersistenceError(EditingError):
     """Snapshot persistence failed."""
+
+
+class ProposalNotFoundError(EditingError):
+    """No proposal with that id exists in the project (HTTP 404)."""
+
+
+class ProposalStateError(EditingError):
+    """The proposal is not in a state that allows the action (HTTP 409)."""
+
+
+class EditingDisabledError(EditingError):
+    """This client is not allowed to perform the editing action (HTTP 403)."""
+
+
+class UntrustedStateError(EditingError):
+    """A state file was not written by this RIP installation (HTTP 403).
+
+    Typically it came with a cloned repository. Proposals and snapshots
+    like that are never used; see ``app/core/storage/integrity.py``.
+    """

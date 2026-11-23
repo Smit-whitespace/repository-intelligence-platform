@@ -2,6 +2,9 @@
 
 from pathlib import Path
 
+from app.editing.change_applier import (
+    read_text_exact,
+)
 from app.editing.exceptions import (
     InvalidRepositoryError,
 )
@@ -85,10 +88,8 @@ class DefaultEditingProvider(
                         "Planned path is not a file.",
                     )
 
-                original_content = (
-                    candidate_path.read_text(
-                        encoding="utf-8",
-                    )
+                original_content = read_text_exact(
+                    candidate_path,
                 )
 
             change_set.edits.append(

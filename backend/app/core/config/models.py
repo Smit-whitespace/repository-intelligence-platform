@@ -9,6 +9,19 @@ class ServerSettings(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8000
 
+    allowed_hosts: list[str] = Field(
+        default_factory=lambda: [
+            "localhost",
+            "127.0.0.1",
+        ],
+    )
+    """Host header values the API accepts.
+
+    Rejecting other Host headers blocks DNS rebinding: a web page on an
+    attacker's domain that re-resolves to 127.0.0.1 would otherwise be
+    able to call this API as same-origin.
+    """
+
 
 class LoggingSettings(BaseModel):
     """Logging configuration."""
@@ -27,6 +40,20 @@ class OllamaSettings(BaseModel):
     chat_model: str = "qwen3:8b"
 
     timeout_seconds: int = 120
+
+
+class ModelsSettings(BaseModel):
+    """Where the model configuration file lives."""
+
+    config_path: str = ""
+    """Empty means the per-user default, ~/.local_openclaw/models.json."""
+
+
+class SecuritySettings(BaseModel):
+    """Where the key that signs RIP's state files lives."""
+
+    integrity_key_path: str = ""
+    """Empty means the per-user default, ~/.local_openclaw/integrity.key."""
 
 
 class ChromaSettings(BaseModel):
@@ -60,6 +87,14 @@ class ApplicationSettings(BaseModel):
 
     ollama: OllamaSettings = Field(
         default_factory=OllamaSettings,
+    )
+
+    models: ModelsSettings = Field(
+        default_factory=ModelsSettings,
+    )
+
+    security: SecuritySettings = Field(
+        default_factory=SecuritySettings,
     )
 
     chroma: ChromaSettings = Field(

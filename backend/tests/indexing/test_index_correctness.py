@@ -337,7 +337,14 @@ class TestCorrectReIndexing:
             tmp_path,
         )
 
-        assert second.indexed_chunks == first.indexed_chunks
+        # Unchanged content keeps its vectors: nothing is re-embedded.
+        assert first.indexed_chunks > 0
+
+        assert second.indexed_chunks == 0
+
+        assert second.unchanged_files == 1
+
+        assert second.indexed_files == first.indexed_files
 
         assert set(store._chunks.keys()) == first_ids
 

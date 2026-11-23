@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -130,6 +131,8 @@ def test_application_factory_registers_routes_and_openapi() -> None:
         "/api/v1/repository/summary",
         "/api/v1/models",
         "/api/v1/settings/model",
+        "/api/v1/models/configuration",
+        "/api/v1/models/effective",
         "/api/v1/system/status",
         "/api/v1/system/capabilities",
         "/api/v1/system/version",
@@ -138,6 +141,19 @@ def test_application_factory_registers_routes_and_openapi() -> None:
         "/api/v1/editing/edit",
         "/api/v1/editing/apply",
         "/api/v1/editing/rollback",
+        "/api/v1/editing/proposals",
+        "/api/v1/editing/proposals/plan",
+        "/api/v1/editing/proposals/{proposal_id}",
+        "/api/v1/editing/proposals/{proposal_id}/apply",
+        "/api/v1/editing/proposals/{proposal_id}/reject",
+        "/api/v1/editing/proposals/{proposal_id}/rollback",
+        "/api/v1/editing/validation",
+        "/api/v1/editing/validation/run",
+        "/api/v1/workspace/file",
+        "/api/v1/workspace/tree",
+        "/api/v1/workspace/search/text",
+        "/api/v1/workspace/symbols",
+        "/api/v1/workspace/search/semantic",
     }
 
 
@@ -181,8 +197,12 @@ def test_health_endpoint_is_ready_after_startup() -> None:
     }
 
 
-def test_no_custom_middleware_is_registered() -> None:
-    """Middleware stack should remain explicit and unchanged."""
+def test_middleware_stack_is_explicit() -> None:
+    """Middleware stack should remain explicit: CORS, then trusted hosts.
+
+    ``user_middleware`` lists the most recently added first, and
+    TrustedHostMiddleware is added first so it is the outermost check.
+    """
 
     application = main.create_application()
 
@@ -193,6 +213,7 @@ def test_no_custom_middleware_is_registered() -> None:
 
     assert middleware_classes == [
         CORSMiddleware,
+        TrustedHostMiddleware,
     ]
 
 

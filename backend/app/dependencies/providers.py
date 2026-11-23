@@ -4,9 +4,6 @@ from collections.abc import Callable
 from functools import lru_cache
 from pathlib import Path
 
-from app.chat.ollama_provider import (
-    OllamaChatProvider,
-)
 from app.chat.providers import (
     ChatProvider,
 )
@@ -29,14 +26,14 @@ from app.editing.providers import (
 from app.editing.service import (
     EditingService,
 )
+from app.editing.planner import EditPlanner
+from app.editing.proposal_service import ProposalService
+from app.editing.validation import ValidationRunner
 from app.editing.snapshot_store import (
     SnapshotStore,
 )
 from app.indexing.indexer import (
     RepositoryIndexer,
-)
-from app.indexing.ollama_provider import (
-    OllamaEmbeddingProvider,
 )
 from app.indexing.providers import (
     EmbeddingProvider,
@@ -64,6 +61,28 @@ from app.repository.scanner import RepositoryScanner
 from app.repository.service import RepositoryService
 from app.editing.change_applier import (
     ChangeApplier,
+)
+from app.llm.config import (
+    ModelConfiguration,
+    Task,
+)
+from app.llm.factory import (
+    LazyEmbeddingProvider,
+    build_chat_provider,
+    build_embedding_provider,
+)
+from app.llm.resolver import EffectiveModel, ModelResolver
+from app.llm.store import (
+    ModelConfigStore,
+    configuration_from_ollama_settings,
+    default_config_path,
+)
+from app.workspace.service import (
+    RepositoryWorkspace,
+    WorkspaceOpener,
+)
+from app.workspace.symbols import (
+    PythonSymbolExtractor,
 )
 
 
@@ -123,10 +142,22 @@ def get_repository_service() -> RepositoryService:
 
 @lru_cache(maxsize=1)
 def get_embedding_provider() -> EmbeddingProvider:
-    """Return the embedding provider."""
+    """Return the configured embedding provider (built on first use)."""
 
-    return OllamaEmbeddingProvider(
-        settings.ollama,
+    def build() -> EmbeddingProvider:
+        resolver = get_model_resolver()
+
+        return build_embedding_provider(
+            configuration=resolver.configuration,
+            effective=resolver.for_embedding(),
+            ollama_settings=settings.ollama,
+        )
+
+    # Objects that captured this provider (an MCP server's indexer, say)
+    # rebuild it when the configuration file changes.
+    return LazyEmbeddingProvider(
+        build,
+        version=model_config_stamp,
     )
 
 
@@ -181,10 +212,16 @@ def get_context_assembly() -> ContextAssembly:
 
 @lru_cache(maxsize=1)
 def get_chat_provider() -> ChatProvider:
-    """Return the chat provider."""
+    """Return the chat provider for the chat-answer task's model."""
 
-    return OllamaChatProvider(
-        settings.ollama,
+    resolver = get_model_resolver()
+
+    return build_chat_provider(
+        configuration=resolver.configuration,
+        effective=resolver.for_task(
+            Task.CHAT_ANSWER,
+        ),
+        ollama_settings=settings.ollama,
     )
 
 
@@ -248,6 +285,7 @@ def get_snapshot_store_factory() -> Callable[[Path], SnapshotStore]:
 
         return SnapshotStore(
             storage=storage,
+            repository_root=repository_root,
         )
 
     return create_snapshot_store
@@ -261,4 +299,172 @@ def get_project_initialization_service() -> ProjectInitializationService:
         project_service=get_project_service(),
         repository_service=get_repository_service(),
         indexing_service=get_indexing_service(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_symbol_extractor() -> PythonSymbolExtractor:
+    """Return the shared symbol extractor (its parse cache is process-wide)."""
+
+    return PythonSymbolExtractor()
+
+
+@lru_cache(maxsize=1)
+def get_workspace_opener() -> WorkspaceOpener:
+    """Return a function that opens a workspace on a project root.
+
+    Opening validates that the root is a registered project, so every
+    caller (REST today, MCP next) gets the same path-security boundary.
+    """
+
+    def open_workspace(
+        root_directory: str | Path,
+    ) -> RepositoryWorkspace:
+        return RepositoryWorkspace.open(
+            root_directory=root_directory,
+            retrieval_service=get_retrieval_service(),
+            symbol_extractor=get_symbol_extractor(),
+        )
+
+    return open_workspace
+
+
+@lru_cache(maxsize=1)
+def get_model_config_store() -> ModelConfigStore:
+    """Return the per-user model configuration store."""
+
+    path = (
+        Path(settings.models.config_path).expanduser()
+        if settings.models.config_path
+        else default_config_path()
+    )
+
+    return ModelConfigStore(
+        path=path,
+        defaults=configuration_from_ollama_settings(
+            settings.ollama,
+        ),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_model_resolver() -> ModelResolver:
+    """Return the resolver for the current model configuration."""
+
+    return ModelResolver(
+        get_model_config_store().load(),
+    )
+
+
+def apply_model_configuration(
+    configuration: ModelConfiguration,
+) -> None:
+    """Save a new model configuration and rebuild what depends on it.
+
+    Everything that captured a provider is rebuilt, so the next request
+    uses the new models. Changing the embedding model does not reindex
+    anything: searches report the mismatch until the user reindexes.
+    """
+
+    get_model_config_store().save(
+        configuration,
+    )
+
+    refresh_model_configuration_if_changed()
+
+
+_UNSEEN = object()
+
+_seen_config_stamp: object = _UNSEEN
+
+
+def model_config_stamp() -> tuple[int, int] | None:
+    """Identify the current model configuration file version."""
+
+    try:
+        status = get_model_config_store().path.stat()
+
+    except OSError:
+        return None
+
+    return (
+        status.st_mtime_ns,
+        status.st_size,
+    )
+
+
+def refresh_model_configuration_if_changed() -> None:
+    """Rebuild model-dependent services if the config file changed.
+
+    The configuration file can change outside this process: the RIP app
+    and an MCP server are separate processes, and people edit the file
+    by hand. Without this check, a long-lived process kept using the old
+    models; an MCP ``reindex`` could then rebuild the index with the old
+    embedding model and silently undo a change made in the app.
+
+    Called before every API request and every MCP tool call; it only
+    stats the file, so it is cheap.
+    """
+
+    global _seen_config_stamp
+
+    stamp = model_config_stamp()
+
+    if stamp == _seen_config_stamp:
+        return
+
+    _seen_config_stamp = stamp
+
+    for cached in (
+        get_model_resolver,
+        get_chat_provider,
+        get_chat_service,
+        get_embedding_provider,
+        get_repository_indexer,
+        get_indexing_service,
+        get_retrieval_service,
+        get_project_initialization_service,
+        get_workspace_opener,
+        get_proposal_service,
+    ):
+        cached.cache_clear()
+
+
+def _edit_model() -> EffectiveModel:
+    return get_model_resolver().for_task(
+        Task.EDIT_PLAN,
+    )
+
+
+@lru_cache(maxsize=1)
+def get_proposal_service() -> ProposalService:
+    """Return the edit proposal workflow service.
+
+    The edit model is resolved on every planning call, so a model
+    configuration change applies to the next proposal without a restart.
+    """
+
+    def build_edit_chat_provider() -> ChatProvider:
+        resolver = get_model_resolver()
+
+        return build_chat_provider(
+            configuration=resolver.configuration,
+            effective=_edit_model(),
+            ollama_settings=settings.ollama,
+        )
+
+    def edit_model_label() -> str:
+        effective = _edit_model()
+
+        return f"{effective.provider}/{effective.model}"
+
+    return ProposalService(
+        editing_service=get_editing_service(),
+        change_applier=get_change_applier(),
+        validation_runner=ValidationRunner(),
+        planner=EditPlanner(
+            chat_provider_factory=build_edit_chat_provider,
+        ),
+        workspace_opener=get_workspace_opener(),
+        edit_model_label=edit_model_label,
     )

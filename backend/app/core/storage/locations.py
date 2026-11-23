@@ -18,6 +18,7 @@ directory name. No competing names (``.repository-intelligence-platform``,
 ``.local_rip``, ``.rip``) are used for the same purpose.
 """
 
+import os
 from pathlib import Path
 
 PROJECT_STORAGE_DIRECTORY_NAME = ".local_openclaw"
@@ -29,6 +30,21 @@ INDEX_RELATIVE_DIRECTORY = Path("index")
 CHROMA_RELATIVE_DIRECTORY = Path("index/chroma")
 
 SNAPSHOTS_RELATIVE_DIRECTORY = Path("snapshots")
+
+PROTECTED_DIRECTORY_NAMES = frozenset(
+    {
+        ".git",
+        PROJECT_STORAGE_DIRECTORY_NAME,
+    },
+)
+"""Directory names that repository tools never read from or write into.
+
+``.git`` because writing ``.git/hooks/*`` is arbitrary code execution
+(and its internals are noise to an agent); ``.local_openclaw`` because
+it holds RIP's own index and the snapshots that rollback depends on.
+Compared case-insensitively, because Windows and macOS file systems are
+case-insensitive by default.
+"""
 
 
 def project_storage_directory(
@@ -76,4 +92,69 @@ def project_snapshots_directory(
     return (
         project_storage_directory(root_directory)
         / SNAPSHOTS_RELATIVE_DIRECTORY
+    )
+
+
+def is_registered_project(
+    root_directory: str | Path,
+) -> bool:
+    """Return whether a directory is a registered RIP project.
+
+    A project is registered once its metadata file exists. Tools that
+    read or modify a repository only accept registered roots, so a
+    caller cannot point them at an arbitrary directory.
+
+    A storage directory or metadata file that is a symlink or junction is
+    not accepted: RIP would then write its index and snapshots wherever
+    the link points.
+    """
+
+    storage_directory = project_storage_directory(
+        root_directory,
+    )
+
+    metadata_path = storage_directory / PROJECT_METADATA_FILE_NAME
+
+    if is_link(storage_directory) or is_link(metadata_path):
+        return False
+
+    return metadata_path.is_file()
+
+
+def is_link(
+    path: Path,
+) -> bool:
+    """Return whether a path is a symlink or a Windows junction.
+
+    ``Path.is_symlink`` is False for junctions, which Windows users can
+    create without admin rights, so both must be checked.
+    """
+
+    return path.is_symlink() or path.is_junction()
+
+
+def is_valid_path_text(
+    path_text: str,
+) -> bool:
+    """Reject path text that the filesystem would misinterpret.
+
+    NUL bytes make path functions raise. On Windows, ``:`` outside the
+    drive prefix addresses an alternate data stream (``file.txt:hidden``),
+    which no repository file legitimately uses.
+    """
+
+    if "\x00" in path_text:
+        return False
+
+    return os.name != "nt" or ":" not in path_text
+
+
+def is_protected_path(
+    relative_path: Path,
+) -> bool:
+    """Return whether a repository-relative path is in a protected directory."""
+
+    return any(
+        part.casefold() in PROTECTED_DIRECTORY_NAMES
+        for part in relative_path.parts
     )

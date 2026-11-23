@@ -9,7 +9,7 @@ import {
   useSystemStatus,
   useUpdateActiveModel,
 } from "@/lib/api/queries";
-import type { ModelSource } from "@/types/api";
+import type { EffectiveModel, ModelSource } from "@/types/api";
 import { useThemeStore, type ThemeMode } from "@/stores/themeStore";
 import { RefreshCw, Save } from "lucide-react";
 import { useState } from "react";
@@ -29,6 +29,7 @@ export function SettingsPage() {
   const setTheme = useThemeStore((state) => state.setTheme);
   const status = useSystemStatus();
   const activeModel = useActiveModel();
+  const effectiveModels = useEffectiveModels();
   const models = useModels();
   const updateActiveModel = useUpdateActiveModel();
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -107,6 +108,7 @@ export function SettingsPage() {
             <p className="mt-1 text-sm text-[#7A8599]">
               Provider: {activeModel.data?.active_provider ?? status.data?.active_provider}
             </p>
+            <ChatOverrideNote models={effectiveModels.data?.models ?? []} />
             <div className="mt-4 flex flex-col gap-3 md:flex-row">
               <select
                 value={modelValue}
@@ -145,6 +147,22 @@ export function SettingsPage() {
       </div>
       <EffectiveModelsPanel />
     </section>
+  );
+}
+
+function ChatOverrideNote({ models }: { models: EffectiveModel[] }) {
+  // The picker sets the *primary* model; say so when chat ignores it.
+  const chat = models.find((model) => model.operation === "chat.answer");
+
+  if (!chat || chat.source === "primary") {
+    return null;
+  }
+
+  return (
+    <p className="mt-2 text-xs text-[#F59E0B]">
+      Chat uses {chat.provider}/{chat.model} from a {sourceLabels[chat.source].toLowerCase()}.
+      Saving here changes the primary model, used wherever no override applies.
+    </p>
   );
 }
 

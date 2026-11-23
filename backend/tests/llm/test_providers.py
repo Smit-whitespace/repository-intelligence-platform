@@ -462,11 +462,11 @@ def _configuration() -> ModelConfiguration:
                 "openai": {
                     "type": "openai_compatible",
                     "base_url": "https://api.openai.com/v1",
-                    "api_key_env": "RIP_TEST_OPENAI_KEY",
+                    "api_key_env": "RIP_TEST_OPENAI_API_KEY",
                 },
                 "claude": {
                     "type": "anthropic",
-                    "api_key_env": "RIP_TEST_ANTHROPIC_KEY",
+                    "api_key_env": "RIP_TEST_ANTHROPIC_API_KEY",
                 },
             },
             "primary": {"provider": "claude", "model": "claude-opus-5-5"},
@@ -505,7 +505,7 @@ def test_missing_api_key_names_the_variable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(
-        "RIP_TEST_OPENAI_KEY",
+        "RIP_TEST_OPENAI_API_KEY",
         raising=False,
     )
 
@@ -513,7 +513,7 @@ def test_missing_api_key_names_the_variable(
 
     with pytest.raises(
         ModelConfigurationError,
-        match="RIP_TEST_OPENAI_KEY, which is not set",
+        match="RIP_TEST_OPENAI_API_KEY, which is not set",
     ):
         build_embedding_provider(
             configuration=configuration,
@@ -526,7 +526,7 @@ def test_key_from_the_environment_reaches_the_adapter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(
-        "RIP_TEST_OPENAI_KEY",
+        "RIP_TEST_OPENAI_API_KEY",
         "sk-from-env",
     )
 
@@ -623,3 +623,37 @@ def test_ollama_embeddings_report_an_unreachable_server_clearly() -> None:
                 "x",
             ],
         )
+
+
+def test_lazy_embedding_provider_rebuilds_when_the_config_changes() -> None:
+    """Long-lived holders (an MCP server's indexer) never keep a stale model."""
+
+    version = {"value": 1}
+
+    builds: list[int] = []
+
+    class Recording(OllamaEmbeddingProvider):
+        pass
+
+    def build() -> Any:
+        builds.append(version["value"])
+
+        return OllamaEmbeddingProvider(
+            OllamaSettings(),
+            model=f"model-v{version['value']}",
+        )
+
+    lazy = LazyEmbeddingProvider(
+        build,
+        version=lambda: version["value"],
+    )
+
+    assert lazy.identity == "ollama:model-v1"
+
+    assert lazy.identity == "ollama:model-v1"
+
+    version["value"] = 2
+
+    assert lazy.identity == "ollama:model-v2"
+
+    assert builds == [1, 2]

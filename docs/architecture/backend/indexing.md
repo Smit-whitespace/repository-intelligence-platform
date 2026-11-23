@@ -156,7 +156,8 @@ Indexing is independent of retrieval by design — `RetrievalService` never inde
 - Every run still scans, hashes and chunks every file (cheap), but only embeds chunks not already in the index (the expensive part). Chunk ids include the file's content hash, so unchanged files are recognized without any extra bookkeeping; `IndexingResult.unchanged_files` reports them, and `indexed_chunks` counts only newly embedded chunks.
 - Indexing holds an inter-process OS file lock (`.local_openclaw/index/index.lock`), so the RIP app and an MCP server never write one index at once; a second indexer gets `IndexingBusyError` (HTTP 409).
 - ChromaDB is created with anonymized telemetry disabled (offline-first, ADR-0001).
-- When every file fails to index (typically the embedding provider is down), stale-chunk removal is skipped, so the existing index is kept instead of being emptied.
+- When every file fails to index (typically the embedding provider is down), stale-chunk removal is skipped, so the existing index is kept instead of being emptied. A single file that fails temporarily (locked, briefly unreadable) keeps its existing chunks too.
+- Ignore files are repository content, so they are read defensively: symlinked ones and files over 1 MB are skipped, as are patterns with more than three `*` in one path segment, which would make matching exponentially slow.
 - Only the repository's own git ignore files are honored (`.gitignore` files and `.git/info/exclude`); a global `core.excludesFile` is not read.
 
 ---

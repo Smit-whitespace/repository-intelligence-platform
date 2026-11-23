@@ -153,8 +153,11 @@ def get_embedding_provider() -> EmbeddingProvider:
             ollama_settings=settings.ollama,
         )
 
+    # Objects that captured this provider (an MCP server's indexer, say)
+    # rebuild it when the configuration file changes.
     return LazyEmbeddingProvider(
         build,
+        version=model_config_stamp,
     )
 
 
@@ -282,6 +285,7 @@ def get_snapshot_store_factory() -> Callable[[Path], SnapshotStore]:
 
         return SnapshotStore(
             storage=storage,
+            repository_root=repository_root,
         )
 
     return create_snapshot_store
@@ -365,6 +369,51 @@ def apply_model_configuration(
     get_model_config_store().save(
         configuration,
     )
+
+    refresh_model_configuration_if_changed()
+
+
+_UNSEEN = object()
+
+_seen_config_stamp: object = _UNSEEN
+
+
+def model_config_stamp() -> tuple[int, int] | None:
+    """Identify the current model configuration file version."""
+
+    try:
+        status = get_model_config_store().path.stat()
+
+    except OSError:
+        return None
+
+    return (
+        status.st_mtime_ns,
+        status.st_size,
+    )
+
+
+def refresh_model_configuration_if_changed() -> None:
+    """Rebuild model-dependent services if the config file changed.
+
+    The configuration file can change outside this process: the RIP app
+    and an MCP server are separate processes, and people edit the file
+    by hand. Without this check, a long-lived process kept using the old
+    models; an MCP ``reindex`` could then rebuild the index with the old
+    embedding model and silently undo a change made in the app.
+
+    Called before every API request and every MCP tool call; it only
+    stats the file, so it is cheap.
+    """
+
+    global _seen_config_stamp
+
+    stamp = model_config_stamp()
+
+    if stamp == _seen_config_stamp:
+        return
+
+    _seen_config_stamp = stamp
 
     for cached in (
         get_model_resolver,

@@ -21,6 +21,7 @@ from app.dependencies.providers import (
     get_project_service,
     get_proposal_service,
     get_workspace_opener,
+    refresh_model_configuration_if_changed,
 )
 from app.mcp_server.server import (
     EditingMode,
@@ -101,6 +102,7 @@ def main(
         editing_mode=EditingMode(
             arguments.editing,
         ),
+        before_call=refresh_model_configuration_if_changed,
     ).run(
         "stdio",
     )

@@ -131,6 +131,8 @@ RepositoryWorkspace (read tools)   IndexingService (index_status, reindex)
 - **No business logic in the adapter.** Each tool calls the same method the REST API uses, so path security, limits and error messages are identical. Domain errors become MCP tool errors carrying the service's message.
 - **Stdout is protocol only.** All logging goes to stderr, and a test launches the real subprocess to prove it.
 - **One process, one repository.** The root comes from the user's own configuration, which is also what makes registering it on startup legitimate. Home directories and drive roots are refused, both here and in the REST API.
+- **Model configuration changes reach running servers.** Before every tool call the server checks whether `models.json` changed, so an agent's `reindex` never rebuilds the index with a model you have since replaced.
+- **Failures are failures.** A `reindex` in which every file failed (for example, Ollama is not running) is reported as a tool error, not as a successful run, so the agent does not assume the index is current.
 - **Indexing is locked across processes.** The RIP app and an MCP server can run against the same project at once. Indexing takes an OS file lock (`.local_openclaw/index/index.lock`), so a second indexer gets "another process is indexing" (HTTP 409 in REST, a tool error in MCP) instead of corrupting ChromaDB. The OS releases the lock if the holder crashes.
 
 ---

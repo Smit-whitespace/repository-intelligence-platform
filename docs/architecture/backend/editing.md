@@ -73,7 +73,9 @@ propose (search/replace operations)        plan (instruction -> edit model)
                  validation commands (optional, after apply)
 ```
 
-**Search/replace operations** are what both agents (over MCP) and RIP's own edit model produce: `{path, search, replace}`. `search` must be copied exactly from the file and occur exactly once; an empty `search` creates a file. Operations on one file apply in order. Every problem (not found, ambiguous, file exists or missing) is reported at once, per operation, so the author can fix them in one round. A search written with `\n` also matches a CRLF file, and the replacement keeps CRLF.
+**Signed state.** `.local_openclaw` is repository content, so a cloned repository could ship its own proposals, snapshots or validation commands. RIP signs every one it writes with a per-user key outside any repository and refuses unsigned or altered ones (HTTP 403); validation commands that arrived with a repository are shown for review but never run until someone saves them. See [ADR-0019](../../adr/adr-0019-signed-project-state.md).
+
+**Search/replace operations** are what both agents (over MCP) and RIP's own edit model produce: `{path, search, replace}`. `search` must be copied exactly from the file and occur exactly once; an empty `search` creates a file. Operations on one file apply in order. A search containing a line break must cover whole lines (start at the beginning of a line), so `"  return x\n"` cannot match inside `"    return x\n"` and quietly break indentation; a search without a line break may match within a line. Every problem (not found, ambiguous, part of a line, file exists or missing) is reported at once, per operation, so the author can fix them in one round. A search written with `\n` also matches a CRLF file, and the replacement keeps CRLF.
 
 **The edit planner** (`planner.py`) sends the named files in full plus semantic-search hits to the `edit.plan` model and parses its edit blocks:
 
@@ -85,7 +87,7 @@ the replacement lines
 >>>>>>> REPLACE
 ```
 
-**Validation** (`validation.py`) runs the project's commands from `.local_openclaw/validation.json` after an apply, without a shell (argv lists), in the repository root, each with a timeout, keeping the last 8,000 characters of output. That file is in a protected directory, so no edit and no agent can change what gets executed; people set it in the RIP app or `PUT /editing/validation`.
+**Validation** (`validation.py`) runs the project's commands from `.local_openclaw/validation.json` after an apply, without a shell (argv lists), in the repository root, each with a timeout that kills the whole process tree (so `npm test` cannot outlive it), keeping the last 8,000 characters of output. A proposal is marked applied (with its snapshot) before validation runs, so a validation failure or crash never hides that files were written. That file is in a protected directory, so no edit and no agent can change what gets executed; people set it in the RIP app or `PUT /editing/validation`.
 
 **Agent access** is gated by the MCP server's `--editing` flag: `off`, `propose` (default; a person applies in the RIP app) or `apply` (the agent may apply and roll back; applying runs validation commands, which execute repository code).
 
@@ -199,7 +201,7 @@ The three-phase design (edit → review → apply) separates AI-generated change
 - `edit()` returns AI suggestions; the caller must explicitly call `apply()` to execute them.
 - The legacy `POST /editing/edit` planner is a placeholder (`create file <path>`); use proposals (`POST /editing/proposals/plan`) instead. The legacy `POST /editing/apply` still accepts a client-supplied change set for compatibility.
 - Proposals can create and modify files but not delete or rename them.
-- A validation command that times out is stopped, but processes it started may keep running on Windows.
+- The REST API has no authentication beyond accepting only `localhost` Host headers. `--editing propose` limits what an agent can do *through MCP*; an agent that also has a shell could call `POST /editing/proposals/{id}/apply` itself.
 - Validation output is captured whole and then truncated; a command that prints gigabytes still holds them in memory briefly.
 - Paths are validated, then written later. A local process that swaps a parent directory for a junction in between could redirect a write. This needs a concurrent attacker who can already write to the repository.
 - A `.local_openclaw` directory or `project.json` that is a symlink or junction is not treated as a registered project.

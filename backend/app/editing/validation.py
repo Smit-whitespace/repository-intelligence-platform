@@ -13,14 +13,21 @@ separate, explicit opt-in.
 """
 
 import json
+import os
 import shutil
+import signal
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
-from app.core.storage.locations import project_storage_directory
+from app.core.storage.integrity import sign, verify
+from app.core.storage.locations import (
+    is_link,
+    project_storage_directory,
+)
 from app.editing.exceptions import EditingError
 
 VALIDATION_CONFIG_FILE_NAME = "validation.json"
@@ -104,25 +111,62 @@ def validation_config_path(
     ) / VALIDATION_CONFIG_FILE_NAME
 
 
+UNTRUSTED_VALIDATION_MESSAGE = (
+    "Validation did not run: these commands were not set in this RIP "
+    "installation (for example, they came with a cloned repository). "
+    "Review them in the Editing page and save them to approve."
+)
+
+
+class ValidationConfigView(ValidationConfig):
+    """Validation commands, and whether they may run."""
+
+    trusted: bool = Field(
+        description="True when the commands were saved by this RIP "
+        "installation. Commands that arrived with a repository are shown "
+        "for review but never run until someone saves them.",
+    )
+
+
 def load_validation_config(
     repository_root: Path,
-) -> ValidationConfig:
-    """Return the project's validation commands (none if not configured)."""
+) -> ValidationConfigView:
+    """Return the project's validation commands (none if not configured).
+
+    The file sits in the repository's ``.local_openclaw`` directory, which
+    a cloned repository can supply. Only a file signed by this
+    installation is trusted; see ``app/core/storage/integrity.py``.
+    """
+
+    root = repository_root.resolve()
 
     path = validation_config_path(
-        repository_root,
+        root,
+    )
+
+    _refuse_link(
+        path,
     )
 
     if not path.is_file():
-        return ValidationConfig()
+        return ValidationConfigView(
+            trusted=True,
+        )
 
     try:
-        return ValidationConfig.model_validate(
-            json.loads(
-                path.read_text(
-                    encoding="utf-8",
-                ),
+        data = json.loads(
+            path.read_text(
+                encoding="utf-8",
             ),
+        )
+
+        signature = data.pop(
+            "signature",
+            None,
+        ) if isinstance(data, dict) else None
+
+        config = ValidationConfig.model_validate(
+            data,
         )
 
     except (OSError, json.JSONDecodeError, ValidationError) as error:
@@ -130,13 +174,33 @@ def load_validation_config(
             f"The validation configuration is invalid: {error}",
         ) from error
 
+    return ValidationConfigView(
+        commands=config.commands,
+        trusted=verify(
+            config.model_dump(
+                mode="json",
+            ),
+            signature,
+            "validation",
+            root,
+        ),
+    )
+
 
 def save_validation_config(
     repository_root: Path,
     config: ValidationConfig,
 ) -> None:
+    """Save and sign validation commands, which approves them to run."""
+
+    root = repository_root.resolve()
+
     path = validation_config_path(
-        repository_root,
+        root,
+    )
+
+    _refuse_link(
+        path,
     )
 
     path.parent.mkdir(
@@ -144,16 +208,62 @@ def save_validation_config(
         exist_ok=True,
     )
 
-    path.write_text(
-        json.dumps(
-            config.model_dump(
-                mode="json",
-            ),
-            indent=2,
-        )
-        + "\n",
-        encoding="utf-8",
+    data = ValidationConfig(
+        commands=config.commands,
+    ).model_dump(
+        mode="json",
     )
+
+    payload = json.dumps(
+        {
+            **data,
+            "signature": sign(
+                data,
+                "validation",
+                root,
+            ),
+        },
+        indent=2,
+    ) + "\n"
+
+    # Write a new file and rename it over the old one: the rename replaces
+    # a directory entry and never writes through a link.
+    temporary = path.with_name(
+        f".{path.name}.{os.getpid()}.tmp",
+    )
+
+    try:
+        temporary.write_text(
+            payload,
+            encoding="utf-8",
+        )
+
+        temporary.replace(
+            path,
+        )
+
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+
+
+def _refuse_link(
+    path: Path,
+) -> None:
+    """Refuse a validation.json that is a symlink or junction.
+
+    A repository could ship one pointing elsewhere; reading or saving
+    through it would touch a file outside the project.
+    """
+
+    if is_link(
+        path,
+    ):
+        raise EditingError(
+            "The validation configuration is a link; RIP does not follow "
+            "it. Delete .local_openclaw/validation.json and set the "
+            "commands again.",
+        )
 
 
 class ValidationRunner:
@@ -199,43 +309,34 @@ class ValidationRunner:
                 (time.monotonic() - started) * 1000,
             )
 
-        # Resolve the program explicitly: without a shell, Windows does
-        # not search PATHEXT for "pytest" -> "pytest.exe" on its own.
-        program = shutil.which(
-            command.argv[0],
-        ) or command.argv[0]
-
         try:
-            completed = subprocess.run(
+            # Resolve the program explicitly: without a shell, Windows
+            # does not search PATHEXT for "pytest" -> "pytest.exe" itself.
+            # (Inside the try: a NUL byte makes even this raise.)
+            program = shutil.which(
+                command.argv[0],
+            ) or command.argv[0]
+
+            # A new process group (Windows) or session (POSIX) lets a
+            # timeout kill the whole tree. Killing only the direct child
+            # is not enough: "npm test" runs npm.cmd -> cmd.exe -> node,
+            # and a surviving grandchild keeps the output pipe open.
+            process = subprocess.Popen(
                 [
                     program,
                     *command.argv[1:],
                 ],
                 cwd=root,
-                capture_output=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=command.timeout_seconds,
-                check=False,
+                **_process_group_options(),
             )
 
-        except subprocess.TimeoutExpired as error:
-            partial = _decode(error.stdout) + _decode(error.stderr)
-
-            return CommandResult(
-                name=command.name,
-                argv=command.argv,
-                passed=False,
-                timed_out=True,
-                duration_ms=elapsed_ms(),
-                output=_tail(
-                    partial
-                    + f"\n[stopped after {command.timeout_seconds:g} seconds]",
-                ),
-            )
-
-        except OSError as error:
+        except (OSError, ValueError) as error:
             return CommandResult(
                 name=command.name,
                 argv=command.argv,
@@ -244,31 +345,89 @@ class ValidationRunner:
                 output=f"Could not start {command.argv[0]!r}: {error}",
             )
 
+        try:
+            output, _ = process.communicate(
+                timeout=command.timeout_seconds,
+            )
+
+        except subprocess.TimeoutExpired:
+            _kill_tree(
+                process,
+            )
+
+            try:
+                output, _ = process.communicate(
+                    timeout=5,
+                )
+
+            except subprocess.TimeoutExpired:
+                output = ""
+
+            return CommandResult(
+                name=command.name,
+                argv=command.argv,
+                passed=False,
+                timed_out=True,
+                duration_ms=elapsed_ms(),
+                output=_tail(
+                    (output or "")
+                    + f"\n[stopped after {command.timeout_seconds:g} seconds]",
+                ),
+            )
+
         return CommandResult(
             name=command.name,
             argv=command.argv,
-            passed=completed.returncode == 0,
-            exit_code=completed.returncode,
+            passed=process.returncode == 0,
+            exit_code=process.returncode,
             duration_ms=elapsed_ms(),
             output=_tail(
-                (completed.stdout or "") + (completed.stderr or ""),
+                output or "",
             ),
         )
 
 
-def _decode(
-    value: str | bytes | None,
-) -> str:
-    if value is None:
-        return ""
+def _process_group_options() -> dict:
+    if sys.platform == "win32":
+        return {
+            "creationflags": subprocess.CREATE_NEW_PROCESS_GROUP,
+        }
 
-    if isinstance(value, bytes):
-        return value.decode(
-            "utf-8",
-            errors="replace",
+    return {
+        "start_new_session": True,
+    }
+
+
+def _kill_tree(
+    process: subprocess.Popen,
+) -> None:
+    """Kill a command and everything it started."""
+
+    if sys.platform == "win32":
+        subprocess.run(
+            [
+                "taskkill",
+                "/F",
+                "/T",
+                "/PID",
+                str(process.pid),
+            ],
+            capture_output=True,
+            timeout=30,
+            check=False,
         )
 
-    return value
+    else:
+        try:
+            os.killpg(
+                process.pid,
+                signal.SIGKILL,
+            )
+
+        except OSError:
+            pass
+
+    process.kill()
 
 
 def _tail(

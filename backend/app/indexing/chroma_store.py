@@ -217,6 +217,44 @@ class ChromaVectorStore(VectorStore):
             )
         ]
 
+    def get_chunk_ids_by_path(
+        self,
+        where: dict | None = None,
+    ) -> dict[str, set[str]]:
+        """Group chunk ids by the ``relative_path`` stored with them."""
+
+        result = cast(
+            dict[str, Any],
+            self._collection.get(
+                where=where,
+                include=[
+                    "metadatas",
+                ],
+            ),
+        )
+
+        grouped: dict[str, set[str]] = {}
+
+        for chunk_id, metadata in zip(
+            result.get("ids", []),
+            result.get("metadatas") or [],
+        ):
+            path = str(
+                (metadata or {}).get(
+                    "relative_path",
+                    "",
+                ),
+            )
+
+            grouped.setdefault(
+                path,
+                set(),
+            ).add(
+                chunk_id,
+            )
+
+        return grouped
+
     def get_chunk_ids(
         self,
         where: dict | None = None,

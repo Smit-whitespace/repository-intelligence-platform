@@ -49,3 +49,11 @@ class ProposalStateError(EditingError):
 
 class EditingDisabledError(EditingError):
     """This client is not allowed to perform the editing action (HTTP 403)."""
+
+
+class UntrustedStateError(EditingError):
+    """A state file was not written by this RIP installation (HTTP 403).
+
+    Typically it came with a cloned repository. Proposals and snapshots
+    like that are never used; see ``app/core/storage/integrity.py``.
+    """

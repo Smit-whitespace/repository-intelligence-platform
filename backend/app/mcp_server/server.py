@@ -9,10 +9,10 @@ Blocking work runs in a worker thread, so a long reindex never stalls
 the protocol loop (pings and cancellation keep working).
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from pathlib import Path
-from typing import TypeVar
+from typing import Any, TypeVar
 
 import anyio
 from mcp.server.mcpserver import MCPServer
@@ -133,6 +133,7 @@ def build_server(
     indexing_service: IndexingService,
     proposal_service: ProposalService | None = None,
     editing_mode: EditingMode = EditingMode.OFF,
+    before_call: Callable[[], None] | None = None,
 ) -> MCPServer:
     """Create an MCP server exposing tools for one bound workspace.
 
@@ -153,6 +154,18 @@ def build_server(
 
     root: Path = workspace.root
 
+    async def call(
+        function: Callable[[], _T],
+    ) -> _T:
+        # Refresh state other processes may have changed (the model
+        # configuration) before each tool runs.
+        if before_call is not None:
+            before_call()
+
+        return await _call(
+            function,
+        )
+
     @server.tool(
         annotations=_READ_ONLY,
     )
@@ -168,7 +181,7 @@ def build_server(
         next_start_line.
         """
 
-        return await _call(
+        return await call(
             lambda: workspace.read_file(
                 path=path,
                 start_line=start_line,
@@ -191,7 +204,7 @@ def build_server(
         offset and limit to page through large trees.
         """
 
-        return await _call(
+        return await call(
             lambda: workspace.list_tree(
                 path=path,
                 max_depth=max_depth,
@@ -216,7 +229,7 @@ def build_server(
         where "*" also matches "/" (e.g. "*.py", "backend/*").
         """
 
-        return await _call(
+        return await call(
             lambda: workspace.search_text(
                 query=query,
                 regex=regex,
@@ -242,7 +255,7 @@ def build_server(
         lists the languages searched; other languages need search_text.
         """
 
-        return await _call(
+        return await call(
             lambda: workspace.find_symbols(
                 query=query,
                 kind=kind,
@@ -265,7 +278,7 @@ def build_server(
         project has no index yet (call reindex).
         """
 
-        return await _call(
+        return await call(
             lambda: workspace.search_semantic(
                 query=query,
                 limit=limit,
@@ -281,7 +294,7 @@ def build_server(
         compatible=false means search_semantic will fail until reindex.
         """
 
-        return await _call(
+        return await call(
             lambda: indexing_service.status(
                 root,
             ),
@@ -306,11 +319,30 @@ def build_server(
         if another process is indexing.
         """
 
-        return await _call(
+        result = await call(
             lambda: indexing_service.index_repository(
                 root,
             ),
         )
+
+        # Nothing could be indexed (typically: the embedding provider is
+        # down). Report it as a failure, so the agent does not assume the
+        # index is current.
+        if result.failed_files and not result.indexed_files:
+            details = (
+                result.diagnostics.failed_files_details
+                if result.diagnostics
+                else []
+            )
+
+            reason = details[0].message if details else "unknown error"
+
+            raise ToolError(
+                f"Reindex failed for all {result.failed_files} files: "
+                f"{reason} The existing index was kept.",
+            )
+
+        return result
 
     if editing_mode is not EditingMode.OFF:
         assert proposal_service is not None
@@ -320,6 +352,7 @@ def build_server(
             root=root,
             proposal_service=proposal_service,
             allow_apply=editing_mode is EditingMode.APPLY,
+            call=call,
         )
 
     return server
@@ -330,6 +363,7 @@ def _add_editing_tools(
     root: Path,
     proposal_service: ProposalService,
     allow_apply: bool,
+    call: Callable[[Callable[[], Any]], Awaitable[Any]],
 ) -> None:
     """Register proposal tools; apply and rollback only when allowed."""
 
@@ -355,7 +389,7 @@ def _add_editing_tools(
         says which one and why; fix it and propose again.
         """
 
-        return await _call(
+        return await call(
             lambda: proposal_service.propose(
                 repository_root=root,
                 operations=edits,
@@ -371,7 +405,7 @@ def _add_editing_tools(
     ) -> EditProposalView:
         """Return a proposal's diff, status and validation results."""
 
-        return await _call(
+        return await call(
             lambda: proposal_service.get(
                 repository_root=root,
                 proposal_id=proposal_id,
@@ -386,7 +420,7 @@ def _add_editing_tools(
     ) -> list[EditProposalView]:
         """List recent proposals, newest first."""
 
-        return await _call(
+        return await call(
             lambda: proposal_service.list(
                 repository_root=root,
                 limit=max(
@@ -422,7 +456,7 @@ def _add_editing_tools(
         is false; check the result's validation field.
         """
 
-        return await _call(
+        return await call(
             lambda: proposal_service.apply(
                 repository_root=root,
                 proposal_id=proposal_id,
@@ -447,7 +481,7 @@ def _add_editing_tools(
         work is never overwritten.
         """
 
-        return await _call(
+        return await call(
             lambda: proposal_service.rollback(
                 repository_root=root,
                 proposal_id=proposal_id,

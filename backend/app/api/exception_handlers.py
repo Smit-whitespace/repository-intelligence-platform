@@ -15,6 +15,7 @@ from app.editing.exceptions import (
     SnapshotNotFoundError,
     SnapshotPersistenceError,
     UnregisteredRepositoryError,
+    UntrustedStateError,
 )
 from app.indexing.exceptions import (
     IndexIncompatibleError,
@@ -43,6 +44,7 @@ _STATUS_BY_EXCEPTION: dict[type[Exception], int] = {
     ProposalNotFoundError: 404,
     ProposalStateError: 409,
     EditingDisabledError: 403,
+    UntrustedStateError: 403,
     IndexIncompatibleError: 409,
     IndexingBusyError: 409,
     ModelConfigurationError: 400,

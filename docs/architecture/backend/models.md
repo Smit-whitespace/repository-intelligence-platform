@@ -36,7 +36,9 @@ If a configured model cannot do what is asked, or its API key is missing, RIP re
 
 The file lives at `~/.local_openclaw/models.json` (override the location with `LOC_MODEL_CONFIG_PATH`). It is per user, so it can never be committed with a repository. Edit it, or send it to `PUT /api/v1/models/configuration`. Changes apply on the next request, with no restart.
 
-API keys are **never** stored. Each provider names an environment variable (`api_key_env`), which is read when the model is used. Set the variable before starting RIP.
+API keys are **never** stored. Each provider names an environment variable (`api_key_env`), which is read when the model is used. Set the variable before starting RIP. The name must end in `_API_KEY` (so a configuration can never read, say, `AWS_SECRET_ACCESS_KEY`), and a key is only sent to a non-local server over `https://`.
+
+Changes apply on the next request in every RIP process, including MCP servers started by agents and edits made to the file by hand: each request first checks whether the file changed.
 
 ### Example: local primary, hosted override for editing
 

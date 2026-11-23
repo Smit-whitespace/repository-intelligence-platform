@@ -26,6 +26,7 @@ from app.core.storage.exceptions import (
     StorageResourceNotFoundError,
 )
 from app.core.storage.filesystem import FileSystemStorage
+from app.core.storage.integrity import sign, verify
 from app.core.storage.locations import project_storage_directory
 from app.editing.change_applier import (
     ChangeApplier,
@@ -34,6 +35,7 @@ from app.editing.change_applier import (
 from app.editing.exceptions import (
     EditingError,
     ProposalNotFoundError,
+    UntrustedStateError,
 )
 from app.editing.models import (
     ChangeSet,
@@ -46,7 +48,7 @@ MAX_OPERATIONS = 50
 _PROPOSALS_DIRECTORY = Path("proposals")
 
 _PROPOSAL_ID_PATTERN = re.compile(
-    r"^[0-9a-f]{32}$",
+    r"[0-9a-f]{32}",
 )
 
 
@@ -357,52 +359,100 @@ def _apply_operation(
 
     replace = operation.replace
 
-    count = content.count(
+    matches = _find_matches(
+        content,
         search,
     )
 
-    # Models usually write "\n"; let that match a CRLF file, and keep the
-    # file's line endings in the replacement.
-    if count == 0 and "\r\n" in content and "\r\n" not in search:
+    # Models usually write "\n"; let that match a CRLF file.
+    if not matches and "\r\n" in content and "\r\n" not in search:
         crlf_search = search.replace(
             "\n",
             "\r\n",
         )
 
-        crlf_count = content.count(
+        crlf_matches = _find_matches(
+            content,
             crlf_search,
         )
 
-        if crlf_count:
+        if crlf_matches:
             search = crlf_search
 
-            replace = replace.replace(
-                "\r\n",
-                "\n",
-            ).replace(
-                "\n",
-                "\r\n",
+            matches = crlf_matches
+
+    if not matches:
+        if search in content:
+            return content, (
+                "'search' spans several lines but matches only part of a "
+                "line; copy whole lines, including their indentation"
             )
 
-            count = crlf_count
-
-    if count == 0:
         return content, (
             "'search' text was not found; copy it exactly from the current "
             "file, including indentation"
         )
 
-    if count > 1:
+    if len(matches) > 1:
         return content, (
-            f"'search' text occurs {count} times; include more surrounding "
-            "lines so it occurs exactly once"
+            f"'search' text occurs {len(matches)} times; include more "
+            "surrounding lines so it occurs exactly once"
         )
 
-    return content.replace(
+    # Keep the file's line endings: a CRLF file stays CRLF.
+    if "\r\n" in content and "\r\n" not in replace:
+        replace = replace.replace(
+            "\n",
+            "\r\n",
+        )
+
+    start = matches[0]
+
+    return content[:start] + replace + content[start + len(search) :], None
+
+
+def _find_matches(
+    content: str,
+    search: str,
+) -> list[int]:
+    """Return the start of every acceptable match of ``search``.
+
+    A search containing a line break is line-based: it must start at the
+    beginning of a line and end at the end of one. Otherwise
+    ``"  return x\n"`` would match inside ``"    return x\n"`` and quietly
+    break its indentation. A search without a line break may match
+    within a line (renaming an identifier, say).
+    """
+
+    whole_lines = "\n" in search
+
+    matches: list[int] = []
+
+    start = content.find(
         search,
-        replace,
-        1,
-    ), None
+    )
+
+    while start != -1:
+        end = start + len(search)
+
+        if not whole_lines or (
+            (start == 0 or content[start - 1] == "\n")
+            and (
+                search.endswith("\n")
+                or end == len(content)
+                or content[end] in "\r\n"
+            )
+        ):
+            matches.append(
+                start,
+            )
+
+        start = content.find(
+            search,
+            start + 1,
+        )
+
+    return matches
 
 
 def _proposed_file(
@@ -418,10 +468,9 @@ def _proposed_file(
 
     added = removed = 0
 
-    for line in diff.splitlines():
-        if line.startswith(("+++", "---")):
-            continue
-
+    # The first two lines are the ---/+++ file headers; a removed SQL
+    # comment ("-- x") later shows as "--- x" and must still count.
+    for line in diff.splitlines()[2:]:
         if line.startswith("+"):
             added += 1
 
@@ -449,11 +498,11 @@ def unified_diff(
     """Return a git-style unified diff for one file."""
 
     lines = difflib.unified_diff(
-        (original or "").splitlines(
-            keepends=True,
+        _lines(
+            original or "",
         ),
-        updated.splitlines(
-            keepends=True,
+        _lines(
+            updated,
         ),
         fromfile="/dev/null" if original is None else f"a/{path}",
         tofile=f"b/{path}",
@@ -477,6 +526,32 @@ def unified_diff(
     )
 
 
+def _lines(
+    text: str,
+) -> list[str]:
+    """Split on "\\n" only, keeping endings.
+
+    ``str.splitlines`` also splits on form feeds and Unicode separators,
+    which produced spurious "No newline at end of file" markers.
+    """
+
+    parts = text.split(
+        "\n",
+    )
+
+    lines = [
+        f"{part}\n"
+        for part in parts[:-1]
+    ]
+
+    if parts[-1]:
+        lines.append(
+            parts[-1],
+        )
+
+    return lines
+
+
 class ProposalStore:
     """Persist proposals under a project's storage directory."""
 
@@ -484,6 +559,8 @@ class ProposalStore:
         self,
         repository_root: Path,
     ) -> None:
+        self._root = repository_root.resolve()
+
         self._directory = (
             project_storage_directory(
                 repository_root,
@@ -503,14 +580,23 @@ class ProposalStore:
         self,
         proposal: EditProposal,
     ) -> None:
+        data = proposal.model_dump(
+            mode="json",
+        )
+
         try:
             self._storage.write_json(
                 self._path(
                     proposal.proposal_id,
                 ),
-                proposal.model_dump(
-                    mode="json",
-                ),
+                {
+                    **data,
+                    "signature": sign(
+                        data,
+                        "proposal",
+                        self._root,
+                    ),
+                },
             )
 
         except StorageError as error:
@@ -522,7 +608,7 @@ class ProposalStore:
         self,
         proposal_id: str,
     ) -> EditProposal:
-        if not _PROPOSAL_ID_PATTERN.match(
+        if not _PROPOSAL_ID_PATTERN.fullmatch(
             proposal_id,
         ):
             raise ProposalNotFoundError(
@@ -545,6 +631,25 @@ class ProposalStore:
             raise EditingError(
                 "Failed to load the proposal.",
             ) from error
+
+        # Only proposals this installation wrote (and signed) are used:
+        # a repository can ship a .local_openclaw/proposals directory
+        # whose stored contents differ from the diff they display.
+        signature = data.pop(
+            "signature",
+            None,
+        ) if isinstance(data, dict) else None
+
+        if not verify(
+            data,
+            signature,
+            "proposal",
+            self._root,
+        ):
+            raise UntrustedStateError(
+                "This proposal was not created by this RIP installation (for example, "
+                "it came with a cloned repository), so it cannot be used.",
+            )
 
         try:
             return EditProposal.model_validate(

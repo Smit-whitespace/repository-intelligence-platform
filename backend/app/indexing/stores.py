@@ -70,6 +70,20 @@ class VectorStore(ABC):
 
         return None
 
+    def get_chunk_ids_by_path(
+        self,
+        where: dict | None = None,
+    ) -> dict[str, set[str]] | None:
+        """Group indexed chunk ids by their file's relative path.
+
+        ``None`` when the store cannot report this; indexing then cannot
+        protect the existing chunks of a file that fails temporarily.
+        """
+
+        del where
+
+        return None
+
     def set_index_metadata(
         self,
         metadata: dict[str, str | int | float | bool],

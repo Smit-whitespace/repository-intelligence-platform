@@ -15,7 +15,9 @@ never stored here, only the *name* of the environment variable that
 holds one.
 """
 
+import re
 from enum import StrEnum
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 from pydantic import Field
@@ -35,6 +37,18 @@ class ProviderType(StrEnum):
     ANTHROPIC = "anthropic"
     """Anthropic's Messages API (chat only; no embeddings endpoint)."""
 
+
+_API_KEY_ENV_PATTERN = re.compile(
+    r"[A-Z][A-Z0-9_]*_API_KEY",
+)
+
+_LOOPBACK_HOSTS = frozenset(
+    {
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    },
+)
 
 GENERATION_PROVIDER_TYPES = frozenset(
     ProviderType,
@@ -104,6 +118,43 @@ class ProviderConfig(BaseModel):
         default=120.0,
         gt=0,
     )
+
+    @model_validator(
+        mode="after",
+    )
+    def _check_key_handling(
+        self,
+    ) -> "ProviderConfig":
+        """Keep a configuration from turning into a secret-exfiltration tool.
+
+        The API has no authentication beyond accepting only local Host
+        headers, so a local process could otherwise point ``api_key_env``
+        at any secret (``AWS_SECRET_ACCESS_KEY``) and ``base_url`` at its
+        own server. Only API-key variables are accepted, and a key is
+        never sent to a non-local server without TLS.
+        """
+
+        if self.api_key_env is not None and not _API_KEY_ENV_PATTERN.fullmatch(
+            self.api_key_env,
+        ):
+            raise ValueError(
+                "api_key_env must name an API key variable ending in "
+                "_API_KEY (for example OPENAI_API_KEY); other environment "
+                "variables are never read.",
+            )
+
+        if self.api_key_env and self.base_url:
+            url = urlsplit(
+                self.base_url,
+            )
+
+            if url.scheme != "https" and url.hostname not in _LOOPBACK_HOSTS:
+                raise ValueError(
+                    "base_url must use https:// when an API key is sent to "
+                    "a server other than this machine.",
+                )
+
+        return self
 
     @model_validator(
         mode="after",

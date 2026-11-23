@@ -10,6 +10,7 @@ from app.core.config.models import (
     ChromaSettings,
     IndexingSettings,
     ModelsSettings,
+    SecuritySettings,
     LoggingSettings,
     OllamaSettings,
     ServerSettings,
@@ -53,6 +54,8 @@ class EnvironmentSettings(BaseSettings):
 
     model_config_path: str = ""
 
+    integrity_key_path: str = ""
+
     indexing_chunk_size: int = 512
 
     indexing_chunk_overlap: int = 64
@@ -86,6 +89,9 @@ def get_settings() -> ApplicationSettings:
         ),
         models=ModelsSettings(
             config_path=environment.model_config_path,
+        ),
+        security=SecuritySettings(
+            integrity_key_path=environment.integrity_key_path,
         ),
         chroma=ChromaSettings(
             collection_name=environment.chroma_collection_name,

@@ -15,12 +15,12 @@ import { useProjectStore } from "@/stores/projectStore";
 import type {
   EditProposal,
   ProposalStatus,
-  ValidationCommand,
   ValidationReport,
 } from "@/types/api";
 import { Check, RefreshCw, RotateCcw, Sparkles, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
+import { commandsToText, textToCommands } from "./commandLine";
 
 const statusStyles: Record<ProposalStatus, string> = {
   pending: "border-[#4F8CFF]/40 text-[#8FB4FF]",
@@ -120,7 +120,15 @@ function EditingWorkspace({ root }: { root: string }) {
             ))}
           </ul>
         </Panel>
-        {selected ? <ProposalDetail root={root} proposal={selected} /> : null}
+        {selected ? (
+          // Keyed so an error or checkbox state never carries over to
+          // another proposal.
+          <ProposalDetail
+            key={selected.proposal_id}
+            root={root}
+            proposal={selected}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -338,13 +346,22 @@ function ValidationPanel({ root }: { root: string }) {
   const saved = config.data ? commandsToText(config.data.commands) : "";
 
   const value = text ?? saved;
+  const untrusted = config.data?.trusted === false;
 
   return (
     <Panel title="Validation commands">
       <p className="mt-1 text-sm text-[#7A8599]">
         One command per line, run in the repository root after applying
-        (without a shell). Agents cannot change these.
+        (without a shell). Only commands saved here ever run; agents and
+        repositories cannot set them.
       </p>
+      {untrusted ? (
+        <p className="mt-3 rounded-[var(--radius-sm)] border border-[#F59E0B]/40 p-2 text-sm text-[#FBBF24]">
+          These commands came with the repository (they were not saved in
+          this RIP installation), so they will not run. Review them
+          carefully, then save to approve them.
+        </p>
+      ) : null}
       <textarea
         value={value}
         onChange={(event) => setText(event.target.value)}
@@ -355,14 +372,23 @@ function ValidationPanel({ root }: { root: string }) {
       <div className="mt-3 flex flex-wrap gap-2">
         <Button
           variant="secondary"
-          disabled={text === null || text === saved || save.isPending}
+          disabled={
+            save.isPending ||
+            (!untrusted && (text === null || text === saved))
+          }
           onClick={() =>
             save.mutate(
-              { commands: textToCommands(value) },
+              {
+                commands: textToCommands(value, config.data?.commands ?? []),
+              },
               {
                 onSuccess: () => {
                   setText(null);
-                  toast.success("Validation commands saved");
+                  toast.success(
+                    untrusted
+                      ? "Validation commands approved"
+                      : "Validation commands saved",
+                  );
                 },
               },
             )
@@ -372,7 +398,7 @@ function ValidationPanel({ root }: { root: string }) {
         </Button>
         <Button
           variant="ghost"
-          disabled={!saved || runNow.isPending}
+          disabled={!saved || untrusted || runNow.isPending}
           onClick={() => runNow.mutate()}
         >
           {runNow.isPending ? (
@@ -398,9 +424,17 @@ function ValidationPanel({ root }: { root: string }) {
 
 function ValidationResults({ report }: { report: ValidationReport }) {
   if (!report.ran) {
+    // Not run: either nothing is configured, or the commands were not
+    // approved (the reason is in the first result).
     return (
-      <p className="text-sm text-[#7A8599]">
-        No validation commands are configured for this project.
+      <p
+        className={cn(
+          "text-sm",
+          report.results.length ? "text-[#FBBF24]" : "text-[#7A8599]",
+        )}
+      >
+        {report.results.at(0)?.output ??
+          "No validation commands are configured for this project."}
       </p>
     );
   }
@@ -415,9 +449,9 @@ function ValidationResults({ report }: { report: ValidationReport }) {
       >
         Validation {report.passed ? "passed" : "failed"}
       </p>
-      {report.results.map((result) => (
+      {report.results.map((result, index) => (
         <details
-          key={result.name}
+          key={`${index}-${result.name}`}
           open={!result.passed}
           className="rounded-[var(--radius-sm)] border border-[rgba(255,255,255,0.06)] p-2"
         >
@@ -466,36 +500,3 @@ function Panel({ title, children }: { title: string; children: ReactNode }) {
 
 const inputClass =
   "w-full rounded-[var(--radius-sm)] border border-[rgba(255,255,255,0.1)] bg-[#0A0F1E] px-3 py-2 text-sm text-[#F8FAFC] outline-none transition placeholder:text-[#4B5568] focus:border-[#4F8CFF]/50";
-
-function splitCommandLine(line: string): string[] {
-  const tokens: string[] = [];
-  const pattern = /"([^"]*)"|'([^']*)'|(\S+)/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = pattern.exec(line)) !== null) {
-    tokens.push(match[1] ?? match[2] ?? match[3] ?? "");
-  }
-
-  return tokens;
-}
-
-function textToCommands(text: string): ValidationCommand[] {
-  return text
-    .split("\n")
-    .map((line) => splitCommandLine(line.trim()))
-    .filter((argv) => argv.length > 0)
-    .map((argv) => ({
-      name: argv.slice(0, 2).join(" "),
-      argv,
-    }));
-}
-
-function commandsToText(commands: ValidationCommand[]): string {
-  return commands
-    .map((command) =>
-      command.argv
-        .map((arg) => (/\s/.test(arg) ? `"${arg}"` : arg))
-        .join(" "),
-    )
-    .join("\n");
-}

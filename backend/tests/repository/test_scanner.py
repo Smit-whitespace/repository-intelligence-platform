@@ -232,3 +232,48 @@ def test_scan_respects_gitignore(
     assert "build/out.py" not in paths
 
     assert "app.min.js" not in paths
+
+
+def test_pathological_gitignore_patterns_are_skipped_quickly(
+    tmp_path: Path,
+) -> None:
+    """A hostile .gitignore cannot stall every walk (security review)."""
+
+    import time
+
+    from app.repository.ignore import RepositoryIgnoreRules
+
+    (tmp_path / ".gitignore").write_text(
+        "*a*a*a*a*a*a*a*a*b\nbuild/\n",
+        encoding="utf-8",
+    )
+
+    rules = RepositoryIgnoreRules(
+        tmp_path,
+    )
+
+    started = time.monotonic()
+
+    long_name = tmp_path / ("a" * 200)
+
+    assert not rules.is_ignored(long_name, is_directory=False)
+
+    # The safe pattern on the next line still applies.
+    assert rules.is_ignored(tmp_path / "build", is_directory=True)
+
+    assert time.monotonic() - started < 1
+
+
+def test_gitignore_with_bom_and_bad_pattern(
+    tmp_path: Path,
+) -> None:
+    from app.repository.ignore import RepositoryIgnoreRules
+
+    (tmp_path / ".gitignore").write_bytes(
+        "\ufeffdist/\n".encode("utf-8"),
+    )
+
+    assert RepositoryIgnoreRules(tmp_path).is_ignored(
+        tmp_path / "dist",
+        is_directory=True,
+    )

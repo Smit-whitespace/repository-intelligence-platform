@@ -116,6 +116,8 @@ export type ValidationCommand = {
 
 export type ValidationConfig = {
   commands: ValidationCommand[];
+  /** False when the commands came with the repository and are unapproved. */
+  trusted?: boolean;
 };
 
 export type CommandResult = {

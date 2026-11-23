@@ -167,6 +167,7 @@ def test_validation_config_and_run(
 
     assert empty.json() == {
         "commands": [],
+        "trusted": True,
     }
 
     saved = client.put(

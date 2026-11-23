@@ -18,6 +18,8 @@ from pathlib import Path, PurePosixPath
 
 from pathspec import GitIgnoreSpec
 
+from app.core.storage.locations import is_link
+
 _INTERNAL_EXCLUDED_NAMES = {
     ".git",
     ".repository-intelligence-platform",
@@ -61,6 +63,26 @@ def is_indexable_file_name(
     """Return whether a file belongs in the semantic index by name."""
 
     return name not in NOT_INDEXED_FILE_NAMES
+
+
+MAX_IGNORE_FILE_BYTES = 1_000_000
+
+MAX_WILDCARDS_PER_SEGMENT = 3
+"""Patterns are compiled to backtracking regular expressions; matching
+time grows exponentially with the number of ``*`` in one path segment
+(``*a*a*a*a*a*a*a*a*b`` takes over a minute per file name). Three keep
+every check in milliseconds and cover real-world patterns."""
+
+
+def _is_safe_pattern(
+    line: str,
+) -> bool:
+    """Skip patterns too complex to match quickly (as git skips bad lines)."""
+
+    return all(
+        segment.replace("**", "").count("*") <= MAX_WILDCARDS_PER_SEGMENT
+        for segment in line.split("/")
+    )
 
 
 _GITIGNORE_FILE_NAME = ".gitignore"
@@ -174,18 +196,57 @@ class RepositoryIgnoreRules:
     def _load(
         path: Path,
     ) -> GitIgnoreSpec | None:
+        # Ignore files are repository content, so a hostile repository
+        # controls them: never follow a link out of the project, and
+        # refuse absurdly large files.
         try:
-            lines = path.read_text(
-                encoding="utf-8",
-                errors="replace",
-            ).splitlines()
+            if is_link(path) or path.stat().st_size > MAX_IGNORE_FILE_BYTES:
+                return None
+
+            # utf-8-sig: editors on Windows often save a byte order mark,
+            # which would otherwise corrupt the first pattern.
+            lines = [
+                line
+                for line in path.read_text(
+                    encoding="utf-8-sig",
+                    errors="replace",
+                ).splitlines()
+                if _is_safe_pattern(
+                    line,
+                )
+            ]
 
         except OSError:
             return None
 
-        return GitIgnoreSpec.from_lines(
-            lines,
-        )
+        try:
+            return GitIgnoreSpec.from_lines(
+                lines,
+            )
+
+        except ValueError:
+            # One malformed pattern must not break every scan: keep the
+            # patterns that parse on their own, as git skips bad lines.
+            valid_lines: list[str] = []
+
+            for line in lines:
+                try:
+                    GitIgnoreSpec.from_lines(
+                        [
+                            line,
+                        ],
+                    )
+
+                except ValueError:
+                    continue
+
+                valid_lines.append(
+                    line,
+                )
+
+            return GitIgnoreSpec.from_lines(
+                valid_lines,
+            )
 
     @staticmethod
     def _check(

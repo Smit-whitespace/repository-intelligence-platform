@@ -49,6 +49,13 @@ class ModelsSettings(BaseModel):
     """Empty means the per-user default, ~/.local_openclaw/models.json."""
 
 
+class SecuritySettings(BaseModel):
+    """Where the key that signs RIP's state files lives."""
+
+    integrity_key_path: str = ""
+    """Empty means the per-user default, ~/.local_openclaw/integrity.key."""
+
+
 class ChromaSettings(BaseModel):
     """ChromaDB configuration.
 
@@ -84,6 +91,10 @@ class ApplicationSettings(BaseModel):
 
     models: ModelsSettings = Field(
         default_factory=ModelsSettings,
+    )
+
+    security: SecuritySettings = Field(
+        default_factory=SecuritySettings,
     )
 
     chroma: ChromaSettings = Field(

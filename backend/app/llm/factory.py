@@ -20,7 +20,6 @@ from app.llm.config import (
     ProviderType,
 )
 from app.llm.exceptions import ModelConfigurationError
-from app.llm.providers.anthropic_provider import AnthropicChatProvider
 from app.llm.providers.openai_compatible import (
     OpenAICompatibleChatProvider,
     OpenAICompatibleEmbeddingProvider,
@@ -89,6 +88,11 @@ def build_chat_provider(
 
     assert api_key is not None
 
+    # Imported here, not at module level: the anthropic SDK takes about
+    # three seconds to import, which every backend and MCP server start
+    # would otherwise pay even when no Anthropic model is configured.
+    from app.llm.providers.anthropic_provider import AnthropicChatProvider
+
     return AnthropicChatProvider(
         model=effective.model,
         api_key=api_key,
@@ -149,16 +153,28 @@ class LazyEmbeddingProvider(
     def __init__(
         self,
         build: Callable[[], EmbeddingProvider],
+        version: Callable[[], object] | None = None,
     ) -> None:
+        """``version`` identifies the configuration; when it changes, the
+        provider is rebuilt on next use."""
+
         self._build = build
 
+        self._version = version
+
         self._provider: EmbeddingProvider | None = None
+
+        self._built_for: object = None
 
     def _resolved(
         self,
     ) -> EmbeddingProvider:
-        if self._provider is None:
+        current = self._version() if self._version is not None else None
+
+        if self._provider is None or current != self._built_for:
             self._provider = self._build()
+
+            self._built_for = current
 
         return self._provider
 

@@ -92,6 +92,13 @@ class IndexingService:
             root_directory_str,
         )
 
+        # A file that fails this run (locked, temporarily unreadable,
+        # provider hiccup) keeps the chunks it already had, instead of
+        # having its valid vectors removed as "stale".
+        existing_by_path = self._indexer.existing_chunk_ids_by_path(
+            root_directory_str,
+        )
+
         unchanged_files = 0
 
         entries = self._scanner.scan(
@@ -173,6 +180,13 @@ class IndexingService:
 
                 failed_files += 1
 
+                indexed_chunk_ids.extend(
+                    existing_by_path.get(
+                        relative_path,
+                        (),
+                    ),
+                )
+
                 continue
 
             try:
@@ -205,6 +219,13 @@ class IndexingService:
 
                 failed_files += 1
 
+                indexed_chunk_ids.extend(
+                    existing_by_path.get(
+                        relative_path,
+                        (),
+                    ),
+                )
+
                 continue
 
             try:
@@ -236,6 +257,13 @@ class IndexingService:
                 )
 
                 failed_files += 1
+
+                indexed_chunk_ids.extend(
+                    existing_by_path.get(
+                        relative_path,
+                        (),
+                    ),
+                )
 
                 continue
 
@@ -298,6 +326,13 @@ class IndexingService:
                 )
 
                 failed_files += 1
+
+                indexed_chunk_ids.extend(
+                    existing_by_path.get(
+                        relative_path,
+                        (),
+                    ),
+                )
 
                 continue
 

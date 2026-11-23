@@ -604,3 +604,49 @@ async def test_apply_mode_applies_and_rolls_back(
     assert rolled_back.structured_content["status"] == "rolled_back"
 
     assert (project / "app.py").read_bytes() == original
+
+
+@pytest.mark.anyio
+async def test_reindex_that_fails_for_every_file_is_an_error(
+    client: Client,
+    indexing: MagicMock,
+) -> None:
+    """An agent must not think the index is current when nothing indexed."""
+
+    from app.indexing.models import FileFailureInfo, IndexingDiagnostics
+
+    indexing.index_repository.return_value = IndexingResult(
+        scanned_files=2,
+        indexed_files=0,
+        indexed_chunks=0,
+        skipped_files=0,
+        failed_files=2,
+        diagnostics=IndexingDiagnostics(
+            total_files_discovered=2,
+            text_files_detected=2,
+            total_chunks_created=0,
+            indexing_duration_ms=5,
+            failed_files_details=[
+                FileFailureInfo(
+                    relative_path="app.py",
+                    stage="indexing",
+                    exception_type="EmbeddingError",
+                    message="Could not reach Ollama at http://localhost:11434. Is it running?",
+                ),
+            ],
+        ),
+    )
+
+    async with client:
+        result = await client.call_tool(
+            "reindex",
+            {},
+        )
+
+    assert result.is_error
+
+    text = result.content[0].text
+
+    assert "Reindex failed for all 2 files" in text
+
+    assert "Could not reach Ollama" in text

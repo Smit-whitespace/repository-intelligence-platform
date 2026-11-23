@@ -340,3 +340,61 @@ def test_corrupt_file_is_a_clear_error(
         match="Fix or delete the file",
     ):
         _store(path).load()
+
+
+# --- Secret exfiltration guards (security review) -------------------------
+
+
+@pytest.mark.parametrize(
+    "variable",
+    [
+        "AWS_SECRET_ACCESS_KEY",
+        "GITHUB_TOKEN",
+        "PATH",
+        "openai_api_key",
+    ],
+)
+def test_only_api_key_variables_can_be_read(
+    variable: str,
+) -> None:
+    with pytest.raises(
+        ValidationError,
+        match="must name an API key variable ending in _API_KEY",
+    ):
+        ProviderConfig(
+            type=ProviderType.OPENAI_COMPATIBLE,
+            base_url="https://api.example.test/v1",
+            api_key_env=variable,
+        )
+
+
+def test_keys_are_never_sent_over_plain_http_to_other_machines() -> None:
+    with pytest.raises(
+        ValidationError,
+        match="must use https://",
+    ):
+        ProviderConfig(
+            type=ProviderType.OPENAI_COMPATIBLE,
+            base_url="http://attacker.example/v1",
+            api_key_env="OPENAI_API_KEY",
+        )
+
+
+@pytest.mark.parametrize(
+    ("base_url", "api_key_env"),
+    [
+        ("http://localhost:1234/v1", "LMSTUDIO_API_KEY"),
+        ("http://127.0.0.1:8000/v1", "LOCAL_API_KEY"),
+        ("http://gpu-box.lan:11434/v1", None),
+        ("https://api.openai.com/v1", "OPENAI_API_KEY"),
+    ],
+)
+def test_reasonable_setups_are_accepted(
+    base_url: str,
+    api_key_env: str | None,
+) -> None:
+    ProviderConfig(
+        type=ProviderType.OPENAI_COMPATIBLE,
+        base_url=base_url,
+        api_key_env=api_key_env,
+    )

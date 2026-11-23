@@ -13,8 +13,15 @@ os.environ["LOC_SERVER_ALLOWED_HOSTS"] = "localhost,127.0.0.1,testserver"
 
 # Never read or write the developer's real ~/.local_openclaw/models.json.
 # The file does not exist, so the LOC_OLLAMA_* defaults apply.
+_TEST_HOME = Path(tempfile.mkdtemp(prefix="rip-tests-"))
+
 os.environ["LOC_MODEL_CONFIG_PATH"] = str(
-    Path(tempfile.mkdtemp(prefix="rip-tests-")) / "models.json",
+    _TEST_HOME / "models.json",
+)
+
+# The key that signs proposals, snapshots and validation commands.
+os.environ["LOC_INTEGRITY_KEY_PATH"] = str(
+    _TEST_HOME / "integrity.key",
 )
 
 

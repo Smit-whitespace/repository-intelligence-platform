@@ -226,6 +226,12 @@ def parse_edit_blocks(
 ) -> tuple[list[EditOperation], str]:
     """Extract edit operations, and the explanation outside the blocks."""
 
+    # Some providers return CRLF; the block markers are matched on "\n".
+    text = text.replace(
+        "\r\n",
+        "\n",
+    )
+
     operations = [
         EditOperation(
             path=match.group(

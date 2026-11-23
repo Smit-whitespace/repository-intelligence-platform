@@ -34,7 +34,7 @@ from app.dependencies.providers import (
 from app.editing.proposal_service import ProposalService
 from app.editing.proposals import EditProposalView
 from app.editing.validation import (
-    ValidationConfig,
+    ValidationConfigView,
     ValidationReport,
 )
 from app.editing.models import (
@@ -381,7 +381,7 @@ def rollback_edit_proposal(
 
 @router.get(
     "/validation",
-    response_model=ValidationConfig,
+    response_model=ValidationConfigView,
     operation_id="getValidationConfig",
     summary="Get validation commands",
     description=(
@@ -399,7 +399,7 @@ def get_validation_config(
     proposal_service: ProposalService = Depends(
         get_proposal_service,
     ),
-) -> ValidationConfig:
+) -> ValidationConfigView:
     """Return validation commands."""
 
     return proposal_service.validation_config(
@@ -409,7 +409,7 @@ def get_validation_config(
 
 @router.put(
     "/validation",
-    response_model=ValidationConfig,
+    response_model=ValidationConfigView,
     operation_id="updateValidationConfig",
     summary="Set validation commands",
     description=(
@@ -424,7 +424,7 @@ def update_validation_config(
     proposal_service: ProposalService = Depends(
         get_proposal_service,
     ),
-) -> ValidationConfig:
+) -> ValidationConfigView:
     """Save validation commands."""
 
     return proposal_service.set_validation_config(

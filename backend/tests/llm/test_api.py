@@ -16,7 +16,7 @@ HOSTED_CONFIGURATION = {
         "ollama": {"type": "ollama"},
         "claude": {
             "type": "anthropic",
-            "api_key_env": "RIP_TEST_ANTHROPIC_KEY",
+            "api_key_env": "RIP_TEST_ANTHROPIC_API_KEY",
         },
     },
     "primary": {"provider": "ollama", "model": "qwen3:8b"},
@@ -55,7 +55,7 @@ def test_saved_configuration_takes_effect_on_the_next_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(
-        "RIP_TEST_ANTHROPIC_KEY",
+        "RIP_TEST_ANTHROPIC_API_KEY",
         raising=False,
     )
 
@@ -98,7 +98,7 @@ def test_api_key_values_are_never_returned(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(
-        "RIP_TEST_ANTHROPIC_KEY",
+        "RIP_TEST_ANTHROPIC_API_KEY",
         "sk-ant-very-secret",
     )
 
@@ -123,7 +123,7 @@ def test_chat_with_a_missing_key_is_a_clear_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv(
-        "RIP_TEST_ANTHROPIC_KEY",
+        "RIP_TEST_ANTHROPIC_API_KEY",
         raising=False,
     )
 
@@ -141,7 +141,7 @@ def test_chat_with_a_missing_key_is_a_clear_error(
 
     assert response.status_code == 400
 
-    assert "RIP_TEST_ANTHROPIC_KEY" in response.json()["detail"]
+    assert "RIP_TEST_ANTHROPIC_API_KEY" in response.json()["detail"]
 
 
 def test_invalid_configuration_is_rejected_and_not_saved(
@@ -170,7 +170,7 @@ def test_workspace_tools_keep_working_without_an_embedding_key(
     from app.core.storage.locations import project_metadata_path
 
     monkeypatch.delenv(
-        "RIP_TEST_OPENAI_KEY",
+        "RIP_TEST_OPENAI_API_KEY",
         raising=False,
     )
 
@@ -182,7 +182,7 @@ def test_workspace_tools_keep_working_without_an_embedding_key(
                 "openai": {
                     "type": "openai_compatible",
                     "base_url": "https://api.openai.com/v1",
-                    "api_key_env": "RIP_TEST_OPENAI_KEY",
+                    "api_key_env": "RIP_TEST_OPENAI_API_KEY",
                 },
             },
             "primary": {"provider": "ollama", "model": "qwen3:8b"},
@@ -217,3 +217,30 @@ def test_workspace_tools_keep_working_without_an_embedding_key(
     )
 
     assert response.status_code == 200
+
+
+def test_config_changes_made_outside_the_app_apply_to_the_next_request(
+    model_config_path: Path,
+) -> None:
+    """Another process (an MCP server) or a person may edit the file."""
+
+    import json
+
+    assert client.get("/api/v1/settings/model").json()["active_model"] == (
+        "qwen3:8b"
+    )
+
+    model_config_path.write_text(
+        json.dumps(
+            {
+                "providers": {"ollama": {"type": "ollama"}},
+                "primary": {"provider": "ollama", "model": "llama3.2"},
+                "embedding": {"provider": "ollama", "model": "nomic-embed-text"},
+            },
+        ),
+        encoding="utf-8",
+    )
+
+    assert client.get("/api/v1/settings/model").json()["active_model"] == (
+        "llama3.2"
+    )

@@ -23,6 +23,12 @@ Configuration is managed by `app/core/config/models.py` (`ApplicationSettings` a
 |---------|------|---------|-------------|
 | `LOC_MODEL_CONFIG_PATH` | `str` | `~/.local_openclaw/models.json` | Model configuration file (providers, primary model, overrides, embedding). Until it exists, the `LOC_OLLAMA_*` settings below are the configuration. See [Model Configuration](../architecture/backend/models.md). |
 
+### Security
+
+| Setting | Type | Default | Description |
+|---------|------|---------|-------------|
+| `LOC_INTEGRITY_KEY_PATH` | `str` | `~/.local_openclaw/integrity.key` | Key that signs proposals, snapshots and validation commands ([ADR-0019](../adr/adr-0019-signed-project-state.md)). Created on first use. |
+
 ### Frontend
 
 | Setting | Where | Default | Description |

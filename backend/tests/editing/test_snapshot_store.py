@@ -13,6 +13,7 @@ from app.core.storage.filesystem import (
     FileSystemStorage,
 )
 from app.editing.exceptions import (
+    UntrustedStateError,
     SnapshotNotFoundError,
     SnapshotPersistenceError,
 )
@@ -296,7 +297,11 @@ def test_load_translates_storage_error(
 def test_load_translates_malformed_snapshot(
     tmp_path: Path,
 ) -> None:
-    """Malformed persisted snapshots should become persistence errors."""
+    """Unsigned (here also malformed) snapshots are refused before parsing.
+
+    The signature check runs first, so content that RIP did not write is
+    never even parsed.
+    """
 
     storage = MalformedSnapshotStorage(
         root_directory=tmp_path,
@@ -309,7 +314,7 @@ def test_load_translates_malformed_snapshot(
     )
 
     with pytest.raises(
-        SnapshotPersistenceError,
+        UntrustedStateError,
     ):
         store.load(
             "snapshot-1",

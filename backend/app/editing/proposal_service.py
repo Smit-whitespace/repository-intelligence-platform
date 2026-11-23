@@ -32,7 +32,10 @@ from app.editing.service import (
     require_registered_root,
 )
 from app.editing.validation import (
+    UNTRUSTED_VALIDATION_MESSAGE,
+    CommandResult,
     ValidationConfig,
+    ValidationConfigView,
     ValidationReport,
     ValidationRunner,
     load_validation_config,
@@ -177,13 +180,38 @@ class ProposalService:
             change_set=proposal.change_set,
         )
 
+        # The files are written: record that (and the snapshot needed to
+        # roll back) before anything else can fail.
         proposal.status = ProposalStatus.APPLIED
 
         proposal.snapshot_id = snapshot_id
 
-        if validate:
+        view = self._save(
+            root,
+            proposal,
+        )
+
+        if not validate:
+            return view
+
+        try:
             proposal.validation = self._validate(
                 root,
+            )
+
+        except Exception as error:  # noqa: BLE001 - reported, not raised
+            proposal.validation = ValidationReport(
+                ran=False,
+                passed=False,
+                results=[
+                    CommandResult(
+                        name="validation",
+                        argv=[],
+                        passed=False,
+                        duration_ms=0,
+                        output=f"Validation could not run: {error}",
+                    ),
+                ],
             )
 
         return self._save(
@@ -249,7 +277,7 @@ class ProposalService:
     def validation_config(
         self,
         repository_root: Path,
-    ) -> ValidationConfig:
+    ) -> ValidationConfigView:
         return load_validation_config(
             self._validated_root(
                 repository_root,
@@ -260,7 +288,7 @@ class ProposalService:
         self,
         repository_root: Path,
         config: ValidationConfig,
-    ) -> ValidationConfig:
+    ) -> ValidationConfigView:
         root = self._validated_root(
             repository_root,
         )
@@ -288,11 +316,29 @@ class ProposalService:
         self,
         root: Path,
     ) -> ValidationReport:
+        config = load_validation_config(
+            root,
+        )
+
+        # Commands that arrived with the repository never run unapproved.
+        if not config.trusted:
+            return ValidationReport(
+                ran=False,
+                passed=False,
+                results=[
+                    CommandResult(
+                        name="validation",
+                        argv=[],
+                        passed=False,
+                        duration_ms=0,
+                        output=UNTRUSTED_VALIDATION_MESSAGE,
+                    ),
+                ],
+            )
+
         return self._validation_runner.run(
             root,
-            load_validation_config(
-                root,
-            ),
+            config,
         )
 
     def _load(

@@ -22,6 +22,28 @@ from app.editing.snapshot_models import (
 )
 
 
+def _new_file_mode() -> int | None:
+    """0666 minus the process umask on POSIX; None on Windows."""
+
+    if os.name == "nt":
+        return None
+
+    current = os.umask(
+        0,
+    )
+
+    os.umask(
+        current,
+    )
+
+    return 0o666 & ~current
+
+
+# Read once at import, while the process is still single-threaded:
+# os.umask can only be read by setting it.
+_NEW_FILE_MODE = _new_file_mode()
+
+
 def read_text_exact(
     path: Path,
 ) -> str:
@@ -505,6 +527,14 @@ class ChangeApplier:
                     stat.S_IMODE(
                         target_path.stat().st_mode,
                     ),
+                )
+
+            elif _NEW_FILE_MODE is not None:
+                # Temporary files are created 0600; a new repository file
+                # should get the usual mode (0666 minus the umask).
+                os.chmod(
+                    temporary_path,
+                    _NEW_FILE_MODE,
                 )
 
             temporary_path.replace(

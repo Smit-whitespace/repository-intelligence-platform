@@ -82,6 +82,28 @@ class RepositoryIndexer:
             compatible=built_with is None or built_with == configured,
         )
 
+    def existing_chunk_ids_by_path(
+        self,
+        root_directory: str,
+    ) -> dict[str, set[str]]:
+        """Existing chunk ids grouped by file (empty if unknown or rebuilding)."""
+
+        if root_directory in self._pending_rebuilds:
+            return {}
+
+        vector_store = self._vector_store_resolver.for_project(
+            root_directory=root_directory,
+        )
+
+        if vector_store is None:
+            return {}
+
+        return vector_store.get_chunk_ids_by_path(
+            where={
+                "root_directory": root_directory,
+            },
+        ) or {}
+
     def existing_chunk_ids(
         self,
         root_directory: str,

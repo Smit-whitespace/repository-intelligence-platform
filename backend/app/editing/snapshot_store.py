@@ -5,6 +5,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app.core.storage.abstractions import StorageProvider
+from app.core.storage.integrity import sign, verify
 from app.core.storage.exceptions import (
     StorageError,
     StorageResourceNotFoundError,
@@ -12,6 +13,7 @@ from app.core.storage.exceptions import (
 from app.editing.exceptions import (
     SnapshotNotFoundError,
     SnapshotPersistenceError,
+    UntrustedStateError,
 )
 from app.editing.snapshot_models import (
     Snapshot,
@@ -27,10 +29,17 @@ class SnapshotStore:
     def __init__(
         self,
         storage: StorageProvider,
+        repository_root: Path | None = None,
     ) -> None:
-        """Initialize the snapshot store."""
+        """Initialize the snapshot store.
+
+        Snapshots are signed and bound to ``repository_root``; see
+        ``app/core/storage/integrity.py``.
+        """
 
         self._storage = storage
+
+        self._root = repository_root
 
     def save(
         self,
@@ -38,14 +47,23 @@ class SnapshotStore:
     ) -> None:
         """Persist a snapshot."""
 
+        data = snapshot.model_dump(
+            mode="json",
+        )
+
         try:
             self._storage.write_json(
                 self._snapshot_path(
                     snapshot.snapshot_id,
                 ),
-                snapshot.model_dump(
-                    mode="json",
-                ),
+                {
+                    **data,
+                    "signature": sign(
+                        data,
+                        "snapshot",
+                        self._root,
+                    ),
+                },
             )
 
         except StorageError as error:
@@ -75,6 +93,25 @@ class SnapshotStore:
             raise SnapshotPersistenceError(
                 "Failed to load snapshot.",
             ) from error
+
+        # Rolling back writes a snapshot's contents into the repository,
+        # so only snapshots this installation wrote are trusted.
+        signature = data.pop(
+            "signature",
+            None,
+        ) if isinstance(data, dict) else None
+
+        if not verify(
+            data,
+            signature,
+            "snapshot",
+            self._root,
+        ):
+            raise UntrustedStateError(
+                "This snapshot was not created by this RIP installation (for "
+                "example, it came with a cloned repository), so it cannot be "
+                "used for rollback.",
+            )
 
         try:
             return Snapshot.model_validate(

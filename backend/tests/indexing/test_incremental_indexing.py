@@ -355,3 +355,44 @@ def test_lock_files_are_not_embedded(
     assert "uv.lock" not in paths
 
     assert result.skipped_files >= 2
+
+
+def test_a_file_that_fails_temporarily_keeps_its_index_entries(
+    project: Path,
+    resolver: ProjectChromaStoreResolver,
+) -> None:
+    """A locked or briefly unreadable file is not treated as deleted."""
+
+    _index(
+        project,
+        CountingEmbedder(),
+        resolver,
+    )
+
+    class FlakyLoader(RepositoryDocumentLoader):
+        def load(self, entry):  # type: ignore[no-untyped-def]
+            if entry.relative_path.name == "utils.py":
+                raise OSError("file is locked")
+
+            return super().load(entry)
+
+    IndexingService(
+        scanner=RepositoryScanner(),
+        metadata_extractor=RepositoryMetadataExtractor(),
+        document_loader=FlakyLoader(),
+        chunker=RepositoryChunker(),
+        indexer=RepositoryIndexer(
+            embedding_provider=CountingEmbedder(),
+            vector_store_resolver=resolver,
+        ),
+    ).index_repository(
+        project,
+    )
+
+    assert {
+        "main.py",
+        "utils.py",
+    } <= _indexed_paths(
+        project,
+        resolver,
+    )

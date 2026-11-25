@@ -553,6 +553,74 @@ async def test_propose_mode_creates_proposals_without_writing(
 
 
 @pytest.mark.anyio
+async def test_agent_proposals_are_labeled_compact_and_findable(
+    project: Path,
+    indexing: MagicMock,
+) -> None:
+    async with _editing_client(
+        project,
+        indexing,
+        EditingMode.PROPOSE,
+    ) as client:
+        instructions = client.instructions or ""
+
+        proposed = await client.call_tool(
+            "propose_edit",
+            {
+                "edits": [
+                    {
+                        "path": "app.py",
+                        "search": "return 'TODO'",
+                        "replace": "return 'done'",
+                    },
+                ],
+                "description": "finish the TODO",
+            },
+        )
+
+        listed = await client.call_tool(
+            "list_proposals",
+            {},
+        )
+
+        detail = await client.call_tool(
+            "get_proposal",
+            {
+                "proposal_id": proposed.structured_content["proposal_id"],
+            },
+        )
+
+    # The agent is told where the person reviews the proposal.
+    assert "Editing page" in instructions
+
+    assert str(project.resolve()) in instructions
+
+    # Shown in the app as coming from an agent, not a generic client.
+    assert proposed.structured_content["source"] == "agent"
+
+    # A named key like every other tool, and no diffs in a listing.
+    entry = listed.structured_content["proposals"][0]
+
+    assert entry["source"] == "agent"
+
+    assert entry["files"] == [
+        {
+            "path": "app.py",
+            "change": "modify",
+            "added_lines": 1,
+            "removed_lines": 1,
+        },
+    ]
+
+    assert "diff" not in entry
+
+    # The detail carries the diff once, not once per file as well.
+    assert "+        return 'done'" in detail.structured_content["diff"]
+
+    assert "diff" not in detail.structured_content["files"][0]
+
+
+@pytest.mark.anyio
 async def test_apply_mode_applies_and_rolls_back(
     project: Path,
     indexing: MagicMock,

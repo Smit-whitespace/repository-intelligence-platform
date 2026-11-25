@@ -88,6 +88,10 @@ function EditingWorkspace({ root }: { root: string }) {
               over MCP.
             </p>
           ) : null}
+          <p className="mt-3 text-xs text-[#7A8599]">
+            Proposals belong to a project. To review an agent&apos;s proposal,
+            open the repository its MCP server works on.
+          </p>
           <ul className="mt-3 space-y-2">
             {items.map((proposal) => (
               <li key={proposal.proposal_id}>
@@ -110,9 +114,7 @@ function EditingWorkspace({ root }: { root: string }) {
                   <p className="mt-1 text-xs text-[#7A8599]">
                     {proposal.files.length} file
                     {proposal.files.length === 1 ? "" : "s"} ·{" "}
-                    {proposal.source === "planner"
-                      ? `edit model ${proposal.model ?? ""}`
-                      : "proposed by a client"}{" "}
+                    {sourceLabel(proposal)}{" "}
                     · {new Date(proposal.created_at).toLocaleString()}
                   </p>
                 </button>
@@ -474,6 +476,17 @@ function ValidationResults({ report }: { report: ValidationReport }) {
       ))}
     </div>
   );
+}
+
+function sourceLabel(proposal: EditProposal): string {
+  switch (proposal.source) {
+    case "planner":
+      return `edit model ${proposal.model ?? ""}`;
+    case "agent":
+      return "proposed by an agent (MCP)";
+    case "client":
+      return "proposed through the API";
+  }
 }
 
 function StatusBadge({ status }: { status: ProposalStatus }) {

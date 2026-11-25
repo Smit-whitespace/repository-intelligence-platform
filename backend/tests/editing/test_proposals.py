@@ -251,6 +251,56 @@ def test_lf_search_matches_a_crlf_file_and_keeps_crlf(
     assert proposal.change_set.edits[0].updated_content == "a = 10\r\nb = 20\r\n"
 
 
+def test_crlf_search_matches_an_lf_file_and_keeps_lf(
+    project: Path,
+) -> None:
+    """An agent may copy CRLF text from another file or a Windows read."""
+
+    (project / "unix.py").write_bytes(
+        b"a = 1\nb = 2\n",
+    )
+
+    proposal = _build(
+        project,
+        _op("unix.py", "a = 1\r\nb = 2\r\n", "a = 10\r\nb = 20\r\n"),
+    )
+
+    assert proposal.change_set.edits[0].updated_content == "a = 10\nb = 20\n"
+
+
+def test_mixed_line_endings_in_search_still_match(
+    project: Path,
+) -> None:
+    (project / "win.py").write_bytes(
+        b"a = 1\r\nb = 2\r\nc = 3\r\n",
+    )
+
+    proposal = _build(
+        project,
+        _op("win.py", "a = 1\r\nb = 2\n", "a = 1\nb = 20\r\n"),
+    )
+
+    assert (
+        proposal.change_set.edits[0].updated_content
+        == "a = 1\r\nb = 20\r\nc = 3\r\n"
+    )
+
+
+def test_single_line_replace_in_an_lf_file_never_adds_crlf(
+    project: Path,
+) -> None:
+    (project / "unix.py").write_bytes(
+        b"value = 1\n",
+    )
+
+    proposal = _build(
+        project,
+        _op("unix.py", "value = 1", "value = 1\r\nother = 2"),
+    )
+
+    assert proposal.change_set.edits[0].updated_content == "value = 1\nother = 2\n"
+
+
 @pytest.mark.parametrize(
     "path",
     [

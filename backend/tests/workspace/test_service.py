@@ -341,17 +341,51 @@ def test_long_ranges_are_truncated_with_a_resume_point(
     assert result.next_start_line == 5
 
 
-def test_range_past_the_end_is_empty(
+def test_start_past_the_end_says_how_long_the_file_is(
     workspace: RepositoryWorkspace,
 ) -> None:
-    result = workspace.read_file(
+    """It used to return empty content with end_line < start_line."""
+
+    total = workspace.read_file(
         "README.md",
-        start_line=50,
+    ).total_lines
+
+    with pytest.raises(
+        WorkspaceError,
+        match=f"README.md has {total} lines",
+    ):
+        workspace.read_file(
+            "README.md",
+            start_line=50,
+        )
+
+
+def test_last_line_and_empty_files_can_still_be_read(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    total = workspace.read_file(
+        "README.md",
+    ).total_lines
+
+    last = workspace.read_file(
+        "README.md",
+        start_line=total,
     )
 
-    assert result.content == ""
+    assert (last.start_line, last.end_line) == (total, total)
 
-    assert result.end_line < result.start_line
+    _write(
+        project,
+        "empty.txt",
+        b"",
+    )
+
+    empty = workspace.read_file(
+        "empty.txt",
+    )
+
+    assert (empty.content, empty.total_lines) == ("", 0)
 
 
 @pytest.mark.parametrize(
@@ -670,6 +704,53 @@ def test_text_search_limit_truncates(
     assert result.truncated
 
     assert result.truncation_reason is not None
+
+
+def test_exactly_limit_matches_is_not_truncated(
+    workspace: RepositoryWorkspace,
+) -> None:
+    """Truncated used to be set whenever the limit was reached, even when
+    nothing more existed, so callers asked for results that did not."""
+
+    everything = workspace.search_text(
+        "return",
+    )
+
+    assert not everything.truncated
+
+    exact = workspace.search_text(
+        "return",
+        limit=len(everything.matches),
+    )
+
+    assert exact.matches == everything.matches
+
+    assert not exact.truncated
+
+
+def test_a_match_beyond_the_scanned_part_of_a_long_line_is_reported(
+    workspace: RepositoryWorkspace,
+    project: Path,
+) -> None:
+    """A miss used to be silent: no match and truncated=False."""
+
+    _write(
+        project,
+        "bundle.min.js",
+        b"x" * (RepositoryWorkspace.MAX_SCANNED_LINE_LENGTH + 10) + b"NEEDLE",
+    )
+
+    result = workspace.search_text(
+        "NEEDLE",
+    )
+
+    assert result.matches == []
+
+    assert result.truncated
+
+    assert result.truncation_reason is not None
+
+    assert "bundle.min.js" in result.truncation_reason
 
 
 def test_long_lines_are_shortened_around_the_match(

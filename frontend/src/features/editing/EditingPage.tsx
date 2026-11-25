@@ -481,7 +481,7 @@ function ValidationResults({ report }: { report: ValidationReport }) {
 function sourceLabel(proposal: EditProposal): string {
   switch (proposal.source) {
     case "planner":
-      return `edit model ${proposal.model ?? ""}`;
+      return proposal.model ? `edit model ${proposal.model}` : "edit model";
     case "agent":
       return "proposed by an agent (MCP)";
     case "client":

@@ -66,6 +66,18 @@ Changes apply on the next request in every RIP process, including MCP servers st
 
 Each provider also accepts `timeout_seconds` (default 120).
 
+### Thinking (Ollama reasoning models)
+
+Reasoning models such as `qwen3` think before they answer, and RIP waits for that. Any Ollama generation model reference (`primary`, a capability or a task) accepts `"think": false` to turn it off, or `true` to force it; leave it out for the model's default. Measured with `qwen3:8b` on a repository question with about 3,000 tokens of context: 55 s with its default thinking, 19 s with `"think": false`. Answers stayed correct but a little less precise, so a sensible setup turns it off for chat and keeps it for edit planning:
+
+```json
+"tasks": {
+  "chat.answer": { "provider": "ollama", "model": "qwen3:8b", "think": false }
+}
+```
+
+`think` on a non-Ollama provider or on the embedding model is a configuration error rather than being ignored. The Settings page shows it next to the model.
+
 ### Operations
 
 | Name | Level | Used by |

@@ -15,7 +15,7 @@ papered over.
 
 from enum import StrEnum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.llm.config import (
     GENERATION_PROVIDER_TYPES,
@@ -53,6 +53,11 @@ class EffectiveModel(BaseModel):
     model: str
 
     source: ModelSource
+
+    think: bool | None = Field(
+        default=None,
+        description="Whether the model thinks before answering (null: the model's default).",
+    )
 
 
 class ModelResolver:
@@ -187,6 +192,7 @@ class ModelResolver:
             provider_type=provider_type,
             model=ref.model,
             source=source,
+            think=ref.think,
         )
 
     def _provider_type(

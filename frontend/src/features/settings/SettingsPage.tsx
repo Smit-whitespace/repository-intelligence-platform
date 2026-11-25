@@ -205,7 +205,19 @@ function EffectiveModelsPanel() {
                   <td className="py-2 pr-4 font-mono text-[#F8FAFC]">
                     {model.operation}
                   </td>
-                  <td className="py-2 pr-4 font-mono">{model.model}</td>
+                  <td className="py-2 pr-4 font-mono">
+                    {model.model}
+                    {model.think === false ? (
+                      <span className="ml-2 font-sans text-xs text-[#7A8599]">
+                        thinking off
+                      </span>
+                    ) : null}
+                    {model.think === true ? (
+                      <span className="ml-2 font-sans text-xs text-[#7A8599]">
+                        thinking on
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="py-2 pr-4">
                     {model.provider}{" "}
                     <span className="text-[#7A8599]">({model.provider_type})</span>

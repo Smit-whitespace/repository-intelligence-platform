@@ -17,10 +17,13 @@ holds one.
 
 import re
 from enum import StrEnum
+from typing import Any
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 from pydantic import Field
+from pydantic import SerializerFunctionWrapHandler
+from pydantic import model_serializer
 from pydantic import model_validator
 
 
@@ -193,6 +196,33 @@ class ModelRef(BaseModel):
         ],
     )
 
+    think: bool | None = Field(
+        default=None,
+        description="Ollama generation models only. false turns off a "
+        "reasoning model's thinking: much faster answers (qwen3:8b chat: "
+        "19 s instead of 55 s) at some cost in precision. true forces it; "
+        "unset uses the model's default.",
+    )
+
+    @model_serializer(
+        mode="wrap",
+    )
+    def _omit_unset_think(
+        self,
+        handler: SerializerFunctionWrapHandler,
+    ) -> dict[str, Any]:
+        # Keep saved files and API responses as they were for everyone
+        # who never sets it.
+        data: dict[str, Any] = handler(self)
+
+        if self.think is None:
+            data.pop(
+                "think",
+                None,
+            )
+
+        return data
+
 
 class ModelConfiguration(BaseModel):
     """The complete model configuration."""
@@ -237,6 +267,17 @@ class ModelConfiguration(BaseModel):
                 raise ValueError(
                     f"{location} uses provider '{ref.provider}', which is "
                     "not defined under providers.",
+                )
+
+            # Refused, not ignored: a setting that silently does nothing
+            # would leave someone wondering why answers are still slow.
+            if ref.think is not None and (
+                location == "embedding"
+                or self.providers[ref.provider].type is not ProviderType.OLLAMA
+            ):
+                raise ValueError(
+                    f"{location} sets 'think', which only applies to Ollama "
+                    "generation models. Remove it.",
                 )
 
         embedding_type = self.providers[self.embedding.provider].type

@@ -26,7 +26,8 @@ RIP can run as a [Model Context Protocol](https://modelcontextprotocol.io) serve
 | `index_status` | Whether the repository is indexed, with which embedding model | No |
 | `reindex` | Updates the semantic index (changed files only) | RIP's own index only, never repository files |
 | `propose_edit` | Stores search/replace edits as a reviewable proposal with a diff | No (a proposal in RIP's storage) |
-| `get_proposal`, `list_proposals` | Proposal diff, status and validation results | No |
+| `get_proposal` | One proposal's diff, status and validation results | No |
+| `list_proposals` | Recent proposals with per-file line counts, no diffs (`{"proposals": [...]}`) | No |
 | `apply_proposal` | Writes a proposal (snapshot, all-or-nothing), then runs validation | **Yes**, only with `--editing apply` |
 | `rollback_proposal` | Undoes an applied proposal | **Yes**, only with `--editing apply` |
 
@@ -39,6 +40,10 @@ RIP can run as a [Model Context Protocol](https://modelcontextprotocol.io) serve
 | `apply` | all of the above, plus `apply_proposal`, `rollback_proposal` | The agent |
 
 Tools a mode does not allow are not registered at all. `apply` is an explicit opt-in because applying runs the project's validation commands, which execute repository code (that is what tests do).
+
+**Reviewing an agent's proposal.** Proposals belong to a project. They appear on the Editing page, labeled "proposed by an agent (MCP)", when the repository the MCP server works on is the open project in the RIP app. The server's instructions tell the agent to give you the proposal id and that repository path.
+
+**Line endings.** An edit's `search` may use `\n` or `\r\n` regardless of the file's line endings, and `replace` is written with the line endings of the text it replaces, so an agent cannot accidentally mix them.
 
 Every tool returns structured JSON (with an output schema) and is annotated with MCP's read-only hints, so clients can approve read-only tools more freely. The server also sends usage instructions that tell the agent which tool fits which question.
 

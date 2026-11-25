@@ -45,7 +45,7 @@ export function RepositoryPage() {
     <section className="animate-fade-in space-y-8">
       <div>
         <h1 className="text-lg font-semibold text-[#F8FAFC]">Search</h1>
-        <p className="mt-1 font-mono text-xs text-[#7A8599]">
+        <p className="break-anywhere mt-1 font-mono text-xs text-[#7A8599]">
           {activeProject.root_directory}
         </p>
       </div>
@@ -53,7 +53,7 @@ export function RepositoryPage() {
       {repository.isError ? <ApiErrorState error={repository.error} /> : null}
       {repository.data ? (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Metric
               label="Files"
               value={repository.data.summary.files.toLocaleString()}
@@ -68,7 +68,7 @@ export function RepositoryPage() {
             />
             <Metric label="Text files" value={textFiles.length.toLocaleString()} />
           </div>
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <Panel title="Supported languages">
               {languages.length ? (
                 <div className="space-y-3">
@@ -98,7 +98,7 @@ export function RepositoryPage() {
             </Panel>
           </div>
           <Panel title="Repository metadata">
-            <dl className="grid gap-4 text-sm md:grid-cols-2">
+            <dl className="grid grid-cols-1 gap-4 text-sm md:grid-cols-2">
               <Detail label="Project" value={activeProject.name} />
               <Detail label="Root" value={activeProject.root_directory} />
               <Detail label="Entries" value={entries.length.toLocaleString()} />
@@ -179,9 +179,9 @@ type DetailProps = {
 
 function Detail({ label, value }: DetailProps) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="text-xs font-medium text-[#7A8599]">{label}</dt>
-      <dd className="mt-1 break-words font-mono text-xs text-[#AAB4C5]">{value}</dd>
+      <dd className="break-anywhere mt-1 font-mono text-xs text-[#AAB4C5]">{value}</dd>
     </div>
   );
 }

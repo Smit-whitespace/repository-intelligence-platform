@@ -8,7 +8,8 @@ from app.repository.models import (
     RepositoryDocument,
 )
 
-_LINE_CHUNK_SIZE = 100
+LINE_CHUNK_SIZE = 100
+"""Most lines in one line-based chunk, or in merged Python module statements."""
 
 
 class ChunkAlgorithm(ABC):
@@ -40,10 +41,10 @@ class LineChunkAlgorithm(ChunkAlgorithm):
         for start in range(
             0,
             len(document_lines),
-            _LINE_CHUNK_SIZE,
+            LINE_CHUNK_SIZE,
         ):
             end = min(
-                start + _LINE_CHUNK_SIZE,
+                start + LINE_CHUNK_SIZE,
                 len(document_lines),
             )
 

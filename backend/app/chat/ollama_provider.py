@@ -27,11 +27,14 @@ class OllamaChatProvider(
         settings: OllamaSettings,
         model: str | None = None,
         base_url: str | None = None,
+        think: bool | None = None,
     ) -> None:
         """Initialize the Ollama client.
 
         ``model`` and ``base_url`` come from the model configuration;
-        without them the ``LOC_OLLAMA_*`` settings apply.
+        without them the ``LOC_OLLAMA_*`` settings apply. ``think`` turns
+        a reasoning model's thinking on or off; ``None`` leaves the
+        model's default.
         """
 
         self._settings = settings
@@ -39,6 +42,10 @@ class OllamaChatProvider(
         self._model = model or settings.chat_model
 
         self._host = base_url or settings.base_url
+
+        # None is left out of the request by the client (exclude_none), so
+        # an unset value changes nothing for servers or models without it.
+        self._think = think
 
         self._client = Client(
             host=self._host,
@@ -56,6 +63,7 @@ class OllamaChatProvider(
                 messages=self._build_messages(
                     prompt,
                 ),
+                think=self._think,
             )
 
         except ResponseError as error:
@@ -96,6 +104,7 @@ class OllamaChatProvider(
                     prompt,
                 ),
                 stream=True,
+                think=self._think,
             )
 
             for response in stream:

@@ -2,9 +2,11 @@
 
 from pathlib import Path
 
+from app.core.storage.exceptions import StorageReadError
 from app.core.storage.locations import project_storage_directory
 from app.projects.exceptions import (
     InvalidProjectError,
+    ProjectNotFoundError,
 )
 from app.projects.models import Project
 from app.projects.repository import (
@@ -51,13 +53,25 @@ class ProjectService:
                 "project. Open the repository folder itself.",
             )
 
+        storage_directory = project_storage_directory(
+            root_directory,
+        )
+
         project = Project(
             name=root_directory.name,
             root_directory=root_directory,
-            storage_directory=project_storage_directory(
-                root_directory,
-            ),
+            storage_directory=storage_directory,
         )
+
+        # Opening again must not reset when the project was created.
+        # Unreadable metadata is simply replaced.
+        try:
+            project.created_at = self._repository.load(
+                storage_directory,
+            ).created_at
+
+        except (ProjectNotFoundError, StorageReadError, OSError, ValueError):
+            pass
 
         self._repository.save(
             project,

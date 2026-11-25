@@ -5,7 +5,7 @@ import { StatusBar } from "./StatusBar";
 
 export function AppShell() {
   return (
-    <div className="grid min-h-screen grid-cols-[240px_1fr] bg-[#0A0F1E] text-[#F8FAFC]">
+    <div className="grid min-h-screen grid-cols-[240px_minmax(0,1fr)] bg-[#0A0F1E] text-[#F8FAFC]">
       <Sidebar />
       <div className="grid min-h-screen grid-rows-[56px_1fr_36px]">
         <Header />

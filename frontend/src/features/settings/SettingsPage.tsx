@@ -64,7 +64,7 @@ export function SettingsPage() {
           Application configuration.
         </p>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="Theme">
           <div className="mt-4 space-y-3">
             <div className="flex gap-2">
@@ -205,7 +205,19 @@ function EffectiveModelsPanel() {
                   <td className="py-2 pr-4 font-mono text-[#F8FAFC]">
                     {model.operation}
                   </td>
-                  <td className="py-2 pr-4 font-mono">{model.model}</td>
+                  <td className="py-2 pr-4 font-mono">
+                    {model.model}
+                    {model.think === false ? (
+                      <span className="ml-2 font-sans text-xs text-[#7A8599]">
+                        thinking off
+                      </span>
+                    ) : null}
+                    {model.think === true ? (
+                      <span className="ml-2 font-sans text-xs text-[#7A8599]">
+                        thinking on
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="py-2 pr-4">
                     {model.provider}{" "}
                     <span className="text-[#7A8599]">({model.provider_type})</span>
@@ -228,7 +240,7 @@ function EffectiveModelsPanel() {
           {configuration.data.saved
             ? "Configuration file: "
             : "Using defaults from LOC_OLLAMA_* settings. Save a configuration to "}
-          <span className="font-mono">{configuration.data.path}</span>
+          <span className="break-anywhere font-mono">{configuration.data.path}</span>
           {configuration.data.saved ? "" : " to add hosted providers or overrides."}{" "}
           Changing the embedding model requires reindexing.
         </p>

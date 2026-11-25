@@ -47,6 +47,7 @@ export type EffectiveModel = {
   provider_type: string;
   model: string;
   source: ModelSource;
+  think?: boolean | null;
 };
 
 export type EffectiveModelsResponse = {
@@ -141,7 +142,7 @@ export type EditProposal = {
   created_at: string;
   updated_at: string;
   status: ProposalStatus;
-  source: "client" | "planner";
+  source: "client" | "agent" | "planner";
   description: string;
   model: string | null;
   notes: string | null;

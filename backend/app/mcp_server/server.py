@@ -23,11 +23,16 @@ from app.editing.exceptions import EditingError
 from app.editing.proposal_service import ProposalService
 from app.editing.proposals import (
     EditOperation,
-    EditProposalView,
+    ProposalSource,
 )
 from app.indexing.exceptions import IndexingError
 from app.indexing.models import IndexingResult, IndexStatus
 from app.indexing.service import IndexingService
+from app.mcp_server.models import (
+    ProposalDetail,
+    ProposalList,
+    ProposalSummary,
+)
 from app.workspace.exceptions import WorkspaceError
 from app.workspace.models import (
     FileContent,
@@ -116,7 +121,8 @@ _EDITING_INSTRUCTIONS = {
 - To change files, call propose_edit with search/replace operations. Each
   'search' must be copied exactly from the current file (read_file it
   first) and occur exactly once. Nothing is written: tell the user the
-  proposal_id so they can review and apply it in the RIP app.
+  proposal_id, and that they review and apply it on the RIP app's
+  Editing page with this repository open as the project: {root}
 """,
     EditingMode.APPLY: """\
 - To change files, call propose_edit with search/replace operations. Each
@@ -149,7 +155,10 @@ def build_server(
         name=SERVER_NAME,
         title="Repository Intelligence Platform",
         version=SERVER_VERSION,
-        instructions=INSTRUCTIONS + _EDITING_INSTRUCTIONS[editing_mode],
+        instructions=INSTRUCTIONS
+        + _EDITING_INSTRUCTIONS[editing_mode].format(
+            root=workspace.root,
+        ),
     )
 
     root: Path = workspace.root
@@ -378,22 +387,27 @@ def _add_editing_tools(
     async def propose_edit(
         edits: list[EditOperation],
         description: str,
-    ) -> EditProposalView:
+    ) -> ProposalDetail:
         """Propose file changes as search/replace operations.
 
         Each operation replaces 'search' (copied exactly from the current
         file, occurring exactly once) with 'replace'; an empty 'search'
         creates a new file. Operations on the same file apply in order.
-        Nothing is written to the repository: the result is a stored
-        proposal with a unified diff. If an operation is wrong, the error
-        says which one and why; fix it and propose again.
+        Line endings need not match: '\\n' in 'search' also matches a
+        '\\r\\n' file, and 'replace' is written with the file's own line
+        endings. Nothing is written to the repository: the result is a
+        stored proposal with a unified diff. If an operation is wrong, the
+        error says which one and why; fix it and propose again.
         """
 
-        return await call(
-            lambda: proposal_service.propose(
-                repository_root=root,
-                operations=edits,
-                description=description,
+        return ProposalDetail.of(
+            await call(
+                lambda: proposal_service.propose(
+                    repository_root=root,
+                    operations=edits,
+                    description=description,
+                    source=ProposalSource.AGENT,
+                ),
             ),
         )
 
@@ -402,13 +416,15 @@ def _add_editing_tools(
     )
     async def get_proposal(
         proposal_id: str,
-    ) -> EditProposalView:
+    ) -> ProposalDetail:
         """Return a proposal's diff, status and validation results."""
 
-        return await call(
-            lambda: proposal_service.get(
-                repository_root=root,
-                proposal_id=proposal_id,
+        return ProposalDetail.of(
+            await call(
+                lambda: proposal_service.get(
+                    repository_root=root,
+                    proposal_id=proposal_id,
+                ),
             ),
         )
 
@@ -417,10 +433,14 @@ def _add_editing_tools(
     )
     async def list_proposals(
         limit: int = 20,
-    ) -> list[EditProposalView]:
-        """List recent proposals, newest first."""
+    ) -> ProposalList:
+        """List recent proposals, newest first, without diffs.
 
-        return await call(
+        Each entry gives the status and per-file line counts; call
+        get_proposal for a proposal's diff.
+        """
+
+        views = await call(
             lambda: proposal_service.list(
                 repository_root=root,
                 limit=max(
@@ -431,6 +451,10 @@ def _add_editing_tools(
                     ),
                 ),
             ),
+        )
+
+        return ProposalList(
+            proposals=[ProposalSummary.of(view) for view in views],
         )
 
     if not allow_apply:
@@ -447,7 +471,7 @@ def _add_editing_tools(
     async def apply_proposal(
         proposal_id: str,
         run_validation: bool = True,
-    ) -> EditProposalView:
+    ) -> ProposalDetail:
         """Write a pending proposal to the repository.
 
         A snapshot is taken first, and the write is all-or-nothing. Fails
@@ -456,11 +480,13 @@ def _add_editing_tools(
         is false; check the result's validation field.
         """
 
-        return await call(
-            lambda: proposal_service.apply(
-                repository_root=root,
-                proposal_id=proposal_id,
-                validate=run_validation,
+        return ProposalDetail.of(
+            await call(
+                lambda: proposal_service.apply(
+                    repository_root=root,
+                    proposal_id=proposal_id,
+                    validate=run_validation,
+                ),
             ),
         )
 
@@ -474,16 +500,18 @@ def _add_editing_tools(
     )
     async def rollback_proposal(
         proposal_id: str,
-    ) -> EditProposalView:
+    ) -> ProposalDetail:
         """Undo an applied proposal from its snapshot.
 
         Refuses if a file changed after the proposal was applied, so later
         work is never overwritten.
         """
 
-        return await call(
-            lambda: proposal_service.rollback(
-                repository_root=root,
-                proposal_id=proposal_id,
+        return ProposalDetail.of(
+            await call(
+                lambda: proposal_service.rollback(
+                    repository_root=root,
+                    proposal_id=proposal_id,
+                ),
             ),
         )

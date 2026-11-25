@@ -7,6 +7,7 @@ or a fake SDK client (Anthropic), so no API key or server is needed.
 import json
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -499,6 +500,57 @@ def test_factory_builds_the_adapter_for_the_resolved_model() -> None:
     )
 
     assert chat._model == "qwen3:8b"  # noqa: SLF001
+
+
+@pytest.mark.parametrize(
+    "think",
+    [
+        False,
+        True,
+        None,
+    ],
+)
+def test_think_setting_reaches_ollama(
+    think: bool | None,
+) -> None:
+    """None is dropped by the client (exclude_none), so unset sends nothing."""
+
+    configuration = ModelConfiguration.model_validate(
+        {
+            "providers": {"local": {"type": "ollama"}},
+            "primary": {"provider": "local", "model": "qwen3:8b"},
+            "tasks": {
+                "chat.answer": {"provider": "local", "model": "qwen3:8b", "think": think},
+            },
+            "embedding": {"provider": "local", "model": "nomic-embed-text"},
+        },
+    )
+
+    effective = ModelResolver(
+        configuration,
+    ).for_task(
+        Task.CHAT_ANSWER,
+    )
+
+    assert effective.think is think
+
+    chat = build_chat_provider(
+        configuration=configuration,
+        effective=effective,
+        ollama_settings=OllamaSettings(),
+    )
+
+    client = MagicMock()
+
+    client.chat.return_value.message.content = "answer"
+
+    chat._client = client  # noqa: SLF001
+
+    chat.generate(
+        PROMPT,
+    )
+
+    assert client.chat.call_args.kwargs["think"] is think
 
 
 def test_missing_api_key_names_the_variable(

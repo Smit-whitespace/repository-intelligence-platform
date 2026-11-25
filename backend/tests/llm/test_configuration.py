@@ -112,6 +112,27 @@ def test_provider_required_fields(
         )
 
 
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"tasks": {"chat.answer": {"provider": "openai", "model": "gpt", "think": False}}},
+        {"embedding": {"provider": "local", "model": "nomic-embed-text", "think": False}},
+    ],
+)
+def test_think_is_refused_where_it_would_do_nothing(
+    overrides: dict,
+) -> None:
+    """Silently ignoring it would leave answers slow with no explanation."""
+
+    with pytest.raises(
+        ValidationError,
+        match="only applies to Ollama generation models",
+    ):
+        _configuration(
+            **overrides,
+        )
+
+
 def test_unknown_task_and_capability_names_are_rejected() -> None:
     with pytest.raises(
         ValidationError,

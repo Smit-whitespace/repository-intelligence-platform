@@ -2,6 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  /*
+   * Paths, ids and hashes have no spaces, so normal wrapping cannot break
+   * them. `anywhere` also lowers the element's min-content width, which is
+   * what lets the surrounding grid or flex item shrink to fit.
+   */
+  .break-anywhere {
+    overflow-wrap: anywhere;
+  }
+}
+
 :root {
   --background: 228 20% 5%;
   --foreground: 210 20% 96%;

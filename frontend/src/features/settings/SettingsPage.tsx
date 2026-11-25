@@ -64,7 +64,7 @@ export function SettingsPage() {
           Application configuration.
         </p>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="Theme">
           <div className="mt-4 space-y-3">
             <div className="flex gap-2">
@@ -228,7 +228,7 @@ function EffectiveModelsPanel() {
           {configuration.data.saved
             ? "Configuration file: "
             : "Using defaults from LOC_OLLAMA_* settings. Save a configuration to "}
-          <span className="font-mono">{configuration.data.path}</span>
+          <span className="break-anywhere font-mono">{configuration.data.path}</span>
           {configuration.data.saved ? "" : " to add hosted providers or overrides."}{" "}
           Changing the embedding model requires reindexing.
         </p>

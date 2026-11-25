@@ -241,7 +241,7 @@ function MessageBlock({ message }: { message: ChatMessage }) {
               <Copy className="h-3 w-3 text-[#7A8599] hover:text-[#F8FAFC]" />
             </button>
           </div>
-          <div className="text-sm leading-relaxed text-[#AAB4C5]">
+          <div className="break-anywhere text-sm leading-relaxed text-[#AAB4C5]">
             {isUser ? (
               <p className="whitespace-pre-wrap">{message.content}</p>
             ) : message.content ? (

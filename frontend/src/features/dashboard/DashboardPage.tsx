@@ -36,7 +36,7 @@ export function DashboardPage() {
           Workspace status and overview.
         </p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <Metric label="Backend" value={health.data?.status ?? "unknown"} tone="ok" />
         <Metric
           label="Provider"
@@ -51,7 +51,7 @@ export function DashboardPage() {
           value={version.data?.application_version ?? "unknown"}
         />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Panel title="Project">
           <dl className="space-y-4 text-sm">
             <Row label="Name" value={activeProject?.name ?? "No project open"} />
@@ -123,8 +123,8 @@ function Metric({ label, value, tone = "default" }: MetricProps) {
       <p
         className={
           tone === "ok"
-            ? "mt-2 text-sm font-semibold text-[#10B981]"
-            : "mt-2 text-sm font-semibold text-[#F8FAFC]"
+            ? "break-anywhere mt-2 text-sm font-semibold text-[#10B981]"
+            : "break-anywhere mt-2 text-sm font-semibold text-[#F8FAFC]"
         }
       >
         {value}

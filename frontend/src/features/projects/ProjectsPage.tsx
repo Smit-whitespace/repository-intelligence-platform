@@ -100,11 +100,11 @@ export function ProjectsPage() {
       {activeProject ? (
         <section className="rounded-[var(--radius)] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-5">
           <div className="flex items-start justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <h3 className="text-sm font-semibold text-[#F8FAFC]">
                 Active project
               </h3>
-              <p className="mt-1 text-sm text-[#AAB4C5]">
+              <p className="break-anywhere mt-1 text-sm text-[#AAB4C5]">
                 {activeProject.name}
               </p>
             </div>
@@ -122,7 +122,7 @@ export function ProjectsPage() {
           </div>
           {projectInfo.isLoading ? <LoadingState label="Loading project details" /> : null}
           {projectInfo.isError ? <ApiErrorState error={projectInfo.error} /> : null}
-          <dl className="mt-4 grid gap-4 text-sm lg:grid-cols-2">
+          <dl className="mt-4 grid grid-cols-1 gap-4 text-sm lg:grid-cols-2">
             <Detail label="Name" value={projectInfo.data?.name ?? activeProject.name} />
             <Detail label="Root" value={activeProject.root_directory} />
             <Detail
@@ -152,9 +152,9 @@ type DetailProps = {
 
 function Detail({ label, value }: DetailProps) {
   return (
-    <div>
+    <div className="min-w-0">
       <dt className="text-xs font-medium text-[#7A8599]">{label}</dt>
-      <dd className="mt-1 break-words font-mono text-xs text-[#AAB4C5]">{value}</dd>
+      <dd className="break-anywhere mt-1 font-mono text-xs text-[#AAB4C5]">{value}</dd>
     </div>
   );
 }

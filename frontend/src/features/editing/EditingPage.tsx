@@ -72,7 +72,7 @@ function EditingWorkspace({ root }: { root: string }) {
     null;
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
       <div className="space-y-4">
         <PlanPanel root={root} onProposed={setSelectedId} />
         {/* Keyed by root, so unsaved edits never carry over between projects. */}
@@ -102,7 +102,7 @@ function EditingWorkspace({ root }: { root: string }) {
                   )}
                 >
                   <div className="flex items-center justify-between gap-3">
-                    <span className="truncate text-sm text-[#F8FAFC]">
+                    <span className="min-w-0 truncate text-sm text-[#F8FAFC]">
                       {proposal.description || "(no description)"}
                     </span>
                     <StatusBadge status={proposal.status} />
@@ -293,7 +293,7 @@ function ProposalDetail({
       <div className="mt-4 space-y-4">
         {proposal.files.map((file) => (
           <div key={file.path}>
-            <p className="mb-1 font-mono text-xs text-[#AAB4C5]">
+            <p className="break-anywhere mb-1 font-mono text-xs text-[#AAB4C5]">
               {file.path}{" "}
               <span className="text-[#4ADE80]">+{file.added_lines}</span>{" "}
               <span className="text-[#F87171]">-{file.removed_lines}</span>
@@ -455,7 +455,7 @@ function ValidationResults({ report }: { report: ValidationReport }) {
           open={!result.passed}
           className="rounded-[var(--radius-sm)] border border-[rgba(255,255,255,0.06)] p-2"
         >
-          <summary className="cursor-pointer text-sm text-[#AAB4C5]">
+          <summary className="break-anywhere cursor-pointer text-sm text-[#AAB4C5]">
             <span className={result.passed ? "text-[#4ADE80]" : "text-[#F87171]"}>
               {result.passed ? "✓" : "✗"}
             </span>{" "}
@@ -467,7 +467,7 @@ function ValidationResults({ report }: { report: ValidationReport }) {
               · {(result.duration_ms / 1000).toFixed(1)}s
             </span>
           </summary>
-          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-[#AAB4C5]">
+          <pre className="break-anywhere mt-2 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-[#AAB4C5]">
             {result.output || "(no output)"}
           </pre>
         </details>
@@ -492,7 +492,7 @@ function StatusBadge({ status }: { status: ProposalStatus }) {
 function Panel({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="rounded-[var(--radius)] border border-[rgba(255,255,255,0.06)] bg-[#111827] p-5">
-      <h3 className="text-sm font-semibold text-[#F8FAFC]">{title}</h3>
+      <h3 className="break-anywhere text-sm font-semibold text-[#F8FAFC]">{title}</h3>
       {children}
     </section>
   );

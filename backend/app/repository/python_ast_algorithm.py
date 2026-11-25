@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import ast
 
-from app.repository.chunking_algorithms import ChunkAlgorithm
+from app.repository.chunking_algorithms import (
+    LINE_CHUNK_SIZE,
+    ChunkAlgorithm,
+)
 from app.repository.models import (
     ChunkBoundary,
     ChunkType,
@@ -57,6 +60,10 @@ class PythonAstChunkAlgorithm(ChunkAlgorithm):
                     boundary,
                 )
 
+        boundaries = _merge_module_statements(
+            boundaries,
+        )
+
         if not boundaries:
             boundaries.append(
                 ChunkBoundary(
@@ -83,6 +90,18 @@ class PythonAstChunkAlgorithm(ChunkAlgorithm):
 
         if start_line is None:
             return None
+
+        # A decorated definition starts at its first decorator: for a
+        # route, the decorator holds the URL, which search must see.
+        for decorator in getattr(
+            node,
+            "decorator_list",
+            [],
+        ):
+            start_line = min(
+                start_line,
+                decorator.lineno,
+            )
 
         end_line = getattr(
             node,
@@ -119,3 +138,41 @@ class PythonAstChunkAlgorithm(ChunkAlgorithm):
             ),
             chunk_type=chunk_type,
         )
+
+
+def _merge_module_statements(
+    boundaries: list[ChunkBoundary],
+) -> list[ChunkBoundary]:
+    """Join consecutive top-level statements into one module chunk.
+
+    Without this, every import and constant became its own one-line
+    chunk, and those crowded real code out of search results. A merged
+    chunk spans from its first statement to its last, so comments in
+    between stay with them, and never grows past ``LINE_CHUNK_SIZE``
+    lines (a single longer statement stays whole).
+    """
+
+    merged: list[ChunkBoundary] = []
+
+    for boundary in boundaries:
+        previous = merged[-1] if merged else None
+
+        if (
+            previous is not None
+            and previous.chunk_type is ChunkType.MODULE
+            and boundary.chunk_type is ChunkType.MODULE
+            and boundary.end_line - previous.start_line < LINE_CHUNK_SIZE
+        ):
+            merged[-1] = ChunkBoundary(
+                start_line=previous.start_line,
+                end_line=boundary.end_line,
+                chunk_type=ChunkType.MODULE,
+            )
+
+            continue
+
+        merged.append(
+            boundary,
+        )
+
+    return merged

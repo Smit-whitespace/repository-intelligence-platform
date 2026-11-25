@@ -194,6 +194,18 @@ def test_only_the_edited_file_is_re_embedded(
 
     assert result.unchanged_files == 1
 
+    # unchanged_files is part of indexed_files, so the counts add up to
+    # scanned_files (an agent once added them and got one too many).
+    assert result.unchanged_files <= result.indexed_files
+
+    assert result.scanned_files == (
+        result.indexed_files + result.skipped_files + result.failed_files
+    )
+
+    assert "Part of indexed_files" in (
+        IndexingResult.model_json_schema()["properties"]["unchanged_files"]["description"]
+    )
+
     # The old version of main.py is gone; search sees only current text.
     store = resolver.for_project(
         str(

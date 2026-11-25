@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.repository.models import (
     ChunkBoundary,
@@ -60,20 +60,40 @@ class IndexingDiagnostics(BaseModel):
 class IndexingResult(BaseModel):
     """Repository indexing summary."""
 
-    scanned_files: int
+    # Descriptions, not comments: they reach API and MCP schemas, where an
+    # agent once added unchanged_files to indexed_files and got a total
+    # one larger than scanned_files.
 
-    indexed_files: int
+    scanned_files: int = Field(
+        description="Files found: indexed_files + skipped_files + failed_files.",
+    )
 
-    indexed_chunks: int
+    indexed_files: int = Field(
+        description=(
+            "Files whose chunks are in the index after this run, including "
+            "unchanged_files."
+        ),
+    )
 
-    skipped_files: int
+    indexed_chunks: int = Field(
+        description="Chunks embedded in this run (unchanged chunks are not counted).",
+    )
 
-    failed_files: int
+    skipped_files: int = Field(
+        description="Files not indexed by design: binary, lock files, or not text.",
+    )
 
-    unchanged_files: int = 0
-    """Indexed files whose content had not changed, so nothing was
-    re-embedded for them. ``indexed_chunks`` counts only newly embedded
-    chunks."""
+    failed_files: int = Field(
+        description="Files that could not be indexed; they keep their previous chunks.",
+    )
+
+    unchanged_files: int = Field(
+        default=0,
+        description=(
+            "Part of indexed_files: files whose content had not changed, so "
+            "nothing was re-embedded for them."
+        ),
+    )
 
     diagnostics: IndexingDiagnostics | None = None
 

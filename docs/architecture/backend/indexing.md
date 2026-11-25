@@ -109,7 +109,8 @@ sequenceDiagram
 ### IndexingResult
 
 - **File:** `app/indexing/models.py`
-- Fields: `scanned_files`, `indexed_files`, `indexed_chunks`, `skipped_files`, `failed_files`
+- Fields: `scanned_files`, `indexed_files`, `indexed_chunks`, `skipped_files`, `failed_files`, `unchanged_files`
+- `scanned_files = indexed_files + skipped_files + failed_files`; `unchanged_files` is part of `indexed_files`. Each field carries this description in the API and MCP schemas.
 
 ---
 
@@ -152,7 +153,7 @@ Indexing is independent of retrieval by design — `RetrievalService` never inde
 ## Known Limitations
 
 - Indexing processes all text files synchronously. For very large repositories this can be slow.
-- Failed files are counted but not identified (no per-file error reporting in `IndexingResult`).
+- Python files are chunked by their top-level definitions. A function or class chunk starts at its first decorator (a route's URL lives there), and consecutive top-level statements (docstring, imports, constants) form one module chunk of at most 100 lines, so single import lines never fill search results. Other languages use 100-line chunks. Changing these boundaries changes chunk ids, so the first reindex after such a change re-embeds the affected files once.
 - Every run still scans, hashes and chunks every file (cheap), but only embeds chunks not already in the index (the expensive part). Chunk ids include the file's content hash, so unchanged files are recognized without any extra bookkeeping; `IndexingResult.unchanged_files` reports them, and `indexed_chunks` counts only newly embedded chunks.
 - Indexing holds an inter-process OS file lock (`.local_openclaw/index/index.lock`), so the RIP app and an MCP server never write one index at once; a second indexer gets `IndexingBusyError` (HTTP 409).
 - ChromaDB is created with anonymized telemetry disabled (offline-first, ADR-0001).

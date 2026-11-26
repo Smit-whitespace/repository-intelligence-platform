@@ -147,10 +147,54 @@ Retrieval is separated from indexing to prevent circular dependencies and to all
 
 ## Known Limitations
 
-- Single search strategy (pure vector similarity). No hybrid or keyword search.
+- Vector similarity with two measured ranking adjustments (test files ×0.92, one result per file). No hybrid or keyword search.
 - No filtering by file path, language, or date.
 - No pagination beyond the `limit` parameter.
 - Unscoped queries (no `root_directory`) return no results by design — search requires an opened, indexed project.
+
+---
+
+## Measuring Search Quality
+
+`backend/eval/benchmarks.py` holds 34 questions about this repository, each with the files a good answer needs. Run them against a real index:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m eval --root <path of an indexed copy of this repository> --json report.json
+```
+
+It prints, per question, the rank of the first right file, and overall: **hit@1** (right file first), **hit@3**, **hit@10**, **MRR** (mean of 1/rank) and recall. Measure before and after any change to chunking, embedding or ranking.
+
+**Baseline** (2026-11-26; `nomic-embed-text`, top 10 chunks, 336 files, 1,284 chunks):
+
+| hit@1 | hit@3 | hit@10 | MRR | recall |
+|---|---|---|---|---|
+| 18% | 50% | 79% | 0.38 | 62% |
+
+**Ranking changes (2026-11-26).** `backend/eval/holdout.py` holds 15 more questions, written before any tuning and never used for it (`--set holdout`). A ranking idea was kept only if it improved the tuning set without hurting the held-out set. Each idea was tried at several strengths on the same top-50 candidates per question:
+
+| Idea | Tuning MRR | Held-out MRR | Kept? |
+|---|---|---|---|
+| (baseline) | 0.38 | 0.40 | |
+| Test files score ×0.92 (×0.90-0.94 identical) | 0.48 | 0.48 | yes |
+| Each file once, with its best chunk | 0.39 | 0.43 | yes |
+| Both together | **0.49** | **0.50** | **in use** |
+| Chunks under 80-250 characters score ×0.94-0.97 | up to 0.43 | down to 0.37 | no: helped tuning, hurt held-out hit@1 (33% to 27%) |
+
+Result with both changes, measured end to end:
+
+| Set | hit@1 | hit@3 | hit@10 | MRR | recall |
+|---|---|---|---|---|---|
+| Tuning (34) | 18% → **32%** | 50% → **56%** | 79% → **88%** | 0.38 → **0.49** | 62% → **74%** |
+| Held-out (15) | 33% → **40%** | 40% → **53%** | 73% → **87%** | 0.40 → **0.50** | 60% → **80%** |
+
+No question got worse: 18 better and 16 unchanged on the tuning set, 7 better and 8 unchanged held out. The search asks the store for at least 50 candidates and ranks them, so each file still appears at most once in a full set of results.
+
+What held the baseline back, from the per-question results:
+- Several chunks of one file fill the results (2.6 of 10 on average), so fewer distinct files fit.
+- Test files describe the same behavior in the same words: 30% of retrieved chunks are tests, and they rank above the right source file 39 times.
+- Docstring-only `__init__.py` modules (`"""Indexing subsystem."""`) win "which subsystem owns X" questions.
+- Some expectations are narrow: ownership questions also have good answers in the ADRs, which the benchmarks do not accept. `eval/benchmarks.py` itself appears in results, since it contains the questions. (Left unchanged on purpose: changing the questions would move the yardstick, not the search.)
 
 ---
 

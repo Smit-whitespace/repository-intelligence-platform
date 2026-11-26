@@ -27,14 +27,15 @@ from app.indexing.models import (
 def create_hit(
     chunk_id: str = "chunk-1",
     distance: float = 0.5,
+    path: str | None = None,
 ) -> SearchHit:
-    """Create a sample search hit."""
+    """Create a sample search hit (in its own file unless ``path`` is given)."""
 
     return SearchHit(
         chunk_id=chunk_id,
         content="def main():\n    pass",
         metadata=RepositoryChunkMetadata(
-            relative_path=Path("main.py"),
+            relative_path=Path(path or f"src/{chunk_id}.py"),
             language="python",
             mime_type="text/x-python",
             sha256="abc123",
@@ -168,10 +169,10 @@ class TestSearch:
 
         assert result.results[2].similarity_score == 0.2
 
-    def test_passes_limit_to_store(
+    def test_ranks_from_a_larger_pool_and_returns_at_most_limit(
         self,
     ) -> None:
-        """Search should forward the query limit to the vector store."""
+        """Ranking needs more candidates than it returns."""
 
         service, provider, store = create_service()
 
@@ -182,10 +183,11 @@ class TestSearch:
         ]
 
         store.search.return_value = [
-            create_hit(),
+            create_hit(chunk_id=f"c{i}", distance=i / 10)
+            for i in range(20)
         ]
 
-        service.search(
+        result = service.search(
             make_query(
                 limit=5,
             ),
@@ -193,7 +195,115 @@ class TestSearch:
 
         store.search.assert_called_once()
 
-        assert store.search.call_args[1]["limit"] == 5
+        assert store.search.call_args[1]["limit"] >= 50
+
+        assert len(result.results) == 5
+
+    def test_a_zero_limit_returns_nothing(
+        self,
+    ) -> None:
+        """The ranking loop checked the limit only after adding a result,
+        so a limit of 0 returned the whole candidate pool (Graphify, #10)."""
+
+        service, provider, store = create_service()
+
+        provider.embed.return_value = [
+            EmbeddingVector(
+                values=[1.0, 2.0, 3.0],
+            ),
+        ]
+
+        store.search.return_value = [
+            create_hit(chunk_id=f"c{i}", distance=i / 10)
+            for i in range(5)
+        ]
+
+        result = service.search(
+            make_query(
+                limit=0,
+            ),
+        )
+
+        assert result.results == []
+
+    def test_shows_each_file_once_with_its_best_chunk(
+        self,
+    ) -> None:
+        """Repeated chunks of one file used to fill the results, leaving
+        room for fewer files (2.6 of 10 slots on this repository)."""
+
+        service, provider, store = create_service()
+
+        provider.embed.return_value = [
+            EmbeddingVector(
+                values=[1.0, 2.0, 3.0],
+            ),
+        ]
+
+        store.search.return_value = [
+            create_hit(chunk_id="a-best", distance=0.1, path="app/a.py"),
+            create_hit(chunk_id="a-second", distance=0.2, path="app/a.py"),
+            create_hit(chunk_id="b", distance=0.3, path="app/b.py"),
+        ]
+
+        result = service.search(
+            make_query(),
+        )
+
+        assert [r.chunk_id for r in result.results] == [
+            "a-best",
+            "b",
+        ]
+
+    def test_test_files_rank_below_equally_close_source(
+        self,
+    ) -> None:
+        """Tests describe the same behavior in the same words and used to
+        outrank the code they test."""
+
+        service, provider, store = create_service()
+
+        provider.embed.return_value = [
+            EmbeddingVector(
+                values=[1.0, 2.0, 3.0],
+            ),
+        ]
+
+        store.search.return_value = [
+            create_hit(chunk_id="test", distance=0.50, path="backend/tests/test_pricing.py"),
+            create_hit(chunk_id="spec", distance=0.51, path="frontend/src/a.test.ts"),
+            create_hit(chunk_id="source", distance=0.55, path="app/pricing.py"),
+        ]
+
+        result = service.search(
+            make_query(),
+        )
+
+        assert result.results[0].chunk_id == "source"
+
+    def test_a_much_closer_test_file_still_ranks_first(
+        self,
+    ) -> None:
+        """The penalty demotes tests; it does not hide them."""
+
+        service, provider, store = create_service()
+
+        provider.embed.return_value = [
+            EmbeddingVector(
+                values=[1.0, 2.0, 3.0],
+            ),
+        ]
+
+        store.search.return_value = [
+            create_hit(chunk_id="test", distance=0.10, path="tests/test_pricing.py"),
+            create_hit(chunk_id="source", distance=0.90, path="app/pricing.py"),
+        ]
+
+        result = service.search(
+            make_query(),
+        )
+
+        assert result.results[0].chunk_id == "test"
 
     def test_passes_where_filter_when_root_directory_set(
         self,

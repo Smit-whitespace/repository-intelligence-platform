@@ -1,6 +1,7 @@
 """Semantic retrieval service."""
 
 import logging
+import re
 
 from app.indexing.exceptions import IndexIncompatibleError
 from app.indexing.providers import EmbeddingProvider
@@ -17,6 +18,46 @@ from app.indexing.stores import (
 )
 
 logger = logging.getLogger(__name__)
+
+TEST_FILE_WEIGHT = 0.92
+"""Multiplier on a test file's score. Chosen with ``python -m eval``:
+0.90-0.94 scored the same on both question sets; 0.92 is the middle."""
+
+CANDIDATE_POOL_FACTOR = 5
+
+MIN_CANDIDATE_POOL = 50
+
+MAX_CANDIDATE_POOL = 200
+
+
+def _is_test_path(
+    path: str,
+) -> bool:
+    """Whether a repository path is a test file.
+
+    Matches a ``tests``/``test``/``__tests__`` directory and the usual
+    file names: ``test_*.py``, ``*_test.py``, ``*.test.ts``, ``*.spec.js``.
+    """
+
+    parts = re.split(
+        r"[\\/]",
+        path.lower(),
+    )
+
+    name = parts[-1]
+
+    return (
+        any(
+            part in {"tests", "test", "__tests__"}
+            for part in parts[:-1]
+        )
+        or name.startswith("test_")
+        or re.search(
+            r"(_test\.py|\.(test|spec)\.[cm]?[jt]sx?)$",
+            name,
+        )
+        is not None
+    )
 
 
 class RetrievalService:
@@ -75,9 +116,17 @@ class RetrievalService:
 
         where = {"root_directory": query.root_directory}
 
+        # Rank from a larger pool than is returned, so that showing each
+        # file once still fills the results.
         search_hits = vector_store.search(
             query_embedding=query_embedding,
-            limit=query.limit,
+            limit=min(
+                max(
+                    query.limit * CANDIDATE_POOL_FACTOR,
+                    MIN_CANDIDATE_POOL,
+                ),
+                MAX_CANDIDATE_POOL,
+            ),
             where=where,
         )
 
@@ -85,25 +134,86 @@ class RetrievalService:
             search_hits,
         )
 
-        search_results = [
-            SearchResult(
-                chunk_id=hit.chunk_id,
-                content=hit.content,
-                metadata=hit.metadata,
-                boundary=hit.boundary,
-                similarity_score=(
+        return SearchResponse(
+            query=query.query,
+            results=self._rank(
+                search_hits,
+                limit=query.limit,
+            ),
+        )
+
+    def _rank(
+        self,
+        hits: list[SearchHit],
+        limit: int,
+    ) -> list[SearchResult]:
+        """Order hits for people and agents, best first.
+
+        Measured with ``python -m eval`` on this repository (tuning set
+        and a held-out set; see docs/architecture/backend/retrieval.md):
+
+        - Test files score ``TEST_FILE_WEIGHT`` times their similarity.
+          They describe the same behavior in the same words and used to
+          outrank the code they test; a much closer test still wins.
+        - Each file appears once, with its best chunk, so ten results
+          show ten files instead of several chunks of a few.
+        """
+
+        if limit <= 0:
+            return []
+
+        scored = sorted(
+            (
+                (
                     self._normalize_score(
                         hit.vector_score,
                     )
+                    * (
+                        TEST_FILE_WEIGHT
+                        if _is_test_path(
+                            str(
+                                hit.metadata.relative_path,
+                            ),
+                        )
+                        else 1.0
+                    ),
+                    hit,
+                )
+                for hit in hits
+            ),
+            key=lambda pair: -pair[0],
+        )
+
+        results: list[SearchResult] = []
+
+        seen_files: set[str] = set()
+
+        for score, hit in scored:
+            path = str(
+                hit.metadata.relative_path,
+            )
+
+            if path in seen_files:
+                continue
+
+            seen_files.add(
+                path,
+            )
+
+            results.append(
+                SearchResult(
+                    chunk_id=hit.chunk_id,
+                    content=hit.content,
+                    metadata=hit.metadata,
+                    boundary=hit.boundary,
+                    similarity_score=score,
                 ),
             )
-            for hit in search_hits
-        ]
 
-        return SearchResponse(
-            query=query.query,
-            results=search_results,
-        )
+            if len(results) == limit:
+                break
+
+        return results
 
     def _ensure_compatible(
         self,

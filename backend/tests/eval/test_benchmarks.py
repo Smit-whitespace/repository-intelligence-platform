@@ -1,6 +1,9 @@
 """Tests for golden repository benchmarks."""
 
+from pathlib import Path
+
 from eval.benchmarks import BENCHMARKS
+from eval.holdout import HOLDOUT
 from eval.models import RetrievalTestCase
 
 
@@ -8,9 +11,9 @@ class TestBenchmarks:
     """Tests for the golden benchmark suite."""
 
     def test_benchmark_count(self) -> None:
-        """Should have between 10 and 20 benchmarks."""
+        """Enough cases to be meaningful, few enough to run in a minute."""
 
-        assert 10 <= len(BENCHMARKS) <= 20
+        assert 10 <= len(BENCHMARKS) <= 50
 
     def test_all_benchmarks_are_valid_test_cases(self) -> None:
         """Every benchmark should be a valid RetrievalTestCase."""
@@ -34,11 +37,40 @@ class TestBenchmarks:
             assert benchmark.expected_file_paths
 
     def test_all_expected_files_exist(self) -> None:
-        """All expected file paths should exist in the repo."""
+        """All expected file paths should exist in the repo.
 
-        for benchmark in BENCHMARKS:
-            for path in benchmark.expected_file_paths:
-                assert path, f"Empty path in benchmark: {benchmark.query}"
+        (It used to check only that paths were non-empty, so a renamed
+        file silently turned a benchmark into one that can never pass.)
+        """
+
+        repository_root = Path(__file__).resolve().parents[3]
+
+        missing = [
+            path
+            for benchmark in BENCHMARKS
+            for path in benchmark.expected_file_paths
+            if not (repository_root / path).is_file()
+        ]
+
+        assert not missing, f"Benchmarks expect files that do not exist: {missing}"
+
+    def test_holdout_files_exist_and_questions_differ(self) -> None:
+        """The held-out set is real and does not repeat tuning questions."""
+
+        repository_root = Path(__file__).resolve().parents[3]
+
+        missing = [
+            path
+            for case in HOLDOUT
+            for path in case.expected_file_paths
+            if not (repository_root / path).is_file()
+        ]
+
+        assert not missing, f"Held-out questions expect missing files: {missing}"
+
+        assert not {case.query for case in HOLDOUT} & {
+            case.query for case in BENCHMARKS
+        }
 
     def test_all_have_expected_concepts(self) -> None:
         """Every benchmark should have expected concepts."""

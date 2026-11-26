@@ -169,7 +169,10 @@ class SemanticHit(BaseModel):
     chunk_type: str
 
     score: float = Field(
-        description="Relative ranking score within this query only.",
+        description=(
+            "Relative ranking score within this query only; test files are "
+            "weighted lower so the code they test ranks first."
+        ),
     )
 
     content: str

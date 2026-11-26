@@ -145,8 +145,10 @@ def make_chunk(
         chunk_id=chunk_id,
         content=f"content of {chunk_id}",
         metadata=RepositoryChunkMetadata(
+            # One file per chunk: search shows each file once, and these
+            # tests are about project isolation, not that.
             relative_path=Path(
-                "file.py",
+                f"{chunk_id}.py",
             ),
             language="python",
             mime_type="text/x-python",

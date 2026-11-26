@@ -1,11 +1,15 @@
 import { Wifi, WifiOff } from "lucide-react";
-import { useSystemStatus } from "@/lib/api/queries";
+import { useBackendHealth, useSystemStatus } from "@/lib/api/queries";
+import { useAuthStore } from "@/stores/authStore";
 import { useProjectStore } from "@/stores/projectStore";
 
 export function StatusBar() {
-  const { data, isError, isLoading } = useSystemStatus();
+  const signedIn = useAuthStore((state) => state.token !== null && !state.rejected);
+  // /health needs no token, so "not signed in" is never shown as "backend down".
+  const health = useBackendHealth();
+  const { data } = useSystemStatus({ enabled: signedIn });
   const activeProject = useProjectStore((state) => state.activeProject);
-  const connected = data?.backend_health === "healthy";
+  const connected = health.data?.status === "healthy";
 
   return (
     <footer className="flex items-center justify-between border-t border-[rgba(255,255,255,0.06)] bg-[#111827] px-4 text-xs text-[#7A8599]">
@@ -16,18 +20,20 @@ export function StatusBar() {
           <WifiOff className="h-3.5 w-3.5 text-[#EF4444]" aria-hidden="true" />
         )}
         <span>
-          {isLoading
+          {health.isLoading
             ? "Checking backend"
             : connected
-              ? "Backend connected"
-              : isError
+              ? signedIn
+                ? "Backend connected"
+                : "Backend connected · not signed in"
+              : health.isError
                 ? "Backend unavailable"
                 : "Backend status unknown"}
         </span>
       </div>
       <span className="min-w-0 truncate">
         {activeProject ? `${activeProject.name} — ` : ""}
-        {data ? `${data.active_provider}: ${data.active_model}` : "No model"}
+        {signedIn && data ? `${data.active_provider}: ${data.active_model}` : "No model"}
       </span>
     </footer>
   );

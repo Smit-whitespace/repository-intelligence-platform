@@ -38,6 +38,8 @@ class EnvironmentSettings(BaseSettings):
     server_allowed_hosts: str = "localhost,127.0.0.1"
     """Comma-separated Host header values the API accepts."""
 
+    server_frontend_url: str = "http://localhost:5173"
+
     logging_level: str = "INFO"
 
     logging_json_logs: bool = False
@@ -55,6 +57,8 @@ class EnvironmentSettings(BaseSettings):
     model_config_path: str = ""
 
     integrity_key_path: str = ""
+
+    api_token_path: str = ""
 
     indexing_chunk_size: int = 512
 
@@ -76,6 +80,7 @@ def get_settings() -> ApplicationSettings:
                 for host in environment.server_allowed_hosts.split(",")
                 if host.strip()
             ],
+            frontend_url=environment.server_frontend_url,
         ),
         logging=LoggingSettings(
             level=environment.logging_level,
@@ -92,6 +97,7 @@ def get_settings() -> ApplicationSettings:
         ),
         security=SecuritySettings(
             integrity_key_path=environment.integrity_key_path,
+            api_token_path=environment.api_token_path,
         ),
         chroma=ChromaSettings(
             collection_name=environment.chroma_collection_name,

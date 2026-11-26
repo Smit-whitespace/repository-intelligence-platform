@@ -34,15 +34,20 @@ class RecordingLogger:
 
         self.events: list[str] = []
 
+        self.fields: dict[str, dict[str, object]] = {}
+
     def info(
         self,
         event: str,
+        **fields: object,
     ) -> None:
         """Record an info event."""
 
         self.events.append(
             event,
         )
+
+        self.fields[event] = fields
 
 
 def test_application_factory_configures_logging(
@@ -109,8 +114,14 @@ def test_application_lifespan_logs_startup_and_shutdown(
 
     assert recording_logger.events == [
         "application_started",
+        "sign_in",
         "application_stopped",
     ]
+
+    # The startup output carries the link that signs the app in.
+    assert "?token=" in str(
+        recording_logger.fields["sign_in"]["open_this_link"],
+    )
 
 
 def test_application_factory_registers_routes_and_openapi() -> None:

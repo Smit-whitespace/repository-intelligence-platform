@@ -97,7 +97,7 @@ RIP is designed around local execution.
 
 - **Local by default** — With the default configuration, repository scanning, retrieval, inference, and editing run locally with Ollama. A hosted provider is used only for the operations you assign to it ([ADR-0018](docs/adr/adr-0018-hosted-model-providers.md)); API keys are read from environment variables and never stored or returned.
 - **No telemetry** — No analytics, crash reporting, or usage tracking is built into RIP, and ChromaDB's telemetry is disabled.
-- **Safe by construction** — Tools only operate on registered project roots, never read secret-like files (`.env`, keys), never write `.git` or RIP's own storage, and the API only accepts requests addressed to `localhost`. RIP signs the proposals, snapshots, and validation commands it stores, so a cloned repository cannot smuggle in its own ([ADR-0019](docs/adr/adr-0019-signed-project-state.md)).
+- **Safe by construction** — Tools only operate on registered project roots, never read secret-like files (`.env`, keys), never write `.git` or RIP's own storage, and the API only accepts requests addressed to `localhost` that carry your per-user API token ([ADR-0020](docs/adr/adr-0020-local-api-token.md)). RIP signs the proposals, snapshots, and validation commands it stores, so a cloned repository cannot smuggle in its own ([ADR-0019](docs/adr/adr-0019-signed-project-state.md)).
 - **Project-local storage** — Indexes, snapshots, and project metadata live inside:
 
 ```text
@@ -169,7 +169,7 @@ cd frontend
 npm run dev
 ```
 
-Open the address shown by the frontend development server.
+Open the **sign-in link** the backend prints when it starts (the `open_this_link=http://localhost:5173/?token=…` line). It signs the app in with your API token, which RIP creates in `~/.local_openclaw/api.token`; you only need to do this once per browser.
 
 > The backend resolves project persistence from the **opened project root** (`<project-root>/.local_openclaw/`), never from the process working directory. The backend can therefore be started from a different directory without changing the persistence identity of the opened project.
 

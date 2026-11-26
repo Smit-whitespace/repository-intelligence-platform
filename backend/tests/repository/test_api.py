@@ -7,6 +7,7 @@ from httpx import ASGITransport
 from httpx import AsyncClient
 
 from app.main import app
+from tests.conftest import TEST_API_TOKEN
 
 
 @pytest.mark.asyncio
@@ -27,6 +28,9 @@ async def test_repository_summary_endpoint(
     async with AsyncClient(
         transport=transport,
         base_url="http://testserver",
+        headers={
+            "Authorization": f"Bearer {TEST_API_TOKEN}",
+        },
     ) as client:
         response = await client.get(
             "/api/v1/repository/index",

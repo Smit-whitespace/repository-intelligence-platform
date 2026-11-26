@@ -10,6 +10,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from app.api import api_router
 from app.core.logging.factory import get_logger
 from app.core.config.settings import settings
+from app.core.security.api_token import api_token_path, sign_in_url
 from app.core.logging.configuration import (
     configure_logging,
 )
@@ -67,6 +68,17 @@ async def lifespan(
 
     logger.info(
         "application_started",
+    )
+
+    # Like Jupyter: the link carries the API token, so opening it once
+    # signs the app in. Anyone who can read this output already runs as
+    # this user and could read the token file.
+    logger.info(
+        "sign_in",
+        open_this_link=sign_in_url(),
+        token_file=str(
+            api_token_path(),
+        ),
     )
 
     yield

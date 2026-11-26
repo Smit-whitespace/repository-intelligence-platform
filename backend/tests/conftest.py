@@ -24,8 +24,49 @@ os.environ["LOC_INTEGRITY_KEY_PATH"] = str(
     _TEST_HOME / "integrity.key",
 )
 
+# The API token (ADR-0020): a known value, so tests can send it.
+TEST_API_TOKEN = "rip-test-api-token"
+
+(_TEST_HOME / "api.token").write_text(
+    TEST_API_TOKEN,
+    encoding="ascii",
+)
+
+os.environ["LOC_API_TOKEN_PATH"] = str(
+    _TEST_HOME / "api.token",
+)
+
 
 import pytest  # noqa: E402
+from starlette.testclient import TestClient  # noqa: E402
+
+_original_test_client_init = TestClient.__init__
+
+
+def _test_client_with_token(
+    self: TestClient,
+    *args: object,
+    headers: dict[str, str] | None = None,
+    **kwargs: object,
+) -> None:
+    """Every test client sends the API token unless a test overrides it.
+
+    Tests of the token itself pass their own Authorization header or
+    remove it from ``client.headers``.
+    """
+
+    _original_test_client_init(
+        self,
+        *args,
+        headers={
+            "Authorization": f"Bearer {TEST_API_TOKEN}",
+            **(headers or {}),
+        },
+        **kwargs,
+    )
+
+
+TestClient.__init__ = _test_client_with_token  # type: ignore[method-assign]
 
 
 @pytest.fixture

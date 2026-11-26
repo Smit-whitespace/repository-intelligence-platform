@@ -201,7 +201,7 @@ The three-phase design (edit → review → apply) separates AI-generated change
 - `edit()` returns AI suggestions; the caller must explicitly call `apply()` to execute them.
 - The legacy `POST /editing/edit` planner is a placeholder (`create file <path>`); use proposals (`POST /editing/proposals/plan`) instead. The legacy `POST /editing/apply` still accepts a client-supplied change set for compatibility.
 - Proposals can create and modify files but not delete or rename them.
-- The REST API has no authentication beyond accepting only `localhost` Host headers. `--editing propose` limits what an agent can do *through MCP*; an agent that also has a shell could call `POST /editing/proposals/{id}/apply` itself.
+- The REST API requires the API token ([ADR-0020](../../adr/adr-0020-local-api-token.md)), but an agent running shell commands as you can read the token file. `--editing propose` therefore limits an agent fully only when its own permission rules or sandbox keep it away from RIP's files and API; see the [MCP server guide](mcp-server.md#keeping-agents-to-what-you-allowed).
 - Validation output is captured whole and then truncated; a command that prints gigabytes still holds them in memory briefly.
 - Paths are validated, then written later. A local process that swaps a parent directory for a junction in between could redirect a write. This needs a concurrent attacker who can already write to the repository.
 - A `.local_openclaw` directory or `project.json` that is a symlink or junction is not treated as a registered project.

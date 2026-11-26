@@ -13,6 +13,13 @@
 
 The backend exposes a REST API through FastAPI. All endpoints are versioned under `/api/v1/` (via router prefix). The API is documented interactively via Swagger at `/docs` when the server is running.
 
+**Authentication.** Every endpoint except `GET /api/v1/health` needs `Authorization: Bearer <token>`, with the token from `~/.local_openclaw/api.token` (created the first time the backend starts). The backend prints a sign-in link for the RIP app at startup. In Swagger, use **Authorize** and paste the token. See [ADR-0020](../adr/adr-0020-local-api-token.md).
+
+```powershell
+$token = Get-Content "$HOME\.local_openclaw\api.token"
+Invoke-RestMethod http://localhost:8000/api/v1/system/version -Headers @{ Authorization = "Bearer $token" }
+```
+
 ---
 
 ## Health
@@ -187,6 +194,7 @@ A missing API key or unusable configuration returns **400** with a message namin
 All endpoints return standardized error responses:
 
 - **400 Bad Request** — the request is well-formed but cannot be processed
+- **401 Unauthorized** — missing or wrong API token (every endpoint except `/health`)
 - **403 Forbidden** — the root is not a registered RIP project
 - **404 Not Found** — resource not found
 - **409 Conflict** — stale edit, unsafe rollback, or incompatible index

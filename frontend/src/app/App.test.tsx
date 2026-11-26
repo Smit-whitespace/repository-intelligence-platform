@@ -1,5 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { queryClient } from "@/lib/api/queryClient";
+import { captureTokenFromUrl, useAuthStore } from "@/stores/authStore";
 import { App } from "./App";
 
 const responses: Record<string, unknown> = {
@@ -55,13 +57,28 @@ const responses: Record<string, unknown> = {
   },
 };
 
+const VALID_TOKEN = "valid-token";
+
 beforeEach(() => {
   window.localStorage.clear();
+  useAuthStore.setState({ token: null, rejected: false });
   vi.stubGlobal(
     "fetch",
-    vi.fn(async (input: RequestInfo | URL) => {
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
       const body = responses[url];
+      const headers = (init?.headers ?? {}) as Record<string, string>;
+
+      // Like the backend: everything but /health needs the token.
+      if (
+        url !== "/api/v1/health" &&
+        headers.Authorization !== `Bearer ${VALID_TOKEN}`
+      ) {
+        return new Response(JSON.stringify({ detail: "Missing or wrong API token." }), {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
 
       if (!body) {
         return new Response(JSON.stringify({ detail: "Not found" }), {
@@ -80,6 +97,9 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  // The query cache is shared by every render; a result cached by one
+  // test would otherwise answer the next test's requests.
+  queryClient.clear();
   window.localStorage.clear();
   window.history.pushState(null, "", "/");
 });
@@ -92,12 +112,58 @@ describe("App", () => {
       screen.getByText("Repository Intelligence Platform"),
     ).toBeInTheDocument();
 
+    // Signed out is not shown as the backend being down.
     await waitFor(() => {
-      expect(screen.getByText("Backend connected")).toBeInTheDocument();
+      expect(
+        screen.getByText("Backend connected · not signed in"),
+      ).toBeInTheDocument();
     });
   });
 
+  it("asks to sign in until it has a token, then shows the app", async () => {
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", { name: "Sign in to RIP" }),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("API token"), {
+      target: { value: VALID_TOKEN },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Sign in" }));
+
+    fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+
+    expect(
+      await screen.findByRole("heading", { name: "Settings" }),
+    ).toBeInTheDocument();
+  });
+
+  it("asks to sign in again when the backend rejects the saved token", async () => {
+    useAuthStore.setState({ token: "old-token" });
+
+    render(<App />);
+
+    fireEvent.click(screen.getByRole("link", { name: "Settings" }));
+
+    expect(
+      await screen.findByText(/did not accept the saved token/),
+    ).toBeInTheDocument();
+  });
+
+  it("stores the token from a sign-in link and removes it from the address bar", () => {
+    window.history.pushState(null, "", "/editing?token=from-link");
+
+    captureTokenFromUrl();
+
+    expect(useAuthStore.getState().token).toBe("from-link");
+    expect(window.location.pathname).toBe("/editing");
+    expect(window.location.search).toBe("");
+  });
+
   it("routes to workspace pages", async () => {
+    useAuthStore.setState({ token: VALID_TOKEN });
+
     render(<App />);
 
     fireEvent.click(screen.getByRole("link", { name: "Settings" }));
@@ -105,7 +171,8 @@ describe("App", () => {
     expect(
       await screen.findByRole("heading", { name: "Settings" }),
     ).toBeInTheDocument();
-    expect(await screen.findByText("qwen3.6")).toBeInTheDocument();
+    // "qwen3.6" is both a picker option and a table cell; check the table.
+    expect(await screen.findByRole("cell", { name: "qwen3.6" })).toBeInTheDocument();
 
     // The effective-model table resolves operations to models.
     expect(await screen.findByText("nomic-embed-text")).toBeInTheDocument();

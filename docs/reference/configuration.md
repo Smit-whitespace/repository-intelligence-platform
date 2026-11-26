@@ -28,6 +28,8 @@ Configuration is managed by `app/core/config/models.py` (`ApplicationSettings` a
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `LOC_INTEGRITY_KEY_PATH` | `str` | `~/.local_openclaw/integrity.key` | Key that signs proposals, snapshots and validation commands ([ADR-0019](../adr/adr-0019-signed-project-state.md)). Created on first use. |
+| `LOC_API_TOKEN_PATH` | `str` | `~/.local_openclaw/api.token` | Token every REST request except `/health` must send as `Authorization: Bearer <token>` ([ADR-0020](../adr/adr-0020-local-api-token.md)). Created on first use; delete it to issue a new one. |
+| `LOC_SERVER_FRONTEND_URL` | `str` | `http://localhost:5173` | Base of the sign-in link the backend prints at startup. |
 
 ### Frontend
 

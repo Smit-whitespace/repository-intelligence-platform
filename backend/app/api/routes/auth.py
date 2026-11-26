@@ -19,6 +19,16 @@ class SignInRequest(BaseModel):
         max_length=200,
     )
 
+    verifier: str = Field(
+        min_length=16,
+        max_length=200,
+        description=(
+            "A random value the app makes and keeps until sign-in succeeds. "
+            "Retrying with the same verifier is allowed until the code "
+            "expires; any other verifier is refused once the code is used."
+        ),
+    )
+
 
 class SignInResponse(BaseModel):
     """The API token to send as ``Authorization: Bearer <token>``."""
@@ -32,8 +42,9 @@ class SignInResponse(BaseModel):
     operation_id="signIn",
     summary="Exchange a sign-in code for the API token",
     description=(
-        "Open endpoint: the code is the credential. Each code works once and "
-        "for ten minutes; restart the backend for a new link, or paste the "
+        "Open endpoint: the code is the credential. Each code works for one "
+        "app (identified by its verifier, so that app may retry) and for "
+        "ten minutes; restart the backend for a new link, or paste the "
         "token from ~/.local_openclaw/api.token."
     ),
     responses={
@@ -49,6 +60,7 @@ def sign_in(
 
     token = redeem_sign_in_code(
         request.code,
+        request.verifier,
     )
 
     if token is None:

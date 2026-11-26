@@ -230,25 +230,51 @@ def test_the_configured_origin_is_written_the_way_browsers_send_it(
     assert main.allowed_browser_origins()[-1] == expected_origin
 
 
-def test_a_sign_in_code_works_once() -> None:
+VERIFIER = "app-made-verifier-0123456789"
+
+
+def _sign_in(
+    client: TestClient,
+    code: str,
+    verifier: str = VERIFIER,
+):
+    return client.post(
+        "/api/v1/auth/sign-in",
+        json={
+            "code": code,
+            "verifier": verifier,
+        },
+    )
+
+
+def test_a_used_code_works_only_for_the_app_that_used_it() -> None:
+    """Single use against everyone else; a retry by the same app works.
+
+    Graphify on #7: when the app's request timed out after the backend
+    had already redeemed the code, the token was lost and the link was
+    spent, so retrying it was refused.
+    """
+
     client = _client_without_token()
 
     code = _code_from(
         sign_in_url(),
     )
 
-    first = client.post(
-        "/api/v1/auth/sign-in",
-        json={
-            "code": code,
-        },
+    first = _sign_in(
+        client,
+        code,
     )
 
-    second = client.post(
-        "/api/v1/auth/sign-in",
-        json={
-            "code": code,
-        },
+    retry = _sign_in(
+        client,
+        code,
+    )
+
+    someone_else = _sign_in(
+        client,
+        code,
+        verifier="another-verifier-0123456789",
     )
 
     assert first.status_code == 200
@@ -257,9 +283,31 @@ def test_a_sign_in_code_works_once() -> None:
         "token": TEST_API_TOKEN,
     }
 
-    assert second.status_code == 401
+    assert retry.status_code == 200
 
-    assert "already used" in second.json()["detail"]
+    assert retry.json() == first.json()
+
+    assert someone_else.status_code == 401
+
+    assert "already used" in someone_else.json()["detail"]
+
+
+def test_a_sign_in_needs_a_verifier() -> None:
+    code = _code_from(
+        sign_in_url(),
+    )
+
+    response = _client_without_token().post(
+        "/api/v1/auth/sign-in",
+        json={
+            "code": code,
+        },
+    )
+
+    assert response.status_code == 422
+
+    # The code was not spent by the malformed request.
+    assert redeem_sign_in_code(code, VERIFIER) == TEST_API_TOKEN
 
 
 def test_a_new_link_replaces_the_previous_one() -> None:
@@ -269,17 +317,19 @@ def test_a_new_link_replaces_the_previous_one() -> None:
 
     sign_in_url()
 
-    assert redeem_sign_in_code(old) is None
+    assert redeem_sign_in_code(old, VERIFIER) is None
 
 
-def test_an_expired_or_wrong_code_is_refused(
+def test_an_expired_or_wrong_code_is_refused_even_on_retry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     code = _code_from(
         sign_in_url(),
     )
 
-    assert redeem_sign_in_code("not-the-code") is None
+    assert redeem_sign_in_code("not-the-code", VERIFIER) is None
+
+    assert redeem_sign_in_code(code, VERIFIER) == TEST_API_TOKEN
 
     now = time.monotonic()
 
@@ -289,7 +339,7 @@ def test_an_expired_or_wrong_code_is_refused(
         lambda: now + SIGN_IN_CODE_TTL_SECONDS + 1,
     )
 
-    assert redeem_sign_in_code(code) is None
+    assert redeem_sign_in_code(code, VERIFIER) is None
 
 
 def test_secret_file_is_created_once_and_reused(

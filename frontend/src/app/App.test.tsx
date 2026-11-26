@@ -61,7 +61,8 @@ const VALID_TOKEN = "valid-token";
 
 beforeEach(() => {
   window.localStorage.clear();
-  useAuthStore.setState({ token: null, rejected: false, linkError: null });
+  useAuthStore.setState({ token: null, rejected: false, linkError: null, canRetry: false });
+  window.sessionStorage.clear();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -165,7 +166,10 @@ describe("App", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/auth/sign-in",
-      expect.objectContaining({ method: "POST", body: JSON.stringify({ code: "one-time-code" }) }),
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining('"code":"one-time-code"'),
+      }),
     );
     expect(useAuthStore.getState().token).toBe(VALID_TOKEN);
     expect(window.location.pathname).toBe("/editing");

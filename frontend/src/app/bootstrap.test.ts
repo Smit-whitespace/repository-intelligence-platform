@@ -4,7 +4,8 @@ import { bootstrap } from "./bootstrap";
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useAuthStore.setState({ token: null, rejected: false, linkError: null });
+  useAuthStore.setState({ token: null, rejected: false, linkError: null, canRetry: false });
+  window.sessionStorage.clear();
   window.history.pushState(null, "", "/");
 });
 

@@ -81,7 +81,7 @@ async def lifespan(
     logger.info(
         "sign_in",
         open_this_link=sign_in_url(),
-        link_works=f"once, for {SIGN_IN_CODE_TTL_SECONDS // 60} minutes",
+        link_works=f"in one browser tab, for {SIGN_IN_CODE_TTL_SECONDS // 60} minutes",
         token_file=str(
             api_token_path(),
         ),

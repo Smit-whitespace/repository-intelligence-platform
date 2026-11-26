@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from eval.benchmarks import BENCHMARKS
+from eval.holdout import HOLDOUT
 from eval.models import RetrievalTestCase
 
 
@@ -52,6 +53,24 @@ class TestBenchmarks:
         ]
 
         assert not missing, f"Benchmarks expect files that do not exist: {missing}"
+
+    def test_holdout_files_exist_and_questions_differ(self) -> None:
+        """The held-out set is real and does not repeat tuning questions."""
+
+        repository_root = Path(__file__).resolve().parents[3]
+
+        missing = [
+            path
+            for case in HOLDOUT
+            for path in case.expected_file_paths
+            if not (repository_root / path).is_file()
+        ]
+
+        assert not missing, f"Held-out questions expect missing files: {missing}"
+
+        assert not {case.query for case in HOLDOUT} & {
+            case.query for case in BENCHMARKS
+        }
 
     def test_all_have_expected_concepts(self) -> None:
         """Every benchmark should have expected concepts."""

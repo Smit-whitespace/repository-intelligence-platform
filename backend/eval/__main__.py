@@ -15,6 +15,7 @@ from pathlib import Path
 
 from app.dependencies.providers import get_retrieval_service
 from eval.benchmarks import BENCHMARKS
+from eval.holdout import HOLDOUT
 from eval.models import RetrievalEvalReport
 from eval.runner import RetrievalEvaluator
 
@@ -69,6 +70,13 @@ def main() -> None:
     )
 
     parser.add_argument(
+        "--set",
+        choices=["tuning", "holdout"],
+        default="tuning",
+        help="Which questions: the tuning set, or the held-out set never used for tuning.",
+    )
+
+    parser.add_argument(
         "--json",
         type=Path,
         help="Also write the full report, with every retrieved path, here.",
@@ -80,7 +88,7 @@ def main() -> None:
         retrieval_service=get_retrieval_service(),
         root_directory=str(args.root.resolve()),
     ).evaluate(
-        BENCHMARKS,
+        HOLDOUT if args.set == "holdout" else BENCHMARKS,
         limit=args.limit,
     )
 

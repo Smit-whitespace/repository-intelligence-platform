@@ -240,7 +240,9 @@ function EffectiveModelsPanel() {
           {configuration.data.saved
             ? "Configuration file: "
             : "Using defaults from LOC_OLLAMA_* settings. Save a configuration to "}
-          <span className="break-anywhere font-mono">{configuration.data.path}</span>
+          <span className="break-anywhere font-mono" title={configuration.data.path}>
+            {configuration.data.display_path ?? configuration.data.path}
+          </span>
           {configuration.data.saved ? "" : " to add hosted providers or overrides."}{" "}
           Changing the embedding model requires reindexing.
         </p>

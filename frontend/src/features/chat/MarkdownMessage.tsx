@@ -46,20 +46,46 @@ function TextBlock({ content }: { content: string }) {
     return null;
   }
 
-  return (
-    <div className="space-y-2 leading-7">
-      {lines.map((line, index) =>
-        line.startsWith("- ") ? (
-          <p key={`${line}-${index}`} className="pl-4">
-            <span className="text-[#7A8599]">- </span>
-            {renderInline(line.slice(2))}
-          </p>
-        ) : (
-          <p key={`${line}-${index}`}>{renderInline(line)}</p>
-        ),
-      )}
-    </div>
-  );
+  return <div className="space-y-2 leading-7">{lines.map(renderLine)}</div>;
+}
+
+/** One line of a text block: a heading, a list item or a paragraph. */
+function renderLine(line: string, index: number) {
+  const key = `${line}-${index}`;
+
+  const heading = /^#{1,6}\s+(.*)$/.exec(line);
+
+  if (heading) {
+    return (
+      <h4 key={key} className="pt-1 font-semibold text-[#F8FAFC]">
+        {renderInline(heading[1])}
+      </h4>
+    );
+  }
+
+  const numbered = /^(\d+)[.)]\s+(.*)$/.exec(line);
+
+  if (numbered) {
+    return (
+      <p key={key} className="flex gap-2 pl-1">
+        <span className="shrink-0 text-[#7A8599]">{numbered[1]}.</span>
+        <span className="min-w-0">{renderInline(numbered[2])}</span>
+      </p>
+    );
+  }
+
+  const bullet = /^[-*+]\s+(.*)$/.exec(line);
+
+  if (bullet) {
+    return (
+      <p key={key} className="flex gap-2 pl-1">
+        <span className="shrink-0 text-[#7A8599]">•</span>
+        <span className="min-w-0">{renderInline(bullet[1])}</span>
+      </p>
+    );
+  }
+
+  return <p key={key}>{renderInline(line)}</p>;
 }
 
 function CodeBlock({ code, language }: { code: string; language: string }) {
@@ -127,11 +153,12 @@ function parseMarkdown(content: string): Segment[] {
       ];
 }
 
+/** Inline code first (its contents stay literal), then bold and italic. */
 function renderInline(line: string) {
   const parts = line.split(/(`[^`]+`)/g);
 
   return parts.map((part, index) =>
-    part.startsWith("`") && part.endsWith("`") ? (
+    part.startsWith("`") && part.endsWith("`") && part.length > 1 ? (
       <code
         key={`${part}-${index}`}
         className="rounded bg-[rgba(79,140,255,0.1)] px-1.5 py-0.5 text-xs font-mono text-[#22D3EE]"
@@ -139,9 +166,33 @@ function renderInline(line: string) {
         {part.slice(1, -1)}
       </code>
     ) : (
-      <span key={`${part}-${index}`}>{part}</span>
+      <span key={`${part}-${index}`}>{renderEmphasis(part)}</span>
     ),
   );
+}
+
+/**
+ * `**bold**` and `*italic*` (or `__bold__` / `_italic_`). The marker must
+ * hug the text, so arithmetic such as "2 * 3 = 6" stays as written.
+ */
+function renderEmphasis(text: string) {
+  const parts = text.split(/(\*\*[^*\s](?:[^*]*[^*\s])?\*\*|__[^_\s](?:[^_]*[^_\s])?__|\*[^*\s](?:[^*]*[^*\s])?\*|\b_[^_\s](?:[^_]*[^_\s])?_\b)/g);
+
+  return parts.map((part, index) => {
+    if (/^(\*\*|__).+\1$/.test(part)) {
+      return (
+        <strong key={index} className="font-semibold text-[#F8FAFC]">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+
+    if (/^([*_]).+\1$/.test(part) && part.length > 2) {
+      return <em key={index}>{part.slice(1, -1)}</em>;
+    }
+
+    return part;
+  });
 }
 
 function highlightCode(code: string) {

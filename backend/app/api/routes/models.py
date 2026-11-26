@@ -13,6 +13,7 @@ dependency providers; these routes only translate requests.
 """
 
 import os
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
@@ -119,6 +120,13 @@ class ModelConfigurationView(BaseModel):
         description="Configuration file location.",
     )
 
+    display_path: str = Field(
+        description=(
+            "The same location with the home folder written as ~, for "
+            "showing on screen without revealing the user name."
+        ),
+    )
+
     saved: bool = Field(
         description="False while the defaults from LOC_OLLAMA_* are in use.",
     )
@@ -223,6 +231,26 @@ def active_chat_model() -> EffectiveModel:
     )
 
 
+def _home_relative(
+    path: Path,
+) -> str:
+    """``path`` with the home folder written as ``~`` (if it is inside it).
+
+    Settings show this path on screen; the home folder contains the user
+    name, which does not belong in screenshots or shared screens.
+    """
+
+    try:
+        relative = path.expanduser().resolve().relative_to(
+            Path.home().resolve(),
+        )
+
+    except (ValueError, RuntimeError, OSError):
+        return str(path)
+
+    return f"~/{relative.as_posix()}" if relative.parts else "~"
+
+
 def _configuration_view() -> ModelConfigurationView:
     store = providers.get_model_config_store()
 
@@ -231,6 +259,9 @@ def _configuration_view() -> ModelConfigurationView:
     return ModelConfigurationView(
         configuration=configuration,
         path=str(
+            store.path,
+        ),
+        display_path=_home_relative(
             store.path,
         ),
         saved=store.exists(),

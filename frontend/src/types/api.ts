@@ -56,6 +56,8 @@ export type EffectiveModelsResponse = {
 
 export type ModelConfigurationView = {
   path: string;
+  /** The path with the home folder written as ~, for showing on screen. */
+  display_path?: string;
   saved: boolean;
   api_keys_present: Record<string, boolean>;
 };

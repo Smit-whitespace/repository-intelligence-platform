@@ -1,6 +1,8 @@
 """Typed configuration model definitions."""
 
-from pydantic import BaseModel, Field
+from urllib.parse import urlsplit
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class ServerSettings(BaseModel):
@@ -24,6 +26,29 @@ class ServerSettings(BaseModel):
 
     frontend_url: str = "http://localhost:5173"
     """Where the RIP app runs; used for the sign-in link printed at startup."""
+
+    @field_validator(
+        "frontend_url",
+    )
+    @classmethod
+    def _require_http_url(
+        cls,
+        value: str,
+    ) -> str:
+        # Refused at startup instead of silently dropped: without a scheme
+        # the sign-in link is not clickable, and the origin cannot be
+        # allowed for browser requests.
+        url = urlsplit(
+            value,
+        )
+
+        if url.scheme.lower() not in {"http", "https"} or not url.hostname:
+            raise ValueError(
+                "LOC_SERVER_FRONTEND_URL must start with http:// or https:// "
+                f"and name a host, for example http://localhost:5173 (got {value!r}).",
+            )
+
+        return value
 
 
 class LoggingSettings(BaseModel):

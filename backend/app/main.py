@@ -103,24 +103,59 @@ def allowed_browser_origins() -> list[str]:
     this list is not consulted.)
     """
 
-    configured = urlsplit(
-        settings.server.frontend_url,
-    )
-
     origins = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
 
-    if configured.scheme and configured.netloc:
-        origin = f"{configured.scheme}://{configured.netloc}"
+    origin = _browser_origin(
+        settings.server.frontend_url,
+    )
 
-        if origin not in origins:
-            origins.append(
-                origin,
-            )
+    if origin is not None and origin not in origins:
+        origins.append(
+            origin,
+        )
 
     return origins
+
+
+_DEFAULT_PORTS = {
+    "http": 80,
+    "https": 443,
+}
+
+
+def _browser_origin(
+    url: str,
+) -> str | None:
+    """The origin of ``url`` written the way a browser sends ``Origin``.
+
+    Browsers send a lowercase scheme and host, omit the scheme's default
+    port, and never include user info, so an origin typed as
+    ``HTTP://LocalHost:80`` must become ``http://localhost`` to match.
+    """
+
+    parts = urlsplit(
+        url,
+    )
+
+    scheme = parts.scheme.lower()
+
+    host = parts.hostname  # lowercased, without user info or brackets
+
+    if scheme not in _DEFAULT_PORTS or not host:
+        return None
+
+    if ":" in host:
+        host = f"[{host}]"  # IPv6 literal
+
+    port = parts.port
+
+    if port is None or port == _DEFAULT_PORTS[scheme]:
+        return f"{scheme}://{host}"
+
+    return f"{scheme}://{host}:{port}"
 
 
 def create_application() -> FastAPI:

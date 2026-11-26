@@ -173,6 +173,61 @@ def test_the_configured_frontend_may_call_the_api(
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
 
 
+@pytest.mark.parametrize(
+    "frontend_url",
+    [
+        "localhost:3000",
+        "//localhost:3000",
+        "ftp://localhost:3000",
+        "http://",
+    ],
+)
+def test_a_frontend_url_without_http_is_refused_at_startup(
+    frontend_url: str,
+) -> None:
+    """It was silently left out of the allowed origins (Graphify on #6)."""
+
+    from pydantic import ValidationError
+
+    from app.core.config.models import ServerSettings
+
+    with pytest.raises(
+        ValidationError,
+        match="must start with http:// or https://",
+    ):
+        ServerSettings(
+            frontend_url=frontend_url,
+        )
+
+
+@pytest.mark.parametrize(
+    ("frontend_url", "expected_origin"),
+    [
+        ("HTTP://LocalHost:80/rip", "http://localhost"),
+        ("https://RIP.example.test:443", "https://rip.example.test"),
+        ("http://user:secret@localhost:3000/", "http://localhost:3000"),
+        ("http://[::1]:3000", "http://[::1]:3000"),
+    ],
+)
+def test_the_configured_origin_is_written_the_way_browsers_send_it(
+    monkeypatch: pytest.MonkeyPatch,
+    frontend_url: str,
+    expected_origin: str,
+) -> None:
+    """Browsers send a lowercase host, no default port and no userinfo,
+    so the allow-list entry must too (Graphify on #6)."""
+
+    from app import main
+
+    monkeypatch.setattr(
+        main.settings.server,
+        "frontend_url",
+        frontend_url,
+    )
+
+    assert main.allowed_browser_origins()[-1] == expected_origin
+
+
 def test_a_sign_in_code_works_once() -> None:
     client = _client_without_token()
 

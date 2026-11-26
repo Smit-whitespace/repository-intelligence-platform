@@ -196,7 +196,15 @@ The repository contains detailed architecture, development, reference, and proje
 
 ## 📸 Screenshots
 
-*Screenshots will be added as the frontend stabilizes.*
+![RIP answering a repository question, then applying a reviewed edit with tests passing](docs/images/demo.gif)
+
+*Ask about the code, review a proposed change, apply it with validation. ([MP4](docs/images/demo.mp4))*
+
+| Repository-aware chat | Reviewable editing |
+|---|---|
+| ![Chat answer citing functions and files](docs/images/chat.png) | ![A pending edit proposal with its diff](docs/images/editing.png) |
+| **Configurable models** | **Repository overview** |
+| ![Effective model per operation, with thinking off for chat](docs/images/settings.png) | ![Languages, largest and recently modified files](docs/images/repository.png) |
 
 ---
 

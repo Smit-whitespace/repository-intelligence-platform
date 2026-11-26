@@ -178,7 +178,7 @@ export function ChatPage() {
         <label className="sr-only" htmlFor="chatQuery">
           Chat query
         </label>
-        <div className="relative rounded-[var(--radius)] border border-[rgba(255,255,255,0.1)] bg-[#111827] transition-colors focus-within:border-[#4F8CFF]/50">
+        <div className="relative rounded-[var(--radius)] border border-[rgba(255,255,255,0.1)] bg-[#111827] transition focus-within:border-[#4F8CFF]/60 focus-within:ring-2 focus-within:ring-[#4F8CFF]/25">
           <textarea
             ref={inputRef}
             id="chatQuery"

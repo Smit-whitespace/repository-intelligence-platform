@@ -344,6 +344,14 @@ class RepositoryWorkspace:
             lines,
         )
 
+        # Starting past the end used to return empty content with an
+        # end_line before start_line, which reads like a valid range.
+        if start_line > max(total_lines, 1):
+            raise WorkspaceError(
+                f"start_line {start_line} is past the end: {path} has "
+                f"{total_lines} lines.",
+            )
+
         requested_end = (
             total_lines
             if end_line is None
@@ -520,6 +528,11 @@ class RepositoryWorkspace:
 
         files_searched = 0
 
+        # Lines longer than MAX_SCANNED_LINE_LENGTH are searched only in
+        # their first part (it bounds regex cost). A match past it would
+        # otherwise be missed silently, so these are reported.
+        partly_searched: list[str] = []
+
         files = self._iter_text_files(
             path_glob=path_glob,
         )
@@ -576,7 +589,22 @@ class RepositoryWorkspace:
                     )
 
                 if match is None:
+                    if len(line) > self.MAX_SCANNED_LINE_LENGTH:
+                        partly_searched.append(
+                            f"{relative_path}:{line_number}",
+                        )
+
                     continue
+
+                # Truncated only when a match beyond the limit exists, so
+                # exactly `limit` matches is a complete result.
+                if len(matches) >= limit:
+                    return TextSearchResult(
+                        matches=matches,
+                        files_searched=files_searched,
+                        truncated=True,
+                        truncation_reason=f"Stopped at the limit of {limit} matches.",
+                    )
 
                 matches.append(
                     TextMatch(
@@ -590,13 +618,22 @@ class RepositoryWorkspace:
                     ),
                 )
 
-                if len(matches) >= limit:
-                    return TextSearchResult(
-                        matches=matches,
-                        files_searched=files_searched,
-                        truncated=True,
-                        truncation_reason=f"Stopped at the limit of {limit} matches.",
-                    )
+        if partly_searched:
+            examples = ", ".join(
+                partly_searched[:5],
+            )
+
+            return TextSearchResult(
+                matches=matches,
+                files_searched=files_searched,
+                truncated=True,
+                truncation_reason=(
+                    f"{len(partly_searched)} line(s) longer than "
+                    f"{self.MAX_SCANNED_LINE_LENGTH:,} characters were searched "
+                    f"only in their first {self.MAX_SCANNED_LINE_LENGTH:,} "
+                    f"characters ({examples}); read them with read_file."
+                ),
+            )
 
         return TextSearchResult(
             matches=matches,

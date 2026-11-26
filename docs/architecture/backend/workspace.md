@@ -77,9 +77,9 @@ Routes are thin adapters: they translate query parameters and nothing else. Vali
 
 | Tool | Limits |
 |------|--------|
-| `read_file` | 1 MB per file, 2,000 lines per call, `next_start_line` to resume |
+| `read_file` | 1 MB per file, 2,000 lines per call, `next_start_line` to resume; a `start_line` past the end is an error that gives the file's length |
 | `list_tree` | depth 1–20, page size 1–2,000, `offset` pagination |
-| `search_text` | 1–500 matches, 10 s time budget that also bounds each single regex match, lines cut to 10,000 characters before matching, 300-character excerpts |
+| `search_text` | 1–500 matches (truncated only when more exist), 10 s time budget that also bounds each single regex match, lines cut to 10,000 characters before matching (a longer line without a match in that part makes the result truncated and is named in the reason), 300-character excerpts |
 | `find_symbols` | 1–500 definitions |
 | `search_semantic` | 1–50 chunks |
 

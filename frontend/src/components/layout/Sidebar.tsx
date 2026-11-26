@@ -77,7 +77,7 @@ export function Sidebar() {
           className="flex items-center gap-2 rounded-[8px] px-3 py-2 text-xs text-[#7A8599] transition hover:bg-[rgba(255,255,255,0.04)] hover:text-[#F8FAFC]"
         >
           <Code2 className="h-3.5 w-3.5" />
-          v0.1.0
+          v{__APP_VERSION__}
         </a>
       </div>
     </aside>

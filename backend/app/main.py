@@ -11,6 +11,7 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from app.api import api_router
 from app.core.logging.factory import get_logger
 from app.core.config.settings import settings
+from app.core.version import APPLICATION_VERSION
 from app.core.security.api_token import (
     SIGN_IN_CODE_TTL_SECONDS,
     api_token_path,
@@ -168,7 +169,7 @@ def create_application() -> FastAPI:
 
     application = FastAPI(
         title="Repository Intelligence Platform (RIP)",
-        version="0.1.0",
+        version=APPLICATION_VERSION,
         description=(
             "Repository Intelligence Platform (RIP) backend API for "
             "repository-aware coding assistance."

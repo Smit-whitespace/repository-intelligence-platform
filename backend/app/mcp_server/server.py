@@ -19,6 +19,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
+from app.core.version import APPLICATION_VERSION
 from app.editing.exceptions import EditingError
 from app.editing.proposal_service import ProposalService
 from app.editing.proposals import (
@@ -49,7 +50,7 @@ from app.workspace.service import (
 
 SERVER_NAME = "rip"
 
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = APPLICATION_VERSION
 
 INSTRUCTIONS = """\
 Repository Intelligence Platform (RIP): read-only tools for one repository.

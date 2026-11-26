@@ -11,9 +11,9 @@ from app.api.routes.models import (
     _installed_models,
     active_chat_model,
 )
+from app.core.version import APPLICATION_VERSION
 
 APPLICATION_NAME = "Repository Intelligence Platform (RIP)"
-APPLICATION_VERSION = "0.1.0"
 API_VERSION = "v1"
 
 router = APIRouter(

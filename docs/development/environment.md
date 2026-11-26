@@ -76,5 +76,5 @@ npm run dev
 # Backend health check (API is versioned under /api/v1)
 curl http://localhost:8000/api/v1/health
 
-# Expected: {"status":"healthy","application":"Repository Intelligence Platform (RIP)","version":"0.1.0"}
+# Expected: {"status":"healthy","application":"Repository Intelligence Platform (RIP)","version":"1.0.0"}
 ```

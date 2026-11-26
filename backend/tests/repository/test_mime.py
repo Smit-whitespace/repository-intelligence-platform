@@ -106,7 +106,10 @@ class TestUnknownExtension:
     """Extensions unknown to both maps should return None."""
 
     def test_unknown_extension_returns_none(self) -> None:
-        path = Path("data.xyz")
+        # The fallback reads the OS MIME table, which differs by platform
+        # (Linux maps .xyz to chemical/x-xyz), so use an extension no
+        # table defines.
+        path = Path("data.rip-unknown-extension")
         result = detect_mime_type(path)
         assert result is None
 

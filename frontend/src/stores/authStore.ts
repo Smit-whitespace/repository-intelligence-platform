@@ -1,6 +1,35 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { config } from "@/lib/config/env";
+
+/**
+ * Remembering the token is a convenience. When the browser blocks or fills
+ * storage, writes are dropped and the token lives only in memory for this
+ * session, instead of an exception breaking sign-in.
+ */
+const bestEffortLocalStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      return window.localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    try {
+      window.localStorage.setItem(name, value);
+    } catch {
+      // Not remembered across reloads; signing in still works.
+    }
+  },
+  removeItem: (name) => {
+    try {
+      window.localStorage.removeItem(name);
+    } catch {
+      // Nothing stored to remove.
+    }
+  },
+};
 
 /**
  * The API token (ADR-0020). The backend prints a sign-in link with a
@@ -14,6 +43,8 @@ type AuthState = {
   rejected: boolean;
   /** Why the last sign-in link did not work, to show on the sign-in screen. */
   linkError: string | null;
+  /** The last sign-in failed in a way a retry of the same link can fix. */
+  canRetry: boolean;
   setToken: (token: string) => void;
   markRejected: () => void;
   setLinkError: (message: string | null) => void;
@@ -25,12 +56,15 @@ export const useAuthStore = create<AuthState>()(
       token: null,
       rejected: false,
       linkError: null,
-      setToken: (token) => set({ token: token.trim(), rejected: false, linkError: null }),
+      canRetry: false,
+      setToken: (token) =>
+        set({ token: token.trim(), rejected: false, linkError: null, canRetry: false }),
       markRejected: () => set({ rejected: true }),
       setLinkError: (message) => set({ linkError: message }),
     }),
     {
       name: "rip-api-token",
+      storage: createJSONStorage(() => bestEffortLocalStorage),
       partialize: (state) => ({ token: state.token }),
     },
   ),
@@ -39,21 +73,114 @@ export const useAuthStore = create<AuthState>()(
 /** How long to wait for the sign-in exchange before showing the app anyway. */
 export const SIGN_IN_TIMEOUT_MS = 10_000;
 
+const PENDING_KEY = "rip-pending-sign-in";
+
+/** A sign-in that has not succeeded yet: the link's code and our verifier. */
+type PendingSignIn = { code: string; verifier: string };
+
+/**
+ * The pending sign-in lives in memory, so signing in never depends on
+ * storage, and is also copied to this tab's session storage so a retry
+ * still works after a reload. (When storage is blocked, the copy simply
+ * fails: the link still works and can be retried until the page reloads.)
+ * It never goes in the URL, and session storage drops it when the tab
+ * closes. Kept until sign-in succeeds, so a request that timed out
+ * (possibly after the backend used the code) can be retried with the same
+ * verifier, which the backend accepts again.
+ */
+let memoryPending: PendingSignIn | null = null;
+
+function readPending(): PendingSignIn | null {
+  if (memoryPending) {
+    return memoryPending;
+  }
+
+  try {
+    const value = JSON.parse(window.sessionStorage.getItem(PENDING_KEY) ?? "null") as unknown;
+
+    if (
+      value &&
+      typeof value === "object" &&
+      typeof (value as PendingSignIn).code === "string" &&
+      typeof (value as PendingSignIn).verifier === "string"
+    ) {
+      return value as PendingSignIn;
+    }
+  } catch {
+    // Unreadable storage: treat as no pending sign-in.
+  }
+
+  return null;
+}
+
+function writePending(pending: PendingSignIn) {
+  // Drop any older pending sign-in first, so a failed write below can
+  // never leave a stale one to be retried instead of this link.
+  clearPending();
+  memoryPending = pending;
+
+  try {
+    window.sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
+  } catch {
+    // Blocked or full storage: the in-memory copy still signs in and
+    // retries; only a retry after a reload is lost.
+  }
+}
+
+function clearPending() {
+  memoryPending = null;
+
+  try {
+    window.sessionStorage.removeItem(PENDING_KEY);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
+function newVerifier(): string {
+  const bytes = window.crypto.getRandomValues(new Uint8Array(24));
+
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
 /**
  * Sign in from a link's single-use code. The code is removed from the
- * address bar first, so it is never left in history or bookmarks even if
- * the exchange fails.
+ * address bar first, so it is never left in history or bookmarks. Without
+ * a code in the URL, a sign-in left pending by a timeout (for example
+ * before a reload) is retried.
  */
 export async function signInFromUrl(location: Location = window.location) {
   const url = new URL(location.href);
   const code = url.searchParams.get("code");
 
-  if (!code) {
-    return;
+  if (code) {
+    url.searchParams.delete("code");
+    window.history.replaceState(window.history.state, "", url.toString());
+    writePending({ code, verifier: newVerifier() });
   }
 
-  url.searchParams.delete("code");
-  window.history.replaceState(window.history.state, "", url.toString());
+  await exchangePending();
+}
+
+/** Forget the in-memory pending sign-in (tests start from a fresh page). */
+export function resetPendingSignInForTests() {
+  memoryPending = null;
+}
+
+/** Retry a sign-in that timed out or could not reach the backend. */
+export async function retrySignIn() {
+  await exchangePending();
+}
+
+async function exchangePending() {
+  const pending = readPending();
+
+  if (!pending) {
+    return;
+  }
 
   const { setToken, setLinkError } = useAuthStore.getState();
 
@@ -66,7 +193,7 @@ export async function signInFromUrl(location: Location = window.location) {
     const response = await fetch(`${config.apiBaseUrl}/auth/sign-in`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code }),
+      body: JSON.stringify(pending),
       signal: controller.signal,
     });
 
@@ -76,20 +203,33 @@ export async function signInFromUrl(location: Location = window.location) {
     };
 
     if (response.ok && typeof payload.token === "string") {
+      clearPending();
       setToken(payload.token);
       return;
     }
 
+    // A server error may be passing; anything else (used by another app,
+    // expired, malformed) will not change on retry.
+    const retryable = response.status >= 500;
+
+    if (!retryable) {
+      clearPending();
+    }
+
+    useAuthStore.setState({ canRetry: retryable });
     setLinkError(
       typeof payload.detail === "string"
         ? payload.detail
         : `Sign-in failed with status ${response.status}.`,
     );
   } catch {
+    // The backend may have used the code and its answer got lost; the
+    // pending code and verifier let a retry collect the token.
+    useAuthStore.setState({ canRetry: true });
     setLinkError(
       controller.signal.aborted
-        ? "The RIP backend did not answer the sign-in request in time. Check that it is running, then open the link again or paste the token."
-        : "Could not reach the RIP backend to sign in. Is it running?",
+        ? "The RIP backend did not answer the sign-in request in time. Check that it is running, then try again."
+        : "Could not reach the RIP backend to sign in. Start it, then try again.",
     );
   } finally {
     clearTimeout(timer);

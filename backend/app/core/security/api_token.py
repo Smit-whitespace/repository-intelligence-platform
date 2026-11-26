@@ -70,7 +70,8 @@ class _SignInCode:
 
     expires_at: float
 
-    used: bool = False
+    verifier_digest: bytes | None = None
+    """Set on first use: only the app that used the code may use it again."""
 
 
 _sign_in_lock = threading.Lock()
@@ -116,15 +117,26 @@ def issue_sign_in_code() -> str:
 
 def redeem_sign_in_code(
     code: str,
+    verifier: str,
 ) -> str | None:
-    """Return the API token for a valid, unused, unexpired code."""
+    """Return the API token for a valid, unexpired code.
+
+    ``verifier`` is a random value the app makes and keeps until sign-in
+    succeeds. The first use binds the code to it. A retry with the same
+    verifier gets the token again, so a response lost to a timeout does
+    not spend the link; anyone else holding only the code (it is printed
+    to the console) is refused once it has been used.
+    """
+
+    verifier_digest = _digest(
+        verifier,
+    )
 
     with _sign_in_lock:
         current = _sign_in_code
 
         if (
             current is None
-            or current.used
             or time.monotonic() > current.expires_at
             or not hmac.compare_digest(
                 _digest(
@@ -135,7 +147,14 @@ def redeem_sign_in_code(
         ):
             return None
 
-        current.used = True
+        if current.verifier_digest is None:
+            current.verifier_digest = verifier_digest
+
+        elif not hmac.compare_digest(
+            verifier_digest,
+            current.verifier_digest,
+        ):
+            return None
 
     return api_token()
 

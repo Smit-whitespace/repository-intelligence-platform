@@ -1,10 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SIGN_IN_TIMEOUT_MS, useAuthStore } from "@/stores/authStore";
+import {
+  SIGN_IN_TIMEOUT_MS,
+  resetPendingSignInForTests,
+  useAuthStore,
+} from "@/stores/authStore";
 import { bootstrap } from "./bootstrap";
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  useAuthStore.setState({ token: null, rejected: false, linkError: null });
+  useAuthStore.setState({ token: null, rejected: false, linkError: null, canRetry: false });
+  window.sessionStorage.clear();
+  resetPendingSignInForTests();
   window.history.pushState(null, "", "/");
 });
 

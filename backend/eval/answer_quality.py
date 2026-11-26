@@ -62,6 +62,12 @@ _WORD = re.compile(r"[a-z0-9]+")
 
 REFUSAL = "couldn't find enough evidence"
 
+SCORER_FILES = (
+    "backend/eval/answer_quality.py",
+    "backend/tests/eval/test_answer_quality.py",
+)
+"""This scorer and its tests, left out when RIP's own repository is scored."""
+
 
 @dataclass(frozen=True)
 class Repository:
@@ -71,7 +77,12 @@ class Repository:
     """Every text file, as a POSIX path relative to the root."""
 
     identifiers: frozenset[str]
-    """Every identifier-like word in those files."""
+    """Every identifier-like word in those files, also without its edge
+    underscores, since answers often drop them (``_private`` as ``private``)."""
+
+    mentioned_paths: frozenset[str] = frozenset()
+    """Every file path the text mentions, such as runtime files that exist
+    only once the app runs (``.local_openclaw/project.json``)."""
 
     @property
     def basenames(self) -> frozenset[str]:
@@ -80,11 +91,20 @@ class Repository:
 
 def load_repository(
     root: Path,
+    ignore: Iterable[str] = (),
 ) -> Repository:
-    """Read the file list and identifiers of a repository on disk."""
+    """Read the file list and identifiers of a repository on disk.
+
+    ``ignore`` lists files or folders, relative to the root, left out: the
+    scorer's own code and tests spell out invented names as examples, and
+    must not make them look real.
+    """
+
+    ignored = tuple(item.rstrip("/") for item in ignore)
 
     files: set[str] = set()
     identifiers: set[str] = set()
+    mentioned_paths: set[str] = set()
 
     for directory, subdirectories, names in os.walk(root):
         subdirectories[:] = [
@@ -97,7 +117,15 @@ def load_repository(
             if path.suffix not in _TEXT_SUFFIXES:
                 continue
 
-            files.add(path.relative_to(root).as_posix())
+            relative = path.relative_to(root).as_posix()
+
+            if any(
+                relative == item or relative.startswith(item + "/")
+                for item in ignored
+            ):
+                continue
+
+            files.add(relative)
 
             try:
                 text = path.read_text(encoding="utf-8", errors="ignore")
@@ -105,12 +133,40 @@ def load_repository(
             except OSError:
                 continue
 
-            identifiers.update(_IDENTIFIER.findall(text))
+            for name in _IDENTIFIER.findall(text):
+                identifiers.add(name)
+                identifiers.add(name.strip("_"))
+
+            mentioned_paths.update(_normal_path(m) for m in _PATH.findall(text))
 
     return Repository(
         files=frozenset(files),
         identifiers=frozenset(identifiers),
+        mentioned_paths=frozenset(mentioned_paths),
     )
+
+
+def _normal_path(
+    path: str,
+) -> str:
+    """POSIX separators, without ``./``, ``~/`` or a dot folder's dot.
+
+    ``~/.local_openclaw/models.json`` and ``backend/.local_openclaw/x.json``
+    become ``local_openclaw/models.json`` and ``backend/local_openclaw/x.json``.
+    """
+
+    parts = (part.lstrip("~.") for part in path.replace("\\", "/").split("/"))
+
+    return "/".join(part for part in parts if part)
+
+
+def _same_file(
+    one: str,
+    other: str,
+) -> bool:
+    """Equal, or one is the other with more leading folders."""
+
+    return one == other or one.endswith("/" + other) or other.endswith("/" + one)
 
 
 def _cited(
@@ -157,15 +213,21 @@ def invented_paths(
     invented: list[str] = []
 
     for match in _PATH.findall(answer):
-        path = match.replace("\\", "/").strip("./")
+        path = _normal_path(match)
 
         if "/" in path:
+            # Folders count: a bare mentioned "project.json" must not vouch
+            # for "a_typo/project.json".
             known = any(
-                file == path or file.endswith("/" + path)
-                for file in repository.files
+                _same_file(path, other)
+                for other in repository.files | repository.mentioned_paths
+                if "/" in other
             )
         else:
-            known = path in repository.basenames
+            known = path in repository.basenames or any(
+                other.rsplit("/", 1)[-1] == path
+                for other in repository.mentioned_paths
+            )
 
         if not known and path not in invented:
             invented.append(path)
@@ -188,7 +250,11 @@ def invented_identifiers(
         span = _PATH.sub(" ", span)
 
         for name in _IDENTIFIER.findall(span):
-            if name not in repository.identifiers and name not in invented:
+            known = name in repository.identifiers or (
+                name.strip("_") in repository.identifiers
+            )
+
+            if not known and name not in invented:
                 invented.append(name)
 
     return invented
@@ -304,7 +370,7 @@ def evaluate_answers(
 ) -> list[AnswerScore]:
     """Ask every question through the chat service and score each answer."""
 
-    repository = repository or load_repository(root)
+    repository = repository or load_repository(root, ignore=SCORER_FILES)
 
     scores: list[AnswerScore] = []
 

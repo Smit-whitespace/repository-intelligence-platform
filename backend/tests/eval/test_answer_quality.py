@@ -20,6 +20,7 @@ REPOSITORY = Repository(
     identifiers=frozenset(
         {"ProjectInitializationService", "open_project", "build_index", "root"},
     ),
+    mentioned_paths=frozenset({"local_openclaw/project.json", "credentials.json"}),
 )
 
 CASE = RetrievalTestCase(
@@ -102,6 +103,29 @@ class TestInventedNames:
 
         assert invented_identifiers(answer, REPOSITORY) == ["service"]
 
+    def test_runtime_files_the_code_mentions_are_not_invented(self) -> None:
+        answer = (
+            "Stored in `.local_openclaw/project.json` and "
+            "`backend/.local_openclaw/project.json`; `credentials.json` is a secret."
+        )
+
+        assert invented_paths(answer, REPOSITORY) == []
+
+    def test_a_mentioned_name_does_not_vouch_for_an_invented_folder(self) -> None:
+        answer = "Stored in `a_typo/project.json`."
+
+        assert invented_paths(answer, REPOSITORY) == ["a_typo/project.json"]
+
+    def test_names_differing_only_in_edge_underscores_are_known(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        (tmp_path / "prompt.py").write_text("_INSTRUCTION = 1\n")
+
+        repository = load_repository(tmp_path)
+
+        assert invented_identifiers("`INSTRUCTION`", repository) == []
+
     def test_prose_is_not_checked_for_names(self) -> None:
         assert invented_identifiers("A ProjectLoader loads things.", REPOSITORY) == []
 
@@ -122,6 +146,35 @@ class TestLoadRepository:
         assert repository.files == {"app/main.py"}
         assert "start_app" in repository.identifiers
         assert "hidden" not in repository.identifiers
+
+    def test_ignored_folders_are_left_out(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        (tmp_path / "eval").mkdir()
+        (tmp_path / "eval" / "examples.py").write_text("MADE_UP = 'x/made_up.py'\n")
+        (tmp_path / "evaluate.py").write_text("real_name = 1\n")
+
+        repository = load_repository(tmp_path, ignore=["eval"])
+
+        assert repository.files == {"evaluate.py"}
+        assert "MADE_UP" not in repository.identifiers
+        assert repository.mentioned_paths == frozenset()
+
+    def test_collects_paths_the_text_mentions(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        (tmp_path / "store.py").write_text(
+            'PATH = "~/.local_openclaw/models.json"  # see .\\notes\\todo.md\n',
+        )
+
+        repository = load_repository(tmp_path)
+
+        assert repository.mentioned_paths == {
+            "local_openclaw/models.json",
+            "notes/todo.md",
+        }
 
 
 class TestSummarize:

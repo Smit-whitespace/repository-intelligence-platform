@@ -21,6 +21,7 @@ from pathlib import Path
 from app.dependencies.providers import get_chat_service
 from app.dependencies.providers import get_model_resolver
 from app.llm.config import Task
+from eval.answer_quality import SCORER_FILES
 from eval.answer_quality import evaluate_answers
 from eval.answer_quality import load_repository
 from eval.answer_quality import summarize_scores
@@ -72,7 +73,7 @@ def main() -> None:
         get_chat_service(),
         HOLDOUT if args.set == "holdout" else BENCHMARKS,
         root,
-        load_repository(root),
+        load_repository(root, ignore=SCORER_FILES),
     )
 
     for score in scores:

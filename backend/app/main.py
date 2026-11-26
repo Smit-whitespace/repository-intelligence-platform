@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 from typing import AsyncIterator
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,7 +11,11 @@ from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from app.api import api_router
 from app.core.logging.factory import get_logger
 from app.core.config.settings import settings
-from app.core.security.api_token import api_token_path, sign_in_url
+from app.core.security.api_token import (
+    SIGN_IN_CODE_TTL_SECONDS,
+    api_token_path,
+    sign_in_url,
+)
 from app.core.logging.configuration import (
     configure_logging,
 )
@@ -70,12 +75,13 @@ async def lifespan(
         "application_started",
     )
 
-    # Like Jupyter: the link carries the API token, so opening it once
-    # signs the app in. Anyone who can read this output already runs as
-    # this user and could read the token file.
+    # The link carries a single-use code, never the API token, so this
+    # output and any log file kept from it reveal nothing once the link
+    # has been used or has expired.
     logger.info(
         "sign_in",
         open_this_link=sign_in_url(),
+        link_works=f"once, for {SIGN_IN_CODE_TTL_SECONDS // 60} minutes",
         token_file=str(
             api_token_path(),
         ),
@@ -86,6 +92,35 @@ async def lifespan(
     logger.info(
         "application_stopped",
     )
+
+
+def allowed_browser_origins() -> list[str]:
+    """Origins whose pages may call the API directly from a browser.
+
+    The default dev server, plus wherever ``LOC_SERVER_FRONTEND_URL`` says
+    the app runs, so the sign-in link never opens an app the API refuses.
+    (With the dev server's ``/api`` proxy, requests are same-origin and
+    this list is not consulted.)
+    """
+
+    configured = urlsplit(
+        settings.server.frontend_url,
+    )
+
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+    if configured.scheme and configured.netloc:
+        origin = f"{configured.scheme}://{configured.netloc}"
+
+        if origin not in origins:
+            origins.append(
+                origin,
+            )
+
+    return origins
 
 
 def create_application() -> FastAPI:
@@ -114,10 +149,7 @@ def create_application() -> FastAPI:
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ],
+        allow_origins=allowed_browser_origins(),
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

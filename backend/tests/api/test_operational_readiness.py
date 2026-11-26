@@ -22,6 +22,7 @@ from app.editing.exceptions import EditingError
 from app.indexing.exceptions import IndexingError
 from app.projects.exceptions import InvalidProjectError
 from app.repository.exceptions import RepositoryScanError
+from tests.conftest import TEST_API_TOKEN
 
 
 class RecordingLogger:
@@ -118,10 +119,15 @@ def test_application_lifespan_logs_startup_and_shutdown(
         "application_stopped",
     ]
 
-    # The startup output carries the link that signs the app in.
-    assert "?token=" in str(
-        recording_logger.fields["sign_in"]["open_this_link"],
+    # The startup output carries a sign-in link with a single-use code,
+    # and never the API token itself (it would sit in kept log files).
+    logged = str(
+        recording_logger.fields["sign_in"],
     )
+
+    assert "?code=" in logged
+
+    assert TEST_API_TOKEN not in logged
 
 
 def test_application_factory_registers_routes_and_openapi() -> None:
@@ -135,6 +141,7 @@ def test_application_factory_registers_routes_and_openapi() -> None:
         schema["paths"],
     ) == {
         "/api/v1/health",
+        "/api/v1/auth/sign-in",
         "/api/v1/projects/open",
         "/api/v1/projects/info",
         "/api/v1/repository/index",

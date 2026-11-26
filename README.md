@@ -169,7 +169,7 @@ cd frontend
 npm run dev
 ```
 
-Open the **sign-in link** the backend prints when it starts (the `open_this_link=http://localhost:5173/?token=…` line). It signs the app in with your API token, which RIP creates in `~/.local_openclaw/api.token`; you only need to do this once per browser.
+Open the **sign-in link** the backend prints when it starts (the `open_this_link=http://localhost:5173/?code=…` line). It signs the app in with your API token, which RIP creates in `~/.local_openclaw/api.token`; you only need to do this once per browser. The link works once, for ten minutes, and never contains the token itself. Restart the backend for a new one, or paste the token from that file.
 
 > The backend resolves project persistence from the **opened project root** (`<project-root>/.local_openclaw/`), never from the process working directory. The backend can therefore be started from a different directory without changing the persistence identity of the opened project.
 

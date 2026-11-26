@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryClient } from "@/lib/api/queryClient";
-import { captureTokenFromUrl, useAuthStore } from "@/stores/authStore";
+import { signInFromUrl, useAuthStore } from "@/stores/authStore";
 import { App } from "./App";
 
 const responses: Record<string, unknown> = {
@@ -61,7 +61,7 @@ const VALID_TOKEN = "valid-token";
 
 beforeEach(() => {
   window.localStorage.clear();
-  useAuthStore.setState({ token: null, rejected: false });
+  useAuthStore.setState({ token: null, rejected: false, linkError: null });
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -151,14 +151,47 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("stores the token from a sign-in link and removes it from the address bar", () => {
-    window.history.pushState(null, "", "/editing?token=from-link");
+  it("exchanges a sign-in link's code for the token and clears the address bar", async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ token: VALID_TOKEN }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.pushState(null, "", "/editing?code=one-time-code");
 
-    captureTokenFromUrl();
+    await signInFromUrl();
 
-    expect(useAuthStore.getState().token).toBe("from-link");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/auth/sign-in",
+      expect.objectContaining({ method: "POST", body: JSON.stringify({ code: "one-time-code" }) }),
+    );
+    expect(useAuthStore.getState().token).toBe(VALID_TOKEN);
     expect(window.location.pathname).toBe("/editing");
     expect(window.location.search).toBe("");
+  });
+
+  it("explains a used or expired sign-in link, and still clears it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({ detail: "This sign-in link has expired or was already used." }),
+          { status: 401, headers: { "Content-Type": "application/json" } },
+        ),
+      ),
+    );
+    window.history.pushState(null, "", "/?code=used-code");
+
+    await signInFromUrl();
+
+    expect(useAuthStore.getState().token).toBeNull();
+    expect(window.location.search).toBe("");
+
+    render(<App />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(/already used/);
   });
 
   it("routes to workspace pages", async () => {

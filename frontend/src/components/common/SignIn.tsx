@@ -8,6 +8,7 @@ import { useAuthStore } from "@/stores/authStore";
 export function SignIn() {
   // Only a token that was sent can have been rejected.
   const rejected = useAuthStore((state) => state.rejected && state.token !== null);
+  const linkError = useAuthStore((state) => state.linkError);
   const setToken = useAuthStore((state) => state.setToken);
   const [value, setValue] = useState("");
 
@@ -22,12 +23,17 @@ export function SignIn() {
           ? "The backend did not accept the saved token. It may have been replaced."
           : "The RIP backend only answers this app once it has your API token."}
       </p>
+      {linkError ? (
+        <p role="alert" className="mt-3 text-sm text-[#FBBF24]">
+          {linkError}
+        </p>
+      ) : null}
       <p className="mt-3 text-sm text-[#AAB4C5]">
         Open the sign-in link the backend printed when it started (the{" "}
         <code className="break-anywhere font-mono text-xs text-[#22D3EE]">
           open_this_link
         </code>{" "}
-        line), or paste the token from{" "}
+        line; it works once, for ten minutes), or paste the token from{" "}
         <code className="break-anywhere font-mono text-xs text-[#22D3EE]">
           ~/.local_openclaw/api.token
         </code>

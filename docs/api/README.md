@@ -13,7 +13,7 @@
 
 The backend exposes a REST API through FastAPI. All endpoints are versioned under `/api/v1/` (via router prefix). The API is documented interactively via Swagger at `/docs` when the server is running.
 
-**Authentication.** Every endpoint except `GET /api/v1/health` needs `Authorization: Bearer <token>`, with the token from `~/.local_openclaw/api.token` (created the first time the backend starts). The backend prints a sign-in link for the RIP app at startup. In Swagger, use **Authorize** and paste the token. See [ADR-0020](../adr/adr-0020-local-api-token.md).
+**Authentication.** Every endpoint except `GET /api/v1/health` and `POST /api/v1/auth/sign-in` needs `Authorization: Bearer <token>`, with the token from `~/.local_openclaw/api.token` (created the first time the backend starts). The backend prints a sign-in link for the RIP app at startup; it carries a single-use code (valid once, for ten minutes) that the app exchanges at `POST /api/v1/auth/sign-in` (`{"code": "…"}` → `{"token": "…"}`). In Swagger, use **Authorize** and paste the token. See [ADR-0020](../adr/adr-0020-local-api-token.md).
 
 ```powershell
 $token = Get-Content "$HOME\.local_openclaw\api.token"

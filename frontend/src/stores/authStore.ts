@@ -36,6 +36,9 @@ export const useAuthStore = create<AuthState>()(
   ),
 );
 
+/** How long to wait for the sign-in exchange before showing the app anyway. */
+export const SIGN_IN_TIMEOUT_MS = 10_000;
+
 /**
  * Sign in from a link's single-use code. The code is removed from the
  * address bar first, so it is never left in history or bookmarks even if
@@ -54,11 +57,17 @@ export async function signInFromUrl(location: Location = window.location) {
 
   const { setToken, setLinkError } = useAuthStore.getState();
 
+  // The app waits for this before its first render, so a backend that
+  // accepts the request but never answers must not leave the page blank.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SIGN_IN_TIMEOUT_MS);
+
   try {
     const response = await fetch(`${config.apiBaseUrl}/auth/sign-in`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code }),
+      signal: controller.signal,
     });
 
     const payload = (await response.json().catch(() => ({}))) as {
@@ -77,7 +86,13 @@ export async function signInFromUrl(location: Location = window.location) {
         : `Sign-in failed with status ${response.status}.`,
     );
   } catch {
-    setLinkError("Could not reach the RIP backend to sign in. Is it running?");
+    setLinkError(
+      controller.signal.aborted
+        ? "The RIP backend did not answer the sign-in request in time. Check that it is running, then open the link again or paste the token."
+        : "Could not reach the RIP backend to sign in. Is it running?",
+    );
+  } finally {
+    clearTimeout(timer);
   }
 }
 

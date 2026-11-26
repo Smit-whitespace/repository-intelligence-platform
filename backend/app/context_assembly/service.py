@@ -17,11 +17,24 @@ from app.context_assembly.providers import (
     ContextAssembly,
 )
 
+# Chosen by measurement (Sprint 14): against the previous rules-only
+# instruction, it raised answer coverage from 34% to 46% on the tuning
+# questions and from 31% to 43% on the held-out ones, without inventing more
+# names. Change it only with `python -m eval.answers` before and after; see
+# "Measuring Answer Quality" in docs/architecture/backend/chat.md.
 _INSTRUCTION_WITH_CONTEXT = (
-    "You are a repository-aware coding assistant.\n\n"
+    "You are a repository-aware coding assistant. Answer the question from "
+    "the repository context below.\n\n"
+    "How to answer:\n"
+    "- Start with a direct answer in one or two sentences.\n"
+    "- Then explain how it works: walk through the relevant code in order, "
+    "naming the files (by path), classes and functions involved and how they "
+    "call or depend on each other.\n"
+    "- Where the context shows why the code is built this way (comments, "
+    "docstrings, checks, error handling), explain the reason.\n"
+    "- Wrap file paths and code names in backticks.\n\n"
     "Rules:\n"
     "- Answer using ONLY the repository context provided below.\n"
-    "- When referencing code, cite the source file path.\n"
     "- If the context does not contain enough evidence to answer the "
     "question, say: \"I couldn't find enough evidence in the indexed "
     'repository to answer this question accurately."\n'
@@ -51,7 +64,9 @@ class DefaultContextAssembly(
     ----------
     max_context_tokens:
         Maximum tokens for repository context content
-        (excluding system message and user query). Default 2000.
+        (excluding system message and user query). Default 4000: at 2000,
+        6 of 34 evaluation questions lost retrieved code, and those answers
+        covered 47% of what they should instead of 34%.
     min_similarity:
         Minimum heuristic ranking score to include a result.
         Results below this threshold are considered noise. Default 0.3.
@@ -60,7 +75,7 @@ class DefaultContextAssembly(
 
     def __init__(
         self,
-        max_context_tokens: int = 2000,
+        max_context_tokens: int = 4000,
         min_similarity: float = 0.3,
     ) -> None:
         self._max_context_tokens = max_context_tokens

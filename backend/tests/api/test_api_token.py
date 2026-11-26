@@ -3,12 +3,18 @@
 import os
 import stat
 import sys
+import time
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app.core.security.api_token import sign_in_url
+from app.core.security.api_token import (
+    SIGN_IN_CODE_TTL_SECONDS,
+    redeem_sign_in_code,
+    sign_in_url,
+)
 from app.core.storage.secret_file import read_or_create_secret
 from app.main import create_application
 from tests.conftest import TEST_API_TOKEN
@@ -113,8 +119,120 @@ def test_openapi_documents_the_bearer_scheme() -> None:
     assert schema["components"]["securitySchemes"]["HTTPBearer"]["scheme"] == "bearer"
 
 
-def test_sign_in_url_carries_the_token() -> None:
-    assert sign_in_url() == f"http://localhost:5173/?token={TEST_API_TOKEN}"
+def _code_from(
+    url: str,
+) -> str:
+    return parse_qs(
+        urlsplit(
+            url,
+        ).query,
+    )["code"][0]
+
+
+def test_sign_in_link_carries_a_code_never_the_token() -> None:
+    """Graphify P1: a token in the link sat in every kept log file."""
+
+    url = sign_in_url()
+
+    assert url.startswith("http://localhost:5173/?code=")
+
+    assert TEST_API_TOKEN not in url
+
+
+def test_the_configured_frontend_may_call_the_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Graphify: a custom LOC_SERVER_FRONTEND_URL got a sign-in link to an
+    app whose browser requests the API then refused (CORS)."""
+
+    from app import main
+
+    monkeypatch.setattr(
+        main.settings.server,
+        "frontend_url",
+        "http://localhost:3000/rip",
+    )
+
+    assert main.allowed_browser_origins() == [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+    ]
+
+    response = TestClient(
+        main.create_application(),
+    ).options(
+        "/api/v1/system/version",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "authorization",
+        },
+    )
+
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+
+
+def test_a_sign_in_code_works_once() -> None:
+    client = _client_without_token()
+
+    code = _code_from(
+        sign_in_url(),
+    )
+
+    first = client.post(
+        "/api/v1/auth/sign-in",
+        json={
+            "code": code,
+        },
+    )
+
+    second = client.post(
+        "/api/v1/auth/sign-in",
+        json={
+            "code": code,
+        },
+    )
+
+    assert first.status_code == 200
+
+    assert first.json() == {
+        "token": TEST_API_TOKEN,
+    }
+
+    assert second.status_code == 401
+
+    assert "already used" in second.json()["detail"]
+
+
+def test_a_new_link_replaces_the_previous_one() -> None:
+    old = _code_from(
+        sign_in_url(),
+    )
+
+    sign_in_url()
+
+    assert redeem_sign_in_code(old) is None
+
+
+def test_an_expired_or_wrong_code_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    code = _code_from(
+        sign_in_url(),
+    )
+
+    assert redeem_sign_in_code("not-the-code") is None
+
+    now = time.monotonic()
+
+    monkeypatch.setattr(
+        time,
+        "monotonic",
+        lambda: now + SIGN_IN_CODE_TTL_SECONDS + 1,
+    )
+
+    assert redeem_sign_in_code(code) is None
 
 
 def test_secret_file_is_created_once_and_reused(

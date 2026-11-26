@@ -3,6 +3,9 @@
 from fastapi import APIRouter
 from fastapi import Depends
 
+from app.api.routes.auth import (
+    router as auth_router,
+)
 from app.api.routes.chat import (
     router as chat_router,
 )
@@ -47,6 +50,11 @@ api_router = APIRouter(
 # "backend not running" apart from "not signed in".
 api_router.include_router(
     health_router,
+)
+
+# Open: the single-use code it takes is the credential.
+api_router.include_router(
+    auth_router,
 )
 
 # Everything else needs the API token (ADR-0020).

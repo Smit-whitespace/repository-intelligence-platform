@@ -12,7 +12,7 @@ That still left the API open to any process on the machine, including processes 
 
 - Every REST request except `GET /api/v1/health` must send `Authorization: Bearer <token>`; otherwise it gets HTTP 401 before any handler runs. `/health` stays open, so the app can tell "backend not running" apart from "not signed in".
 - The token is created on first use with `secrets.token_urlsafe(32)` in a per-user file, `~/.local_openclaw/api.token` (mode 0600 where supported; `LOC_API_TOKEN_PATH` overrides the location). It is compared in constant time.
-- Like Jupyter, the backend prints a sign-in link at startup (`open_this_link=http://localhost:5173/?token=…`, base URL from `LOC_SERVER_FRONTEND_URL`). Opening it stores the token in the app and removes it from the address bar. The app can also take a pasted token.
+- The backend prints a sign-in link at startup (`open_this_link=http://localhost:5173/?code=…`, base URL from `LOC_SERVER_FRONTEND_URL`). The link carries a **single-use code, never the token**: the app removes it from the address bar and exchanges it once at the open `POST /api/v1/auth/sign-in` for the token. A code works once and for ten minutes; only its hash is kept in memory, and a new link replaces the previous one. The app can also take a pasted token.
 - The app streams chat with `fetch` instead of `EventSource`, because `EventSource` cannot send headers, and a token in the URL would be written to server access logs.
 - The MCP server is unaffected: it talks over stdio, and its agent was started by the user.
 
@@ -24,7 +24,8 @@ Positive:
 
 Negative:
 - A process running as the same user can read the token file. **The token does not stop such a process**; it only makes the attempt explicit. Real enforcement against a user's own agents belongs to the agent's sandbox and permission settings.
-- The sign-in link appears in the backend's console output (and in its logs if they are kept). Anyone who can read them already runs as the user.
+- Someone who reads the backend's output during the ten minutes before the link is used could sign in with it first; the user would then see the link fail. After use or expiry, kept logs reveal nothing. (The first version printed the token itself in the link; Graphify's review flagged that anyone who could read kept logs could recover the token.)
+- A new sign-in link needs a backend restart; pasting the token always works.
 - The app must be signed in once per browser profile, and again if the token file is deleted.
 
 **Alternatives Considered:**
@@ -32,3 +33,4 @@ Negative:
 - No token, relying on agent permission rules alone: rejected; it leaves the API open to other user accounts.
 - The Vite dev proxy injecting the token: rejected; the proxy on `localhost:5173` would itself become an unauthenticated way into the API.
 - A token in the query string for streaming: rejected; query strings are logged.
+- The token in the sign-in link (Jupyter's approach, and this ADR's first version): replaced by the single-use code, because console output and log files outlive the sign-in.

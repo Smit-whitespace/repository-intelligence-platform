@@ -154,6 +154,31 @@ Retrieval is separated from indexing to prevent circular dependencies and to all
 
 ---
 
+## Measuring Search Quality
+
+`backend/eval/benchmarks.py` holds 34 questions about this repository, each with the files a good answer needs. Run them against a real index:
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m eval --root <path of an indexed copy of this repository> --json report.json
+```
+
+It prints, per question, the rank of the first right file, and overall: **hit@1** (right file first), **hit@3**, **hit@10**, **MRR** (mean of 1/rank) and recall. Measure before and after any change to chunking, embedding or ranking.
+
+**Baseline** (2026-11-26; `nomic-embed-text`, top 10 chunks, 336 files, 1,284 chunks):
+
+| hit@1 | hit@3 | hit@10 | MRR | recall |
+|---|---|---|---|---|
+| 18% | 50% | 79% | 0.38 | 62% |
+
+What holds it back, from the per-question results:
+- Several chunks of one file fill the results (2.6 of 10 on average), so fewer distinct files fit.
+- Test files describe the same behavior in the same words: 30% of retrieved chunks are tests, and they rank above the right source file 39 times.
+- Docstring-only `__init__.py` modules (`"""Indexing subsystem."""`) win "which subsystem owns X" questions.
+- Some expectations are narrow: ownership questions also have good answers in the ADRs, which the benchmarks do not accept. `eval/benchmarks.py` itself appears in results, since it contains the questions.
+
+---
+
 ## Related Documents
 
 | Document | Link |

@@ -344,6 +344,130 @@ BENCHMARKS: list[RetrievalTestCase] = [
             "DefaultContextAssembly",
         ],
     ),
+    # ── V1: MCP server and workspace tools ──────────────────────────────
+    RetrievalTestCase(
+        query="How do AI agents use RIP over MCP?",
+        expected_file_paths=[
+            "backend/app/mcp_server/server.py",
+            "backend/app/mcp_server/__main__.py",
+        ],
+        expected_concepts=["MCP", "tools", "stdio"],
+        expected_symbols=["build_server", "EditingMode"],
+    ),
+    RetrievalTestCase(
+        query="Which MCP tools can write to the repository, and when are they available?",
+        expected_file_paths=[
+            "backend/app/mcp_server/server.py",
+        ],
+        expected_concepts=["editing mode", "apply_proposal", "propose"],
+        expected_symbols=["EditingMode", "apply_proposal", "rollback_proposal"],
+    ),
+    RetrievalTestCase(
+        query="How does RIP stop a tool from reading files outside the repository?",
+        expected_file_paths=[
+            "backend/app/workspace/service.py",
+        ],
+        expected_concepts=["path safety", "symlinks", "junctions"],
+        expected_symbols=["RepositoryWorkspace", "_resolve"],
+    ),
+    RetrievalTestCase(
+        query="Which files are treated as secrets and never read?",
+        expected_file_paths=[
+            "backend/app/workspace/service.py",
+        ],
+        expected_concepts=["secret files", ".env", "private keys"],
+    ),
+    # ── V1: reviewable editing ──────────────────────────────────────────
+    RetrievalTestCase(
+        query="How are edit proposals created, stored and applied?",
+        expected_file_paths=[
+            "backend/app/editing/proposals.py",
+            "backend/app/editing/proposal_service.py",
+        ],
+        expected_concepts=["search/replace", "proposal lifecycle", "diff"],
+        expected_symbols=["build_proposal", "ProposalStore", "ProposalService"],
+    ),
+    RetrievalTestCase(
+        query="How are proposals and snapshots signed so a cloned repository cannot tamper with them?",
+        expected_file_paths=[
+            "backend/app/core/storage/integrity.py",
+        ],
+        expected_concepts=["HMAC", "signature", "integrity key"],
+        expected_symbols=["sign", "verify"],
+    ),
+    RetrievalTestCase(
+        query="How are validation commands run after an edit is applied?",
+        expected_file_paths=[
+            "backend/app/editing/validation.py",
+        ],
+        expected_concepts=["validation commands", "timeout", "process tree"],
+        expected_symbols=["ValidationRunner", "ValidationConfig"],
+    ),
+    RetrievalTestCase(
+        query="How does the edit model turn an instruction into search/replace edits?",
+        expected_file_paths=[
+            "backend/app/editing/planner.py",
+        ],
+        expected_concepts=["planner", "SEARCH/REPLACE blocks", "edit model"],
+        expected_symbols=["EditPlanner", "parse_edit_blocks"],
+    ),
+    # ── V1: security ────────────────────────────────────────────────────
+    RetrievalTestCase(
+        query="How does the API token protect the REST API?",
+        expected_file_paths=[
+            "backend/app/core/security/api_token.py",
+            "backend/app/api/router.py",
+        ],
+        expected_concepts=["bearer token", "401", "constant-time comparison"],
+        expected_symbols=["require_api_token", "api_token"],
+    ),
+    RetrievalTestCase(
+        query="How does the sign-in link sign the app in without logging the token?",
+        expected_file_paths=[
+            "backend/app/core/security/api_token.py",
+            "backend/app/api/routes/auth.py",
+        ],
+        expected_concepts=["single-use code", "verifier", "sign-in"],
+        expected_symbols=["issue_sign_in_code", "redeem_sign_in_code"],
+    ),
+    # ── V1: configurable models ─────────────────────────────────────────
+    RetrievalTestCase(
+        query="How is the model for each operation chosen?",
+        expected_file_paths=[
+            "backend/app/llm/resolver.py",
+            "backend/app/llm/config.py",
+        ],
+        expected_concepts=["task override", "capability override", "primary model"],
+        expected_symbols=["ModelResolver", "for_task", "ModelConfiguration"],
+    ),
+    RetrievalTestCase(
+        query="How are hosted models such as Anthropic or OpenAI-compatible APIs called?",
+        expected_file_paths=[
+            "backend/app/llm/providers/anthropic_provider.py",
+            "backend/app/llm/providers/openai_compatible.py",
+            "backend/app/llm/factory.py",
+        ],
+        expected_concepts=["hosted provider", "API key", "chat provider"],
+        expected_symbols=["AnthropicChatProvider", "OpenAICompatibleChatProvider"],
+    ),
+    # ── V1: search freshness ────────────────────────────────────────────
+    RetrievalTestCase(
+        query="How does reindexing skip files that did not change?",
+        expected_file_paths=[
+            "backend/app/indexing/service.py",
+            "backend/app/indexing/indexer.py",
+        ],
+        expected_concepts=["incremental indexing", "content hash", "chunk ids"],
+        expected_symbols=["existing_chunk_ids", "remove_stale_chunks"],
+    ),
+    RetrievalTestCase(
+        query="How does indexing respect .gitignore?",
+        expected_file_paths=[
+            "backend/app/repository/ignore.py",
+        ],
+        expected_concepts=["gitignore", "ignore rules", "pathspec"],
+        expected_symbols=["RepositoryIgnoreRules"],
+    ),
 ]
 
 __all__ = [

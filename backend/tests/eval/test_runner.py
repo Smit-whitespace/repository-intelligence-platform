@@ -50,6 +50,39 @@ def create_result(
 class TestRetrievalEvaluator:
     """Tests for RetrievalEvaluator."""
 
+    def test_windows_paths_match_forward_slash_expectations(self) -> None:
+        """Indexes built on Windows store backslash paths; benchmarks are
+        written with forward slashes. Every case used to score zero."""
+
+        service = MagicMock(
+            spec=RetrievalService,
+        )
+
+        service.search.return_value = MagicMock(
+            results=[
+                create_result(
+                    relative_path="backend\\app\\chat\\service.py",
+                ),
+            ],
+        )
+
+        report = RetrievalEvaluator(
+            retrieval_service=service,
+        ).evaluate(
+            test_cases=[
+                RetrievalTestCase(
+                    query="How does chat work?",
+                    expected_file_paths=["backend/app/chat/service.py"],
+                ),
+            ],
+        )
+
+        assert report.results[0].retrieved_file_paths == [
+            "backend/app/chat/service.py",
+        ]
+
+        assert report.avg_mrr == 1.0
+
     def test_all_results_relevant(self) -> None:
         """Perfect precision and recall when all results match."""
 
@@ -289,6 +322,48 @@ class TestRetrievalEvaluator:
         )
 
         assert report.results[0].mrr == 0.5
+
+
+class TestSummary:
+    """The hit rates printed by `python -m eval`."""
+
+    def test_hit_rates_follow_the_rank_of_the_first_right_file(self) -> None:
+        from eval.__main__ import summarize
+
+        service = MagicMock(
+            spec=RetrievalService,
+        )
+
+        # First case: right file first. Second: third. Third: missing.
+        service.search.side_effect = [
+            MagicMock(results=[create_result("a.py")]),
+            MagicMock(
+                results=[
+                    create_result("x.py"),
+                    create_result("y.py"),
+                    create_result("b.py"),
+                ],
+            ),
+            MagicMock(results=[create_result("x.py")]),
+        ]
+
+        report = RetrievalEvaluator(
+            retrieval_service=service,
+        ).evaluate(
+            [
+                RetrievalTestCase(query="a", expected_file_paths=["a.py"]),
+                RetrievalTestCase(query="b", expected_file_paths=["b.py"]),
+                RetrievalTestCase(query="c", expected_file_paths=["c.py"]),
+            ],
+        )
+
+        summary = summarize(report)
+
+        assert summary["hit_at_1"] == 1 / 3
+
+        assert summary["hit_at_3"] == 2 / 3
+
+        assert summary["hit_at_limit"] == 2 / 3
 
 
 class TestCreateEvaluator:

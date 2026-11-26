@@ -107,13 +107,18 @@ class RetrievalEvaluator:
             ),
         )
 
-        relevant = set(
-            case.expected_file_paths,
-        )
+        relevant = {
+            _posix(path)
+            for path in case.expected_file_paths
+        }
 
+        # Indexes built on Windows store backslash paths, while benchmarks
+        # are written with forward slashes; compare them the same way.
         retrieved_paths = [
-            str(
-                r.metadata.relative_path,
+            _posix(
+                str(
+                    r.metadata.relative_path,
+                ),
             )
             for r in response.results
         ]
@@ -153,6 +158,15 @@ class RetrievalEvaluator:
             f1=f1,
             mrr=rr,
         )
+
+
+def _posix(
+    path: str,
+) -> str:
+    return path.replace(
+        "\\",
+        "/",
+    )
 
 
 def create_retrieval_evaluator(

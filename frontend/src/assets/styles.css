@@ -71,9 +71,17 @@ body {
   color: #fff;
 }
 
-:focus-visible {
-  outline: 2px solid #4F8CFF;
-  outline-offset: 2px;
+/*
+ * The default keyboard focus ring. It lives in the base layer so that a
+ * component's own focus style (`outline-none` plus a focus border or ring)
+ * can replace it; outside a layer it came after Tailwind's utilities and
+ * always won, drawing a square outline around rounded fields.
+ */
+@layer base {
+  :focus-visible {
+    outline: 2px solid #4F8CFF;
+    outline-offset: 2px;
+  }
 }
 
 ::-webkit-scrollbar {

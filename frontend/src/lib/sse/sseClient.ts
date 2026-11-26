@@ -1,22 +1,81 @@
 import { config } from "@/lib/config/env";
+import { authorizationHeader, useAuthStore } from "@/stores/authStore";
 
 type SseClientOptions = {
   onMessage: (message: string) => void;
-  onError?: (event: Event) => void;
+  /** Called once if the stream fails; not called after close(). */
+  onError?: (error: Error) => void;
+  /** Called once when the server ends the stream normally. */
+  onDone?: () => void;
 };
 
+/**
+ * Read a `text/event-stream` response with fetch.
+ *
+ * EventSource cannot send an Authorization header, and putting the API
+ * token in the URL would write it into server logs (ADR-0020).
+ */
 export function createSseClient(path: string, options: SseClientOptions) {
-  const source = new EventSource(`${config.apiBaseUrl}${path}`);
+  const controller = new AbortController();
 
-  source.onmessage = (event) => {
-    options.onMessage(event.data);
-  };
+  void (async () => {
+    try {
+      const response = await fetch(`${config.apiBaseUrl}${path}`, {
+        headers: { Accept: "text/event-stream", ...authorizationHeader() },
+        signal: controller.signal,
+      });
 
-  source.onerror = (event) => {
-    options.onError?.(event);
-  };
+      if (!response.ok || !response.body) {
+        if (response.status === 401) {
+          useAuthStore.getState().markRejected();
+        }
+
+        throw new Error(`Stream failed with status ${response.status}`);
+      }
+
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      let buffer = "";
+
+      for (;;) {
+        const { done, value } = await reader.read();
+
+        if (done) {
+          break;
+        }
+
+        buffer += value.replace(/\r\n/g, "\n");
+        let boundary = buffer.indexOf("\n\n");
+
+        while (boundary !== -1) {
+          const message = parseEvent(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf("\n\n");
+
+          if (message !== null) {
+            options.onMessage(message);
+          }
+        }
+      }
+
+      options.onDone?.();
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        options.onError?.(error instanceof Error ? error : new Error(String(error)));
+      }
+    }
+  })();
 
   return {
-    close: () => source.close(),
+    close: () => controller.abort(),
   };
+}
+
+/** Join an event's `data:` lines with "\n", as EventSource does. */
+export function parseEvent(block: string): string | null {
+  const data = block
+    .split("\n")
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).replace(/^ /, ""));
+
+  return data.length ? data.join("\n") : null;
 }

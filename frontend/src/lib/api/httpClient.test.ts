@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useAuthStore } from "@/stores/authStore";
 import { ApiError } from "./errors";
 import { request } from "./httpClient";
 
@@ -29,6 +30,31 @@ describe("request", () => {
         }),
       }),
     );
+  });
+
+  it("sends the API token and asks to sign in again when it is refused", async () => {
+    useAuthStore.setState({ token: "secret", rejected: false });
+
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ detail: "Missing or wrong API token." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(request("/system/version")).rejects.toMatchObject({ status: 401 });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/system/version",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer secret" }),
+      }),
+    );
+    expect(useAuthStore.getState().rejected).toBe(true);
+
+    useAuthStore.setState({ token: null, rejected: false });
   });
 
   it("translates backend errors", async () => {

@@ -27,6 +27,7 @@ from app.api.routes.system import (
 from app.api.routes.workspace import (
     router as workspace_router,
 )
+from app.core.security.api_token import require_api_token
 from app.dependencies.providers import (
     refresh_model_configuration_if_changed,
 )
@@ -42,34 +43,27 @@ api_router = APIRouter(
     ],
 )
 
+# Open: it reveals only that the backend is up, which lets the app tell
+# "backend not running" apart from "not signed in".
 api_router.include_router(
     health_router,
 )
 
-api_router.include_router(
+# Everything else needs the API token (ADR-0020).
+for router in (
     projects_router,
-)
-
-api_router.include_router(
     repository_router,
-)
-
-api_router.include_router(
     models_router,
-)
-
-api_router.include_router(
     system_router,
-)
-
-api_router.include_router(
     chat_router,
-)
-
-api_router.include_router(
     editing_router,
-)
-
-api_router.include_router(
     workspace_router,
-)
+):
+    api_router.include_router(
+        router,
+        dependencies=[
+            Depends(
+                require_api_token,
+            ),
+        ],
+    )

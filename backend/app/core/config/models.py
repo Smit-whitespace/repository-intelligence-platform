@@ -22,6 +22,9 @@ class ServerSettings(BaseModel):
     able to call this API as same-origin.
     """
 
+    frontend_url: str = "http://localhost:5173"
+    """Where the RIP app runs; used for the sign-in link printed at startup."""
+
 
 class LoggingSettings(BaseModel):
     """Logging configuration."""
@@ -50,10 +53,13 @@ class ModelsSettings(BaseModel):
 
 
 class SecuritySettings(BaseModel):
-    """Where the key that signs RIP's state files lives."""
+    """Where RIP's per-user secrets live."""
 
     integrity_key_path: str = ""
     """Empty means the per-user default, ~/.local_openclaw/integrity.key."""
+
+    api_token_path: str = ""
+    """Empty means the per-user default, ~/.local_openclaw/api.token."""
 
 
 class ChromaSettings(BaseModel):

@@ -116,6 +116,30 @@ To let the agent apply its own edits, add `--editing apply` after `--root "<REPO
 
 Ask the agent something like: *"Use the rip tools: check index_status, reindex if needed, then find where file edits are applied and explain the safety checks."* On first use, the server registers `<REPO>` as a RIP project (metadata only, in `<REPO>\.local_openclaw\`). Nothing is indexed until `reindex` is called.
 
+### Keeping agents to what you allowed
+
+`--editing propose` limits what an agent can do *through RIP's MCP tools*. An agent that can also run shell commands runs as you. It could read RIP's per-user files (the API token, the signing key) and call the REST API to apply a proposal itself. The API token ([ADR-0020](../../adr/adr-0020-local-api-token.md)) makes that a deliberate act, not an accident; your agent's own settings decide whether it is allowed.
+
+For Claude Code, add deny rules to your user settings (`~/.claude/settings.json`, so they apply in every project):
+
+```json
+{
+  "permissions": {
+    "deny": [
+      "Read(~/.local_openclaw/**)",
+      "Edit(~/.local_openclaw/**)",
+      "Bash(curl *)",
+      "WebFetch(domain:localhost)",
+      "WebFetch(domain:127.0.0.1)"
+    ]
+  }
+}
+```
+
+- A `Read` deny rule also blocks editing and writing that path; the `Edit` rule adds notebook edits.
+- **These rules raise the bar; they are not a wall.** Claude Code's documentation calls Bash argument rules fragile: `Bash(curl *)` does not stop `/usr/bin/curl`, `sh -c 'curl …'`, or a Python script that opens a socket, and file rules do not cover programs that read files themselves. For enforcement, run the agent in Claude Code's sandbox, which restricts file and network access at the operating-system level. See [Claude Code permissions](https://code.claude.com/docs/en/permissions).
+- `Bash(curl *)` blocks every `curl` command. If your agent needs curl for other work, prefer the sandbox over a narrower rule.
+
 ---
 
 ## Architecture

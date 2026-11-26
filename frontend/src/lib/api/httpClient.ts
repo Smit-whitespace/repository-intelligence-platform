@@ -1,4 +1,5 @@
 import { config } from "@/lib/config/env";
+import { authorizationHeader, useAuthStore } from "@/stores/authStore";
 import { toApiError } from "./errors";
 
 type RequestOptions = Omit<RequestInit, "body"> & {
@@ -14,12 +15,17 @@ export async function request<T>(path: string, options: RequestOptions = {}) {
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...authorizationHeader(),
       ...options.headers,
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
 
   if (!response.ok) {
+    if (response.status === 401) {
+      useAuthStore.getState().markRejected();
+    }
+
     throw await toApiError(response);
   }
 

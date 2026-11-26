@@ -21,13 +21,13 @@ arrives with a repository.
 import hashlib
 import hmac
 import json
-import os
 import secrets
 from functools import lru_cache
 from pathlib import Path
 
 from app.core.config.settings import settings
 from app.core.storage.locations import PROJECT_STORAGE_DIRECTORY_NAME
+from app.core.storage.secret_file import read_or_create_secret
 
 INTEGRITY_KEY_FILE_NAME = "integrity.key"
 
@@ -47,52 +47,12 @@ def integrity_key_path() -> Path:
 def _key() -> bytes:
     """Load the per-user key, creating it on first use."""
 
-    path = integrity_key_path()
-
-    try:
-        return bytes.fromhex(
-            path.read_text(
-                encoding="ascii",
-            ).strip(),
-        )
-
-    except FileNotFoundError:
-        pass
-
-    path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
+    return bytes.fromhex(
+        read_or_create_secret(
+            integrity_key_path(),
+            lambda: secrets.token_bytes(32).hex(),
+        ),
     )
-
-    key = secrets.token_bytes(
-        32,
-    )
-
-    try:
-        # O_EXCL: if another process created the key meanwhile, use theirs.
-        descriptor = os.open(
-            path,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-            0o600,
-        )
-
-    except FileExistsError:
-        return bytes.fromhex(
-            path.read_text(
-                encoding="ascii",
-            ).strip(),
-        )
-
-    with os.fdopen(
-        descriptor,
-        "w",
-        encoding="ascii",
-    ) as file:
-        file.write(
-            key.hex(),
-        )
-
-    return key
 
 
 def _canonical(

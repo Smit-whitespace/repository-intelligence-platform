@@ -32,10 +32,11 @@ export function useBackendHealth() {
   });
 }
 
-export function useSystemStatus() {
+export function useSystemStatus(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.systemStatus,
     queryFn: api.systemStatus,
+    enabled: options.enabled ?? true,
   });
 }
 

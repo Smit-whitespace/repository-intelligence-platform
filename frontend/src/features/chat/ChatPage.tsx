@@ -78,6 +78,14 @@ export function ChatPage() {
           hadContentRef.current = true;
           appendAssistantChunk(assistantId, message);
         },
+        onDone: () => {
+          streamRef.current = null;
+          finishStreaming();
+
+          if (!hadContentRef.current) {
+            setError("The model returned an empty response.");
+          }
+        },
         onError: () => {
           streamRef.current?.close();
           streamRef.current = null;

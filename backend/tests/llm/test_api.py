@@ -50,6 +50,45 @@ def test_defaults_are_reported_as_unsaved(
     assert body["api_keys_present"] == {}
 
 
+def test_settings_show_the_config_path_without_the_user_name(
+    model_config_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Screenshots and shared screens must not reveal the home folder."""
+
+    monkeypatch.setattr(
+        Path,
+        "home",
+        classmethod(lambda cls: model_config_path.parent.parent),
+    )
+
+    body = client.get(
+        "/api/v1/models/configuration",
+    ).json()
+
+    assert body["display_path"] == f"~/{model_config_path.parent.name}/models.json"
+
+    # The full path is still available to API clients that need it.
+    assert body["path"] == str(model_config_path)
+
+
+def test_a_config_outside_home_is_shown_as_is(
+    model_config_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        Path,
+        "home",
+        classmethod(lambda cls: Path("Z:/someone-else")),
+    )
+
+    body = client.get(
+        "/api/v1/models/configuration",
+    ).json()
+
+    assert body["display_path"] == str(model_config_path)
+
+
 def test_saved_configuration_takes_effect_on_the_next_request(
     model_config_path: Path,
     monkeypatch: pytest.MonkeyPatch,

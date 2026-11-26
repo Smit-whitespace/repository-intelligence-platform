@@ -180,6 +180,8 @@ def test_the_configured_frontend_may_call_the_api(
         "//localhost:3000",
         "ftp://localhost:3000",
         "http://",
+        "http://localhost:abc",
+        "http://localhost:99999",
     ],
 )
 def test_a_frontend_url_without_http_is_refused_at_startup(

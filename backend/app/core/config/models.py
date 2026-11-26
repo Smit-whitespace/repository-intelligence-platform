@@ -42,10 +42,22 @@ class ServerSettings(BaseModel):
             value,
         )
 
-        if url.scheme.lower() not in {"http", "https"} or not url.hostname:
+        try:
+            # .port raises for a non-numeric or out-of-range port.
+            valid = (
+                url.scheme.lower() in {"http", "https"}
+                and bool(url.hostname)
+                and (url.port is None or url.port > 0)
+            )
+
+        except ValueError:
+            valid = False
+
+        if not valid:
             raise ValueError(
                 "LOC_SERVER_FRONTEND_URL must start with http:// or https:// "
-                f"and name a host, for example http://localhost:5173 (got {value!r}).",
+                "and name a host with an optional port from 1 to 65535, for "
+                f"example http://localhost:5173 (got {value!r}).",
             )
 
         return value

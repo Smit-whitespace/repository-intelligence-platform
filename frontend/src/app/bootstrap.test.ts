@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { useAuthStore } from "@/stores/authStore";
+import { SIGN_IN_TIMEOUT_MS, useAuthStore } from "@/stores/authStore";
 import { bootstrap } from "./bootstrap";
 
 afterEach(() => {
@@ -45,6 +45,47 @@ describe("bootstrap", () => {
 
     expect(render).toHaveBeenCalledOnce();
     expect(useAuthStore.getState().linkError).toMatch(/Could not reach/);
+  });
+
+  it("gives up on a stalled exchange and still renders", async () => {
+    vi.useFakeTimers();
+
+    // A backend that accepts the request but never answers (until aborted).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () =>
+              reject(new DOMException("Aborted", "AbortError")),
+            );
+          }),
+      ),
+    );
+    window.history.pushState(null, "", "/?code=abc");
+
+    const render = vi.fn();
+    const started = bootstrap(render);
+
+    await vi.advanceTimersByTimeAsync(SIGN_IN_TIMEOUT_MS + 1);
+    await started;
+
+    vi.useRealTimers();
+
+    // Graphify on #7: the page used to stay blank for as long as the
+    // request hung.
+    expect(render).toHaveBeenCalledOnce();
+    expect(useAuthStore.getState().linkError).toMatch(/did not answer/);
+  });
+
+  it("renders even if signing in throws", async () => {
+    const render = vi.fn();
+
+    await bootstrap(render, () => Promise.reject(new Error("unexpected"))).catch(
+      () => undefined,
+    );
+
+    expect(render).toHaveBeenCalledOnce();
   });
 
   it("renders straight away without a code", async () => {

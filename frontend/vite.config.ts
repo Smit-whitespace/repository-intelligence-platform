@@ -1,6 +1,12 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
+
+// The version shown in the app comes from package.json, its one source.
+const { version } = JSON.parse(
+  readFileSync(path.resolve(__dirname, "package.json"), "utf-8"),
+) as { version: string };
 
 // The frontend calls the API at the relative path /api/v1 by default, so the
 // dev server forwards /api to the backend. Override the target with
@@ -10,6 +16,9 @@ const backendUrl = process.env.RIP_BACKEND_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

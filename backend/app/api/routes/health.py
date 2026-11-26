@@ -5,6 +5,8 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
+from app.core.version import APPLICATION_VERSION
+
 
 class HealthResponse(BaseModel):
     """Application health response."""
@@ -26,7 +28,7 @@ class HealthResponse(BaseModel):
     version: str = Field(
         description="Application version.",
         examples=[
-            "0.1.0",
+            APPLICATION_VERSION,
         ],
     )
 
@@ -35,7 +37,7 @@ class HealthResponse(BaseModel):
             "example": {
                 "status": "healthy",
                 "application": "Repository Intelligence Platform (RIP)",
-                "version": "0.1.0",
+                "version": APPLICATION_VERSION,
             },
         },
     )
@@ -60,5 +62,5 @@ def get_health() -> HealthResponse:
     return HealthResponse(
         status="healthy",
         application="Repository Intelligence Platform (RIP)",
-        version="0.1.0",
+        version=APPLICATION_VERSION,
     )

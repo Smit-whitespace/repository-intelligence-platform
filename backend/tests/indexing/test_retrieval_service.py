@@ -199,6 +199,33 @@ class TestSearch:
 
         assert len(result.results) == 5
 
+    def test_a_zero_limit_returns_nothing(
+        self,
+    ) -> None:
+        """The ranking loop checked the limit only after adding a result,
+        so a limit of 0 returned the whole candidate pool (Graphify, #10)."""
+
+        service, provider, store = create_service()
+
+        provider.embed.return_value = [
+            EmbeddingVector(
+                values=[1.0, 2.0, 3.0],
+            ),
+        ]
+
+        store.search.return_value = [
+            create_hit(chunk_id=f"c{i}", distance=i / 10)
+            for i in range(5)
+        ]
+
+        result = service.search(
+            make_query(
+                limit=0,
+            ),
+        )
+
+        assert result.results == []
+
     def test_shows_each_file_once_with_its_best_chunk(
         self,
     ) -> None:

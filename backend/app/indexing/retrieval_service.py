@@ -159,6 +159,9 @@ class RetrievalService:
           show ten files instead of several chunks of a few.
         """
 
+        if limit <= 0:
+            return []
+
         scored = sorted(
             (
                 (

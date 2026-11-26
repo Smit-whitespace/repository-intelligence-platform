@@ -366,6 +366,23 @@ class TestSummary:
         assert summary["hit_at_limit"] == 2 / 3
 
 
+class TestCommandLine:
+    """`python -m eval` argument checks."""
+
+    def test_a_limit_below_one_is_refused(self) -> None:
+        """--limit 0 used to report dozens of results (Graphify, #10)."""
+
+        import pytest
+
+        from eval.__main__ import positive_int
+
+        for bad in ["0", "-3", "abc"]:
+            with pytest.raises(Exception):
+                positive_int(bad)
+
+        assert positive_int("10") == 10
+
+
 class TestCreateEvaluator:
     """Tests for create_retrieval_evaluator factory."""
 

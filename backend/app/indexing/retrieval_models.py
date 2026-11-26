@@ -42,6 +42,10 @@ class SearchResult(BaseModel):
     ``1 / (1 + distance)``. The value should only be interpreted as a
     relative ranking metric — higher is more relevant. It is not comparable
     across different queries or embedding models.
+
+    It includes the ranking adjustments, so results are always in score
+    order: a test file's score is multiplied by ``TEST_FILE_WEIGHT``
+    (see ``RetrievalService._rank``).
     """
 
     chunk_id: str

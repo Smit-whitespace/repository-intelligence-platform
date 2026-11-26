@@ -49,6 +49,23 @@ def summarize(
     }
 
 
+def positive_int(
+    value: str,
+) -> int:
+    """An argparse type: a whole number of at least 1."""
+
+    try:
+        number = int(value)
+
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{value!r} is not a whole number") from None
+
+    if number < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+
+    return number
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="python -m eval",
@@ -64,7 +81,7 @@ def main() -> None:
 
     parser.add_argument(
         "--limit",
-        type=int,
+        type=positive_int,
         default=10,
         help="Chunks retrieved per question (default 10, as agents get).",
     )

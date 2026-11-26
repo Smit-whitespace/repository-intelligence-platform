@@ -112,6 +112,8 @@ sequenceDiagram
 
 - **File:** `app/chat/ollama_provider.py`
 - Default implementation communicating with local Ollama instance
+- Caps each answer at 4,096 tokens (`MAX_OUTPUT_TOKENS`, thinking included). Without the cap, a model caught in a repetition loop wrote one answer for over an hour and a half. An answer the cap cuts short ends with a note saying so.
+- Streams under the hood, even for `generate()`, so the provider's `timeout_seconds` (default 120) means "Ollama sent nothing for that long", not "the answer took that long".
 
 ---
 
@@ -149,8 +151,47 @@ Context assembly is a separate abstraction because prompt construction strategy 
 ## Known Limitations
 
 - No conversation history management beyond a single request-response cycle
-- No streaming chat in the API (backlog — SSE endpoint is defined but not wired)
-- Context assembly uses a fixed prompt template — no customization exposed
+- Context assembly uses a fixed prompt template — no customization exposed. It was chosen by measurement; see Measuring Answer Quality.
+
+---
+
+## Measuring Answer Quality
+
+`python -m eval.answers` asks the search questions (`backend/eval/benchmarks.py`, and the held-out `backend/eval/holdout.py` with `--set holdout`) through the same chat service the app uses, with the configured chat model, and scores every answer:
+
+- **Coverage:** the share of the question's expected files the answer cites, symbols it names and concepts it explains, averaged.
+- **Invented names:** file paths, and names in code spans, that exist nowhere in the repository. Runtime files the code mentions (such as `.local_openclaw/project.json`) count as real.
+- **Refusals**, length and time per answer.
+
+```powershell
+cd backend
+..\.venv\Scripts\python.exe -m eval.answers --root <path of an indexed copy of this repository> --json answers.json
+```
+
+Keyword coverage only stands in for a useful explanation, so read the answers in the JSON report too. The model answers differently every run: run each version at least twice, and count a change only if it beats the gap between two runs of the same version. Keep the JSON report outside the repository, or the next run will treat its invented names as real.
+
+**Prompt changes (2026-11-26, Sprint 14; `qwen3:8b`, thinking off).** The baseline answered tersely and cited few files. Each version was run twice on the 34 tuning questions:
+
+| Version | Coverage | Answers inventing a name | Refusals | Words | Kept? |
+|---|---|---|---|---|---|
+| Baseline: rules-only instruction, 2,000-token context | 33.7% / 35.9% | 6% / 3% | 3% / 6% | ~150 | |
+| Context raised to 4,000 tokens | 37.2% / 39.3% | 3% / 6% | 3% / 3% | ~150 | yes, with the next row |
+| Instruction asks to explain the flow ("explain") | 44.7% / 42.7% | 3% / 6% | 0% / 0% | ~115 | |
+| Both ("explain4k") | **46.1% / 46.5%** | 6% / 3% | 0% / 0% | ~114 | **in use** |
+| Both, plus "cover every part, step by step" ("thorough4k") | 51.3% / 47.2% | 12% / 6% | 3% / 3% | ~190 | no: invented more, including vector stores RIP does not have |
+
+The 4,000-token context only changes the prompt for the 6 questions whose retrieved code exceeds 2,000 tokens. On those 6, coverage rose from 34% to 47%; on the other 28 it moved within run-to-run noise. "explain" made 19 questions better and 7 worse, and left 8 unchanged. No answer reached the 4,096-token output cap.
+
+Confirmed on the 15 held-out questions, never used for tuning:
+
+| Version | Coverage | Answers inventing a name | Refusals |
+|---|---|---|---|
+| Baseline | 33.9% / 28.9% | 13% / 0% | 27% / 27% |
+| explain4k | **42.2% / 43.9%** | **0% / 0%** | 27% / 27% |
+
+What is left:
+- **explain4k grounds answers better rather than explaining more.** File citations doubled (about 24% to 48% on the tuning set), but answers got shorter and concept coverage stayed level. "thorough4k" explains more (concept coverage up to 51-56%, about 190 words), but invents more; making that depth safe is the next step.
+- **4 held-out questions are refused in every run.** For two, search never returns the file (`authStore.ts`, `SignIn.tsx`), so no prompt can help. For the other two, the expected file is in the context and the model still refuses.
 
 ---
 

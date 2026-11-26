@@ -376,7 +376,9 @@ class TestDefaultContextAssembly:
 
         instruction = response.prompt.messages[0].content
 
-        assert "cite the source file path" in instruction
+        assert "naming the files (by path)" in instruction
+
+        assert "Wrap file paths and code names in backticks" in instruction
 
         assert "ONLY the repository context" in instruction
 
@@ -399,6 +401,33 @@ class TestDefaultContextAssembly:
         instruction = response.prompt.messages[0].content
 
         assert "Never fabricate files, functions, classes, or APIs" in instruction
+
+    def test_instruction_asks_for_an_explanation_not_just_a_pointer(
+        self,
+    ) -> None:
+        """Sprint 14: measured answers improved when asked to explain the flow."""
+
+        assembly = DefaultContextAssembly()
+
+        response = assembly.assemble(
+            ContextAssemblyRequest(
+                query="test",
+                results=[create_result()],
+            ),
+        )
+
+        instruction = response.prompt.messages[0].content
+
+        assert "Start with a direct answer" in instruction
+
+        assert "how they call or depend on each other" in instruction
+
+    def test_default_context_budget_is_4000_tokens(
+        self,
+    ) -> None:
+        """Sprint 14: 2,000 tokens dropped retrieved code on 6 of 34 questions."""
+
+        assert DefaultContextAssembly()._max_context_tokens == 4000  # noqa: SLF001
 
     def test_context_overview_included(
         self,

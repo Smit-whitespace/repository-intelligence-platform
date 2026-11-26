@@ -75,6 +75,7 @@ def build_chat_provider(
             model=effective.model,
             base_url=provider.base_url,
             think=effective.think,
+            timeout_seconds=provider.timeout_seconds,
         )
 
     if provider.type is ProviderType.OPENAI_COMPATIBLE:

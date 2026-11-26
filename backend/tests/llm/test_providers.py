@@ -18,7 +18,11 @@ from app.chat.models import (
     ChatPrompt,
     ChatRole,
 )
-from app.chat.ollama_provider import OllamaChatProvider
+from app.chat.ollama_provider import (
+    MAX_OUTPUT_TOKENS,
+    TRUNCATION_NOTE,
+    OllamaChatProvider,
+)
 from app.core.config.models import OllamaSettings
 from app.indexing.exceptions import EmbeddingError
 from app.indexing.ollama_provider import OllamaEmbeddingProvider
@@ -542,7 +546,7 @@ def test_think_setting_reaches_ollama(
 
     client = MagicMock()
 
-    client.chat.return_value.message.content = "answer"
+    client.chat.return_value = iter([_ollama_part("answer", done=True)])
 
     chat._client = client  # noqa: SLF001
 
@@ -638,6 +642,113 @@ def test_lazy_embedding_provider_builds_only_when_used() -> None:
 
 
 # --- Ollama unreachable --------------------------------------------------
+
+
+def _ollama_part(
+    content: str,
+    done: bool = False,
+    done_reason: str | None = None,
+) -> SimpleNamespace:
+    """One streamed piece of an Ollama chat reply."""
+
+    return SimpleNamespace(
+        message=SimpleNamespace(content=content),
+        done=done,
+        done_reason=done_reason,
+    )
+
+
+def _ollama_chat(
+    *parts: SimpleNamespace,
+) -> tuple[OllamaChatProvider, MagicMock]:
+    provider = OllamaChatProvider(OllamaSettings())
+
+    client = MagicMock()
+
+    client.chat.return_value = iter(parts)
+
+    provider._client = client  # noqa: SLF001
+
+    return provider, client
+
+
+def test_ollama_chat_caps_the_answer_length() -> None:
+    """Regression: a looping model wrote one answer for over an hour."""
+
+    provider, client = _ollama_chat(_ollama_part("answer", done=True, done_reason="stop"))
+
+    provider.generate(PROMPT)
+
+    assert client.chat.call_args.kwargs["options"] == {
+        "num_predict": MAX_OUTPUT_TOKENS,
+    }
+
+
+def test_ollama_generate_joins_the_streamed_answer() -> None:
+    provider, client = _ollama_chat(
+        _ollama_part("Edits are "),
+        _ollama_part("applied by the editing service.", done=True, done_reason="stop"),
+    )
+
+    response = provider.generate(PROMPT)
+
+    assert response.content == "Edits are applied by the editing service."
+    assert client.chat.call_args.kwargs["stream"] is True
+
+
+def test_ollama_says_when_the_cap_cut_an_answer_short() -> None:
+    provider, _ = _ollama_chat(
+        _ollama_part("It loops and loops"),
+        _ollama_part("", done=True, done_reason="length"),
+    )
+
+    content = provider.generate(PROMPT).content
+
+    assert content == "It loops and loops" + TRUNCATION_NOTE
+    assert "4,096-token limit" in TRUNCATION_NOTE
+
+
+def test_ollama_finished_answer_gets_no_note() -> None:
+    provider, _ = _ollama_chat(_ollama_part("Done.", done=True, done_reason="stop"))
+
+    assert [c.content for c in provider.stream(PROMPT)] == ["Done."]
+
+
+def test_ollama_empty_answer_is_an_error() -> None:
+    provider, _ = _ollama_chat(_ollama_part("", done=True, done_reason="stop"))
+
+    with pytest.raises(ChatProviderError, match="no content"):
+        provider.generate(PROMPT)
+
+
+def test_ollama_silence_reports_a_timeout_not_a_missing_server() -> None:
+    provider, client = _ollama_chat()
+
+    client.chat.side_effect = httpx.ReadTimeout("timed out")
+
+    with pytest.raises(ChatProviderError, match="sent nothing for 120 seconds"):
+        provider.generate(PROMPT)
+
+
+def test_ollama_timeout_comes_from_the_provider_configuration() -> None:
+    """Regression: the configured timeout never reached the Ollama client."""
+
+    configuration = ModelConfiguration.model_validate(
+        {
+            "providers": {"local": {"type": "ollama", "timeout_seconds": 45}},
+            "primary": {"provider": "local", "model": "qwen3:8b"},
+            "embedding": {"provider": "local", "model": "nomic-embed-text"},
+        },
+    )
+
+    chat = build_chat_provider(
+        configuration=configuration,
+        effective=ModelResolver(configuration).for_task(Task.CHAT_ANSWER),
+        ollama_settings=OllamaSettings(),
+    )
+
+    assert isinstance(chat, OllamaChatProvider)
+    assert chat._client._client.timeout.read == 45  # noqa: SLF001
 
 
 UNREACHABLE = OllamaSettings(

@@ -1,6 +1,35 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { config } from "@/lib/config/env";
+
+/**
+ * Remembering the token is a convenience. When the browser blocks or fills
+ * storage, writes are dropped and the token lives only in memory for this
+ * session, instead of an exception breaking sign-in.
+ */
+const bestEffortLocalStorage: StateStorage = {
+  getItem: (name) => {
+    try {
+      return window.localStorage.getItem(name);
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name, value) => {
+    try {
+      window.localStorage.setItem(name, value);
+    } catch {
+      // Not remembered across reloads; signing in still works.
+    }
+  },
+  removeItem: (name) => {
+    try {
+      window.localStorage.removeItem(name);
+    } catch {
+      // Nothing stored to remove.
+    }
+  },
+};
 
 /**
  * The API token (ADR-0020). The backend prints a sign-in link with a
@@ -35,6 +64,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "rip-api-token",
+      storage: createJSONStorage(() => bestEffortLocalStorage),
       partialize: (state) => ({ token: state.token }),
     },
   ),
@@ -49,12 +79,22 @@ const PENDING_KEY = "rip-pending-sign-in";
 type PendingSignIn = { code: string; verifier: string };
 
 /**
- * Kept in this tab's session storage until sign-in succeeds, so a request
- * that timed out (possibly after the backend used the code) can be retried
- * with the same verifier, which the backend accepts again. It never goes
- * in the URL, and it is dropped when the tab closes.
+ * The pending sign-in lives in memory, so signing in never depends on
+ * storage, and is also copied to this tab's session storage so a retry
+ * still works after a reload. (When storage is blocked, the copy simply
+ * fails: the link still works and can be retried until the page reloads.)
+ * It never goes in the URL, and session storage drops it when the tab
+ * closes. Kept until sign-in succeeds, so a request that timed out
+ * (possibly after the backend used the code) can be retried with the same
+ * verifier, which the backend accepts again.
  */
+let memoryPending: PendingSignIn | null = null;
+
 function readPending(): PendingSignIn | null {
+  if (memoryPending) {
+    return memoryPending;
+  }
+
   try {
     const value = JSON.parse(window.sessionStorage.getItem(PENDING_KEY) ?? "null") as unknown;
 
@@ -74,14 +114,22 @@ function readPending(): PendingSignIn | null {
 }
 
 function writePending(pending: PendingSignIn) {
+  // Drop any older pending sign-in first, so a failed write below can
+  // never leave a stale one to be retried instead of this link.
+  clearPending();
+  memoryPending = pending;
+
   try {
     window.sessionStorage.setItem(PENDING_KEY, JSON.stringify(pending));
   } catch {
-    // Without storage a retry is impossible, but signing in still works.
+    // Blocked or full storage: the in-memory copy still signs in and
+    // retries; only a retry after a reload is lost.
   }
 }
 
 function clearPending() {
+  memoryPending = null;
+
   try {
     window.sessionStorage.removeItem(PENDING_KEY);
   } catch {
@@ -115,6 +163,11 @@ export async function signInFromUrl(location: Location = window.location) {
   }
 
   await exchangePending();
+}
+
+/** Forget the in-memory pending sign-in (tests start from a fresh page). */
+export function resetPendingSignInForTests() {
+  memoryPending = null;
 }
 
 /** Retry a sign-in that timed out or could not reach the backend. */

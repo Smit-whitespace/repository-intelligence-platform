@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryClient } from "@/lib/api/queryClient";
-import { signInFromUrl, useAuthStore } from "@/stores/authStore";
+import {
+  resetPendingSignInForTests,
+  signInFromUrl,
+  useAuthStore,
+} from "@/stores/authStore";
 import { App } from "./App";
 
 const responses: Record<string, unknown> = {
@@ -63,6 +67,7 @@ beforeEach(() => {
   window.localStorage.clear();
   useAuthStore.setState({ token: null, rejected: false, linkError: null, canRetry: false });
   window.sessionStorage.clear();
+  resetPendingSignInForTests();
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

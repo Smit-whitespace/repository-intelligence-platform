@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SIGN_IN_TIMEOUT_MS, retrySignIn, signInFromUrl, useAuthStore } from "./authStore";
+import {
+  SIGN_IN_TIMEOUT_MS,
+  resetPendingSignInForTests,
+  retrySignIn,
+  signInFromUrl,
+  useAuthStore,
+} from "./authStore";
 
 type Body = { code: string; verifier: string };
 
@@ -26,6 +32,8 @@ function hangUntilAborted(_input: RequestInfo | URL, init?: RequestInit) {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  resetPendingSignInForTests();
   useAuthStore.setState({ token: null, rejected: false, linkError: null, canRetry: false });
   window.sessionStorage.clear();
   window.history.pushState(null, "", "/");
@@ -96,6 +104,52 @@ describe("sign-in retry", () => {
 
     expect(useAuthStore.getState().canRetry).toBe(false);
     expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it("signs in and can retry even when session storage is blocked", async () => {
+    // Graphify on #8: with storage blocked the pending sign-in was never
+    // saved, so the link silently did nothing.
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Blocked", "SecurityError");
+    });
+
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(json(200, { token: "the-token" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+    window.history.pushState(null, "", "/?code=printed-code");
+
+    await signInFromUrl();
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(useAuthStore.getState().canRetry).toBe(true);
+
+    await retrySignIn();
+
+    const [attempt, retry] = fetchMock.mock.calls.map(bodyOf);
+
+    expect(attempt.code).toBe("printed-code");
+    expect(retry).toEqual(attempt);
+    expect(useAuthStore.getState().token).toBe("the-token");
+  });
+
+  it("uses a new link, not an older pending one", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError("Failed to fetch"))
+      .mockResolvedValueOnce(json(200, { token: "the-token" }));
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    window.history.pushState(null, "", "/?code=old-code");
+    await signInFromUrl();
+
+    window.history.pushState(null, "", "/?code=new-code");
+    await signInFromUrl();
+
+    expect(bodyOf(fetchMock.mock.calls[1]).code).toBe("new-code");
   });
 
   it("makes a new verifier for every link", async () => {

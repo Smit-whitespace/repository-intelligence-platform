@@ -1,6 +1,6 @@
 """Validation after edits: run the project's own checks.
 
-Commands come only from ``<root>/.local_openclaw/validation.json``. That
+Commands come only from ``<root>/.rip/validation.json``. That
 directory is protected, so no edit (and no agent) can write it: an agent
 can never choose what gets executed. People configure it from the RIP
 app or by editing the file.
@@ -133,7 +133,7 @@ def load_validation_config(
 ) -> ValidationConfigView:
     """Return the project's validation commands (none if not configured).
 
-    The file sits in the repository's ``.local_openclaw`` directory, which
+    The file sits in the repository's ``.rip`` directory, which
     a cloned repository can supply. Only a file signed by this
     installation is trusted; see ``app/core/storage/integrity.py``.
     """
@@ -261,7 +261,7 @@ def _refuse_link(
     ):
         raise EditingError(
             "The validation configuration is a link; RIP does not follow "
-            "it. Delete .local_openclaw/validation.json and set the "
+            "it. Delete .rip/validation.json and set the "
             "commands again.",
         )
 

@@ -306,7 +306,7 @@ def test_single_line_replace_in_an_lf_file_never_adds_crlf(
     [
         "../outside.py",
         ".git/hooks/pre-commit",
-        ".local_openclaw/validation.json",
+        ".rip/validation.json",
     ],
 )
 def test_unsafe_paths_are_rejected_before_reading(

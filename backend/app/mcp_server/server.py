@@ -68,7 +68,7 @@ Repository Intelligence Platform (RIP): read-only tools for one repository.
 - Files excluded by the repository's .gitignore are not listed, searched
   or indexed, but read_file can still open them by path.
 - Secret-like files (.env, credentials, private keys) and the .git and
-  .local_openclaw directories are never readable.
+  .rip directories are never readable.
 """
 
 _READ_ONLY = ToolAnnotations(

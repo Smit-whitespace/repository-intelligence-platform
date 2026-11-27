@@ -386,7 +386,7 @@ def rollback_edit_proposal(
     summary="Get validation commands",
     description=(
         "Return the project's validation commands (from "
-        ".local_openclaw/validation.json)."
+        ".rip/validation.json)."
     ),
     response_description="Validation commands.",
     responses=_PROPOSAL_RESPONSES,

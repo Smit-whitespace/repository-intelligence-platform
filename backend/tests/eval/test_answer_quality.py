@@ -20,7 +20,7 @@ REPOSITORY = Repository(
     identifiers=frozenset(
         {"ProjectInitializationService", "open_project", "build_index", "root"},
     ),
-    mentioned_paths=frozenset({"local_openclaw/project.json", "credentials.json"}),
+    mentioned_paths=frozenset({"rip/project.json", "credentials.json"}),
 )
 
 CASE = RetrievalTestCase(
@@ -105,8 +105,8 @@ class TestInventedNames:
 
     def test_runtime_files_the_code_mentions_are_not_invented(self) -> None:
         answer = (
-            "Stored in `.local_openclaw/project.json` and "
-            "`backend/.local_openclaw/project.json`; `credentials.json` is a secret."
+            "Stored in `.rip/project.json` and "
+            "`backend/.rip/project.json`; `credentials.json` is a secret."
         )
 
         assert invented_paths(answer, REPOSITORY) == []
@@ -187,13 +187,13 @@ class TestLoadRepository:
         tmp_path: Path,
     ) -> None:
         (tmp_path / "store.py").write_text(
-            'PATH = "~/.local_openclaw/models.json"  # see .\\notes\\todo.md\n',
+            'PATH = "~/.rip/models.json"  # see .\\notes\\todo.md\n',
         )
 
         repository = load_repository(tmp_path)
 
         assert repository.mentioned_paths == {
-            "local_openclaw/models.json",
+            "rip/models.json",
             "notes/todo.md",
         }
 

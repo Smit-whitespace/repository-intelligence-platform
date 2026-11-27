@@ -122,7 +122,7 @@ def test_apply_rejects_unregistered_root(
     assert not (tmp_path / "evil.txt").exists()
 
     # No project storage may be created as a side effect.
-    assert not (tmp_path / ".local_openclaw").exists()
+    assert not (tmp_path / ".rip").exists()
 
 
 def test_rollback_and_plan_reject_unregistered_root(
@@ -162,7 +162,7 @@ def test_rollback_and_plan_reject_unregistered_root(
         ".git/hooks/pre-commit",
         ".GIT/config",
         "sub/.git/config",
-        ".local_openclaw/snapshots/forged.json",
+        ".rip/snapshots/forged.json",
         ".Local_OpenClaw/project.json",
     ],
 )
@@ -553,7 +553,7 @@ def test_edit_outside_the_root_is_rejected_before_any_read(
 
     for bad_path in (
         "../outside.txt",
-        ".local_openclaw/project.json",
+        ".rip/project.json",
     ):
         with pytest.raises(
             EditingError,
@@ -646,7 +646,7 @@ def test_empty_change_set_is_rejected(
 def test_linked_project_storage_is_not_a_registered_project(
     tmp_path: Path,
 ) -> None:
-    """A .local_openclaw that is a link would redirect RIP's writes."""
+    """A .rip that is a link would redirect RIP's writes."""
 
     root = tmp_path / "repo"
 
@@ -658,8 +658,8 @@ def test_linked_project_storage_is_not_a_registered_project(
 
     try:
         os.symlink(
-            elsewhere / ".local_openclaw",
-            root / ".local_openclaw",
+            elsewhere / ".rip",
+            root / ".rip",
             target_is_directory=True,
         )
 

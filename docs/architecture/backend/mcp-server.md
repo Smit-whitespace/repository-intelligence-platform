@@ -114,7 +114,7 @@ To let the agent apply its own edits, add `--editing apply` after `--root "<REPO
 
 ### A first session
 
-Ask the agent something like: *"Use the rip tools: check index_status, reindex if needed, then find where file edits are applied and explain the safety checks."* On first use, the server registers `<REPO>` as a RIP project (metadata only, in `<REPO>\.local_openclaw\`). Nothing is indexed until `reindex` is called.
+Ask the agent something like: *"Use the rip tools: check index_status, reindex if needed, then find where file edits are applied and explain the safety checks."* On first use, the server registers `<REPO>` as a RIP project (metadata only, in `<REPO>\.rip\`). Nothing is indexed until `reindex` is called.
 
 ### Keeping agents to what you allowed
 
@@ -126,8 +126,8 @@ For Claude Code, add deny rules to your user settings (`~/.claude/settings.json`
 {
   "permissions": {
     "deny": [
-      "Read(~/.local_openclaw/**)",
-      "Edit(~/.local_openclaw/**)",
+      "Read(~/.rip/**)",
+      "Edit(~/.rip/**)",
       "Bash(curl *)",
       "WebFetch(domain:localhost)",
       "WebFetch(domain:127.0.0.1)"
@@ -162,7 +162,7 @@ RepositoryWorkspace (read tools)   IndexingService (index_status, reindex)
 - **One process, one repository.** The root comes from the user's own configuration, which is also what makes registering it on startup legitimate. Home directories and drive roots are refused, both here and in the REST API.
 - **Model configuration changes reach running servers.** Before every tool call the server checks whether `models.json` changed, so an agent's `reindex` never rebuilds the index with a model you have since replaced.
 - **Failures are failures.** A `reindex` in which every file failed (for example, Ollama is not running) is reported as a tool error, not as a successful run, so the agent does not assume the index is current.
-- **Indexing is locked across processes.** The RIP app and an MCP server can run against the same project at once. Indexing takes an OS file lock (`.local_openclaw/index/index.lock`), so a second indexer gets "another process is indexing" (HTTP 409 in REST, a tool error in MCP) instead of corrupting ChromaDB. The OS releases the lock if the holder crashes.
+- **Indexing is locked across processes.** The RIP app and an MCP server can run against the same project at once. Indexing takes an OS file lock (`.rip/index/index.lock`), so a second indexer gets "another process is indexing" (HTTP 409 in REST, a tool error in MCP) instead of corrupting ChromaDB. The OS releases the lock if the holder crashes.
 
 ---
 

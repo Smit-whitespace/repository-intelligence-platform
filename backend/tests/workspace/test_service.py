@@ -207,7 +207,7 @@ def test_paths_outside_the_root_are_rejected(
     [
         ".git/config",
         ".GIT/config",
-        ".local_openclaw/project.json",
+        ".rip/project.json",
     ],
 )
 def test_protected_directories_are_not_readable(
@@ -518,7 +518,7 @@ def test_tree_skips_ignored_and_protected_directories(
             (
                 "node_modules",
                 ".git",
-                ".local_openclaw",
+                ".rip",
             ),
         )
         for path in paths

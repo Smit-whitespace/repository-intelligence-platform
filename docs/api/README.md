@@ -13,10 +13,10 @@
 
 The backend exposes a REST API through FastAPI. All endpoints are versioned under `/api/v1/` (via router prefix). The API is documented interactively via Swagger at `/docs` when the server is running.
 
-**Authentication.** Every endpoint except `GET /api/v1/health` and `POST /api/v1/auth/sign-in` needs `Authorization: Bearer <token>`, with the token from `~/.local_openclaw/api.token` (created the first time the backend starts). The backend prints a sign-in link for the RIP app at startup; it carries a single-use code (valid once, for ten minutes) that the app exchanges at `POST /api/v1/auth/sign-in` (`{"code": "…", "verifier": "…"}` → `{"token": "…"}`; the verifier is a random value of at least 16 characters, and only the same verifier can use a code again). In Swagger, use **Authorize** and paste the token. See [ADR-0020](../adr/adr-0020-local-api-token.md).
+**Authentication.** Every endpoint except `GET /api/v1/health` and `POST /api/v1/auth/sign-in` needs `Authorization: Bearer <token>`, with the token from `~/.rip/api.token` (created the first time the backend starts). The backend prints a sign-in link for the RIP app at startup; it carries a single-use code (valid once, for ten minutes) that the app exchanges at `POST /api/v1/auth/sign-in` (`{"code": "…", "verifier": "…"}` → `{"token": "…"}`; the verifier is a random value of at least 16 characters, and only the same verifier can use a code again). In Swagger, use **Authorize** and paste the token. See [ADR-0020](../adr/adr-0020-local-api-token.md).
 
 ```powershell
-$token = Get-Content "$HOME\.local_openclaw\api.token"
+$token = Get-Content "$HOME\.rip\api.token"
 Invoke-RestMethod http://localhost:8000/api/v1/system/version -Headers @{ Authorization = "Bearer $token" }
 ```
 
@@ -202,7 +202,7 @@ All endpoints return standardized error responses:
 - **422 Unprocessable Entity** — request validation failed (FastAPI's default format)
 - **500 Server Error** — unexpected failure
 
-Requests whose `Host` header is not in `LOC_SERVER_ALLOWED_HOSTS` (default `localhost,127.0.0.1`) are rejected with **400** before reaching any endpoint. This blocks DNS rebinding.
+Requests whose `Host` header is not in `RIP_SERVER_ALLOWED_HOSTS` (default `localhost,127.0.0.1`) are rejected with **400** before reaching any endpoint. This blocks DNS rebinding.
 
 Domain errors return `{"detail": "<message>"}`.
 

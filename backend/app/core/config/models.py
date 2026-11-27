@@ -55,7 +55,7 @@ class ServerSettings(BaseModel):
 
         if not valid:
             raise ValueError(
-                "LOC_SERVER_FRONTEND_URL must start with http:// or https:// "
+                "RIP_SERVER_FRONTEND_URL must start with http:// or https:// "
                 "and name a host with an optional port from 1 to 65535, for "
                 f"example http://localhost:5173 (got {value!r}).",
             )
@@ -86,24 +86,24 @@ class ModelsSettings(BaseModel):
     """Where the model configuration file lives."""
 
     config_path: str = ""
-    """Empty means the per-user default, ~/.local_openclaw/models.json."""
+    """Empty means the per-user default, ~/.rip/models.json."""
 
 
 class SecuritySettings(BaseModel):
     """Where RIP's per-user secrets live."""
 
     integrity_key_path: str = ""
-    """Empty means the per-user default, ~/.local_openclaw/integrity.key."""
+    """Empty means the per-user default, ~/.rip/integrity.key."""
 
     api_token_path: str = ""
-    """Empty means the per-user default, ~/.local_openclaw/api.token."""
+    """Empty means the per-user default, ~/.rip/api.token."""
 
 
 class ChromaSettings(BaseModel):
     """ChromaDB configuration.
 
     The persist directory is intentionally not configurable here: it is
-    derived from the opened project root (``<root>/.local_openclaw/index/chroma``)
+    derived from the opened project root (``<root>/.rip/index/chroma``)
     so that storage identity never depends on the process working directory.
     """
 

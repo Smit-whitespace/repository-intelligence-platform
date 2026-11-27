@@ -25,7 +25,7 @@ def main() -> None:
 
     store = ChromaVectorStore(
         persist_directory=Path(
-            ".local_openclaw/index/chroma",
+            ".rip/index/chroma",
         ),
         collection_name=settings.chroma.collection_name,
     )

@@ -1,14 +1,14 @@
 """Integrity of RIP's own state files stored inside repositories.
 
 Proposals, snapshots and validation commands live in the project's
-``.local_openclaw`` directory. That directory is ordinary repository
-content: cloning a repository can bring a ``.local_openclaw`` with it.
+``.rip`` directory. That directory is ordinary repository
+content: cloning a repository can bring a ``.rip`` with it.
 Without a check, a malicious repository could ship validation commands
 that run the first time someone applies an edit, or a proposal whose
 stored contents differ from the diff it displays.
 
 So RIP signs every such file it writes with an HMAC-SHA256 key that
-lives outside any repository (``~/.local_openclaw/integrity.key``), and
+lives outside any repository (``~/.rip/integrity.key``), and
 refuses files whose signature is missing or wrong. A signature is bound
 to the purpose of the file and to the resolved project root, so a signed
 file can be neither repurposed nor copied into another project.
@@ -26,21 +26,21 @@ from functools import lru_cache
 from pathlib import Path
 
 from app.core.config.settings import settings
-from app.core.storage.locations import PROJECT_STORAGE_DIRECTORY_NAME
+from app.core.storage.locations import user_storage_directory
 from app.core.storage.secret_file import read_or_create_secret
 
 INTEGRITY_KEY_FILE_NAME = "integrity.key"
 
 
 def integrity_key_path() -> Path:
-    """Return the key file path (``LOC_INTEGRITY_KEY_PATH`` overrides it)."""
+    """Return the key file path (``RIP_INTEGRITY_KEY_PATH`` overrides it)."""
 
     if settings.security.integrity_key_path:
         return Path(
             settings.security.integrity_key_path,
         ).expanduser()
 
-    return Path.home() / PROJECT_STORAGE_DIRECTORY_NAME / INTEGRITY_KEY_FILE_NAME
+    return user_storage_directory() / INTEGRITY_KEY_FILE_NAME
 
 
 @lru_cache(maxsize=1)

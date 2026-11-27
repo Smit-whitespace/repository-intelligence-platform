@@ -18,6 +18,9 @@ __pycache__/
 *.log
 
 # Local runtime state
+.rip/
+backend/.rip/
+# Former name of .rip (ADR-0021)
 .local_openclaw/
 backend/.local_openclaw/
 

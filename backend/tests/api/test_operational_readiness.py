@@ -267,11 +267,11 @@ def test_environment_configuration_overrides(
     get_settings.cache_clear()
 
     monkeypatch.setenv(
-        "LOC_SERVER_PORT",
+        "RIP_SERVER_PORT",
         "9123",
     )
     monkeypatch.setenv(
-        "LOC_CHROMA_PERSIST_DIRECTORY",
+        "RIP_CHROMA_PERSIST_DIRECTORY",
         str(
             tmp_path
             / "legacy-relative-persist-dir",
@@ -306,7 +306,7 @@ def test_invalid_environment_configuration_fails_startup(
     get_settings.cache_clear()
 
     monkeypatch.setenv(
-        "LOC_SERVER_PORT",
+        "RIP_SERVER_PORT",
         "not-an-integer",
     )
 

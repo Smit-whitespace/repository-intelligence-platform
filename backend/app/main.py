@@ -98,7 +98,7 @@ async def lifespan(
 def allowed_browser_origins() -> list[str]:
     """Origins whose pages may call the API directly from a browser.
 
-    The default dev server, plus wherever ``LOC_SERVER_FRONTEND_URL`` says
+    The default dev server, plus wherever ``RIP_SERVER_FRONTEND_URL`` says
     the app runs, so the sign-in link never opens an app the API refuses.
     (With the dev server's ``/api`` proxy, requests are same-origin and
     this list is not consulted.)

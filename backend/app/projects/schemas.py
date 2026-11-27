@@ -81,7 +81,7 @@ class ProjectInfoResponse(BaseModel):
     storage_directory: Path = Field(
         description="Absolute path to the project metadata directory.",
         examples=[
-            "/home/user/projects/my-project/.local_openclaw",
+            "/home/user/projects/my-project/.rip",
         ],
     )
 
@@ -98,7 +98,7 @@ class ProjectInfoResponse(BaseModel):
                 "name": "my-project",
                 "root_directory": "/home/user/projects/my-project",
                 "storage_directory": (
-                    "/home/user/projects/my-project/.local_openclaw"
+                    "/home/user/projects/my-project/.rip"
                 ),
                 "created_at": "2026-07-15T10:30:00Z",
             },

@@ -65,7 +65,7 @@ propose (search/replace operations)        plan (instruction -> edit model)
         \                                        /
          build_proposal: validate paths, apply operations, unified diff
                               |
-                 .local_openclaw/proposals/<id>.json   (status: pending)
+                 .rip/proposals/<id>.json   (status: pending)
                               |
         apply (snapshot, all-or-nothing) -> applied -> rollback -> rolled_back
         reject -> rejected
@@ -73,7 +73,7 @@ propose (search/replace operations)        plan (instruction -> edit model)
                  validation commands (optional, after apply)
 ```
 
-**Signed state.** `.local_openclaw` is repository content, so a cloned repository could ship its own proposals, snapshots or validation commands. RIP signs every one it writes with a per-user key outside any repository and refuses unsigned or altered ones (HTTP 403); validation commands that arrived with a repository are shown for review but never run until someone saves them. See [ADR-0019](../../adr/adr-0019-signed-project-state.md).
+**Signed state.** `.rip` is repository content, so a cloned repository could ship its own proposals, snapshots or validation commands. RIP signs every one it writes with a per-user key outside any repository and refuses unsigned or altered ones (HTTP 403); validation commands that arrived with a repository are shown for review but never run until someone saves them. See [ADR-0019](../../adr/adr-0019-signed-project-state.md).
 
 **Search/replace operations** are what both agents (over MCP) and RIP's own edit model produce: `{path, search, replace}`. `search` must be copied exactly from the file and occur exactly once; an empty `search` creates a file. Operations on one file apply in order. A search containing a line break must cover whole lines (start at the beginning of a line), so `"  return x\n"` cannot match inside `"    return x\n"` and quietly break indentation; a search without a line break may match within a line. Every problem (not found, ambiguous, part of a line, file exists or missing) is reported at once, per operation, so the author can fix them in one round. A search written with `\n` also matches a CRLF file, and the replacement keeps CRLF.
 
@@ -87,7 +87,7 @@ the replacement lines
 >>>>>>> REPLACE
 ```
 
-**Validation** (`validation.py`) runs the project's commands from `.local_openclaw/validation.json` after an apply, without a shell (argv lists), in the repository root, each with a timeout that kills the whole process tree (so `npm test` cannot outlive it), keeping the last 8,000 characters of output. A proposal is marked applied (with its snapshot) before validation runs, so a validation failure or crash never hides that files were written. That file is in a protected directory, so no edit and no agent can change what gets executed; people set it in the RIP app or `PUT /editing/validation`.
+**Validation** (`validation.py`) runs the project's commands from `.rip/validation.json` after an apply, without a shell (argv lists), in the repository root, each with a timeout that kills the whole process tree (so `npm test` cannot outlive it), keeping the last 8,000 characters of output. A proposal is marked applied (with its snapshot) before validation runs, so a validation failure or crash never hides that files were written. That file is in a protected directory, so no edit and no agent can change what gets executed; people set it in the RIP app or `PUT /editing/validation`.
 
 **Agent access** is gated by the MCP server's `--editing` flag: `off`, `propose` (default; a person applies in the RIP app) or `apply` (the agent may apply and roll back; applying runs validation commands, which execute repository code).
 
@@ -166,8 +166,8 @@ sequenceDiagram
 2. **All modifications are reversible.** Every `apply()` call creates a snapshot before making changes.
 3. **Snapshot content is captured before modification.** If a file doesn't exist, snapshot stores empty content.
 4. Editing never performs repository analysis — it only modifies.
-5. **Only registered projects can be edited.** `EditingService` rejects any root without `.local_openclaw/project.json` (`UnregisteredRepositoryError`, HTTP 403). The caller chooses the root, so without this check "stay inside the repository root" would restrict nothing.
-6. **Protected directories are never written.** `.git/` (writing `.git/hooks` is code execution) and `.local_openclaw/` (index and snapshots) are rejected at any depth, case-insensitively, and through symlinks. The list lives in `app/core/storage/locations.py` and is shared with the Workspace tools.
+5. **Only registered projects can be edited.** `EditingService` rejects any root without `.rip/project.json` (`UnregisteredRepositoryError`, HTTP 403). The caller chooses the root, so without this check "stay inside the repository root" would restrict nothing.
+6. **Protected directories are never written.** `.git/` (writing `.git/hooks` is code execution) and `.rip/` (index and snapshots) are rejected at any depth, case-insensitively, and through symlinks. The list lives in `app/core/storage/locations.py` and is shared with the Workspace tools.
 7. **Stale edits are refused.** Each `FileEdit.original_content` must equal the file's current content exactly (an empty string for a new file), or apply raises `EditConflictError` (HTTP 409).
 8. **Rollback never overwrites later work.** Snapshots record `applied_sha256` per file. Rollback accepts each file only in a state the snapshot knows: what the apply wrote, or what was there before it (absent, for a created file). That makes the snapshot named by an incomplete revert usable. Anything else raises `EditConflictError`. Snapshots from before this field skip the check.
 9. **Content is written byte for byte.** Reads and writes use `newline=""`, so line endings are never translated (the default would turn LF into CRLF on Windows).
@@ -204,7 +204,7 @@ The three-phase design (edit → review → apply) separates AI-generated change
 - The REST API requires the API token ([ADR-0020](../../adr/adr-0020-local-api-token.md)), but an agent running shell commands as you can read the token file. `--editing propose` therefore limits an agent fully only when its own permission rules or sandbox keep it away from RIP's files and API; see the [MCP server guide](mcp-server.md#keeping-agents-to-what-you-allowed).
 - Validation output is captured whole and then truncated; a command that prints gigabytes still holds them in memory briefly.
 - Paths are validated, then written later. A local process that swaps a parent directory for a junction in between could redirect a write. This needs a concurrent attacker who can already write to the repository.
-- A `.local_openclaw` directory or `project.json` that is a symlink or junction is not treated as a registered project.
+- A `.rip` directory or `project.json` that is a symlink or junction is not treated as a registered project.
 
 ---
 

@@ -27,7 +27,7 @@ class ChromaVectorStore(VectorStore):
     """Persistent ChromaDB-backed vector store.
 
     The persist directory is provided explicitly by the caller and is
-    derived from the project root (``<root>/.local_openclaw/index/chroma``),
+    derived from the project root (``<root>/.rip/index/chroma``),
     never from the process working directory.
     """
 

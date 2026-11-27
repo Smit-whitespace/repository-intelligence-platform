@@ -9,18 +9,18 @@ import tempfile
 from pathlib import Path
 
 # FastAPI's TestClient sends "Host: testserver"; allow it in tests only.
-os.environ["LOC_SERVER_ALLOWED_HOSTS"] = "localhost,127.0.0.1,testserver"
+os.environ["RIP_SERVER_ALLOWED_HOSTS"] = "localhost,127.0.0.1,testserver"
 
-# Never read or write the developer's real ~/.local_openclaw/models.json.
-# The file does not exist, so the LOC_OLLAMA_* defaults apply.
+# Never read or write the developer's real ~/.rip/models.json.
+# The file does not exist, so the RIP_OLLAMA_* defaults apply.
 _TEST_HOME = Path(tempfile.mkdtemp(prefix="rip-tests-"))
 
-os.environ["LOC_MODEL_CONFIG_PATH"] = str(
+os.environ["RIP_MODEL_CONFIG_PATH"] = str(
     _TEST_HOME / "models.json",
 )
 
 # The key that signs proposals, snapshots and validation commands.
-os.environ["LOC_INTEGRITY_KEY_PATH"] = str(
+os.environ["RIP_INTEGRITY_KEY_PATH"] = str(
     _TEST_HOME / "integrity.key",
 )
 
@@ -32,7 +32,7 @@ TEST_API_TOKEN = "rip-test-api-token"
     encoding="ascii",
 )
 
-os.environ["LOC_API_TOKEN_PATH"] = str(
+os.environ["RIP_API_TOKEN_PATH"] = str(
     _TEST_HOME / "api.token",
 )
 

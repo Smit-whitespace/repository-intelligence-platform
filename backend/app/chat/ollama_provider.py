@@ -45,7 +45,7 @@ class OllamaChatProvider(
         """Initialize the Ollama client.
 
         ``model``, ``base_url`` and ``timeout_seconds`` come from the model
-        configuration; without them the ``LOC_OLLAMA_*`` settings apply.
+        configuration; without them the ``RIP_OLLAMA_*`` settings apply.
         ``think`` turns a reasoning model's thinking on or off; ``None``
         leaves the model's default. The timeout is how long Ollama may stay
         silent, not how long an answer may take: answers are streamed, so

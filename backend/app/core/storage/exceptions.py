@@ -19,3 +19,7 @@ class StorageWriteError(StorageError):
 
 class StorageResourceNotFoundError(StorageError):
     """Raised when a requested storage resource does not exist."""
+
+
+class StorageMigrationError(StorageError):
+    """Raised when a storage directory under a former name cannot be moved."""

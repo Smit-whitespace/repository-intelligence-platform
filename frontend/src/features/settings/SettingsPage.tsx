@@ -239,7 +239,7 @@ function EffectiveModelsPanel() {
         <p className="mt-3 text-xs text-[#7A8599]">
           {configuration.data.saved
             ? "Configuration file: "
-            : "Using defaults from LOC_OLLAMA_* settings. Save a configuration to "}
+            : "Using defaults from RIP_OLLAMA_* settings. Save a configuration to "}
           <span className="break-anywhere font-mono" title={configuration.data.path}>
             {configuration.data.display_path ?? configuration.data.path}
           </span>

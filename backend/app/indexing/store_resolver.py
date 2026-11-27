@@ -3,7 +3,7 @@
 Every project owns its own persistent vector store at a location derived
 exclusively from the project root directory:
 
-    <root>/.local_openclaw/index/chroma
+    <root>/.rip/index/chroma
 
 Because the location derives from the project root — never the process
 working directory — the same project resolves to the same index no

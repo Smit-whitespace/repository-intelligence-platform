@@ -1,5 +1,6 @@
 """Every semantic entry point updates the index before it answers."""
 
+import json
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from app.dependencies.providers import (
     get_chat_service,
     get_index_freshness,
 )
+from app.indexing.exceptions import IndexIncompatibleError
 from app.indexing.freshness import ChangeSet
 from app.indexing.models import FreshnessResult, FreshnessState
 from app.main import app
@@ -263,3 +265,67 @@ def test_index_status_route_reports_without_updating(log, project) -> None:
     assert response.json()["state"] == "stale"
     assert log == ["status"]
     assert fake.roots == []
+
+
+class FailingChatService(FakeChatService):
+    def __init__(self, log: list[str], error: Exception) -> None:
+        super().__init__(log)
+        self.error = error
+
+    def chat(self, request: ChatRequest) -> ChatResponse:
+        raise self.error
+
+    def stream(self, request: ChatRequest) -> Iterator[ChatChunk]:
+        raise self.error
+
+
+def _install_failing(log: list[str], error: Exception, result: FreshnessResult):
+    fake = RecordingFreshness(log, result, ChangeSet(changed=["a.py"]))
+    app.dependency_overrides[get_index_freshness] = lambda: fake
+    app.dependency_overrides[get_chat_service] = lambda: FailingChatService(log, error)
+
+
+def test_a_stream_error_after_the_update_becomes_an_error_event(log, tmp_path) -> None:
+    error = IndexIncompatibleError("Index was built with another model.")
+    _install_failing(log, error, UPDATED)
+
+    http = TestClient(app).post(
+        "/api/v1/chat",
+        json={"query": "q", "root_directory": str(tmp_path)},
+    )
+
+    body = _stream(tmp_path)
+
+    assert http.status_code == 409
+    assert body.index("event: index\n") < body.index("event: error\n")
+
+    event = body[body.index("event: error\n"):]
+    data = json.loads(event.split("data: ", 1)[1].strip())
+
+    assert data == {"status": http.status_code, "detail": http.json()["detail"]}
+    assert body.endswith("\n\n")
+
+
+def test_an_unexpected_stream_error_is_a_logged_generic_500(log, tmp_path, caplog) -> None:
+    _install_failing(log, RuntimeError("secret internals"), UPDATED)
+
+    with caplog.at_level("ERROR"):
+        body = _stream(tmp_path)
+
+    data = json.loads(body[body.index("event: error\n"):].split("data: ", 1)[1].strip())
+
+    assert data == {"status": 500, "detail": "Internal Server Error"}
+    assert "secret internals" not in body
+    assert "secret internals" in caplog.text
+
+
+def test_without_a_root_a_stream_error_is_still_an_http_status(log) -> None:
+    _install_failing(log, IndexIncompatibleError("Wrong model."), UPDATED)
+
+    response = TestClient(app).get(
+        "/api/v1/chat/stream",
+        params={"query": "q"},
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Wrong model."}

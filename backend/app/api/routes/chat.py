@@ -1,6 +1,7 @@
 """Chat endpoints."""
 
 import json
+import logging
 import re
 from collections.abc import Iterator
 from pathlib import Path
@@ -10,6 +11,7 @@ from fastapi import Depends
 from fastapi import Query
 from fastapi.responses import StreamingResponse
 
+from app.api.exception_handlers import error_status_and_detail
 from app.api.response_docs import (
     SERVER_ERROR_RESPONSE,
     VALIDATION_ERROR_RESPONSE,
@@ -26,6 +28,8 @@ from app.dependencies.providers import (
 )
 from app.indexing.freshness import IndexFreshness
 from app.indexing.models import FreshnessState
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/chat",
@@ -83,7 +87,11 @@ def chat(
     operation_id="streamChat",
     summary="Stream chat response",
     description=(
-        "Stream a repository-aware chat response using server-sent events."
+        "Stream a repository-aware chat response using server-sent events. "
+        "With a root directory, `index-progress` and `index` events "
+        "report the index update first. An error after the stream has "
+        "started arrives as an `error` event carrying the status and "
+        "detail the same error would return as an HTTP response."
     ),
     response_description="Server-sent event stream of chat content chunks.",
     responses={
@@ -206,11 +214,35 @@ def _stream_fresh_response(
             result.model_dump_json(),
         )
 
-    yield from _stream_response(
-        chat_service.stream(
-            chat_request,
-        ),
-    )
+    # The 200 has started, so an error can no longer be an HTTP status:
+    # report what the exception handlers would have returned, then stop.
+    try:
+        yield from _stream_response(
+            chat_service.stream(
+                chat_request,
+            ),
+        )
+
+    except Exception as exception:
+        status_code, detail = error_status_and_detail(
+            exception,
+        )
+
+        if status_code >= 500:
+            logger.exception(
+                "Chat stream failed for %s",
+                root,
+            )
+
+        yield _named_event(
+            "error",
+            json.dumps(
+                {
+                    "status": status_code,
+                    "detail": detail,
+                },
+            ),
+        )
 
 
 def _named_event(

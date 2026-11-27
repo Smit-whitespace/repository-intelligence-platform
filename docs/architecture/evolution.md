@@ -165,12 +165,31 @@ This document traces how the architecture evolved across major milestones. Each 
 
 ---
 
+## Sprint 14 — Response Quality
+
+**Objective:** Make chat answers explain how the code works, without inventing names, and measure every change.
+
+**Introduced:**
+- `python -m eval.answers` (`backend/eval/answer_quality.py`): answer coverage, invented names, refusals
+- A measured "explain the flow" instruction and a 4,000-token context in `DefaultContextAssembly`
+- A 4,096-token output cap with a visible note, and a timeout that applies, in `OllamaChatProvider`
+- `.rip` storage and the `RIP_` settings prefix, with `.local_openclaw` moved automatically and `LOC_` still read
+
+**Key Decisions:**
+- A prompt change ships only if it beats run-to-run noise, invents and refuses no more, and holds on held-out questions
+- The last Local OpenClaw identifiers are replaced, without losing existing data ([ADR-0021](../adr/adr-0021-rip-storage-and-settings-names.md))
+
+**See:** [Sprint 14 freeze report](../sprints/sprint-14.md), [Measuring Answer Quality](backend/chat.md#measuring-answer-quality)
+
+---
+
 ## Related Documents
 
 | Document | Link |
 |----------|------|
 | System Overview | [system-overview.md](system-overview.md) |
-| Roadmap | [roadmap/](../../roadmap/) |
-| Sprint 12.1 | [sprints/sprint-12.1.md](../../sprints/sprint-12.1.md) |
-| Sprint 12.2 | [sprints/sprint-12.2.md](../../sprints/sprint-12.2.md) |
-| Sprint 13 | [sprints/sprint-13.md](../../sprints/sprint-13.md) |
+| Roadmap | [roadmap/](../roadmap/) |
+| Sprint 12.1 | [sprints/sprint-12.1.md](../sprints/sprint-12.1.md) |
+| Sprint 12.2 | [sprints/sprint-12.2.md](../sprints/sprint-12.2.md) |
+| Sprint 13 | [sprints/sprint-13.md](../sprints/sprint-13.md) |
+| Sprint 14 | [sprints/sprint-14.md](../sprints/sprint-14.md) |

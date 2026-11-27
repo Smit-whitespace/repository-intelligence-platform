@@ -5,4 +5,4 @@ checks both); the API, OpenAPI document and MCP server all read it here.
 Release steps: docs/development/release-process.md.
 """
 
-APPLICATION_VERSION = "1.0.0"
+APPLICATION_VERSION = "1.1.0"

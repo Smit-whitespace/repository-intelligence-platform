@@ -9,7 +9,7 @@
 
 The project uses semantic versioning: `MAJOR.MINOR.PATCH`.
 
-Current version: `1.0.0`.
+Current version: `1.1.0`.
 
 The version lives in three files that must agree; a test
 (`backend/tests/test_version.py`) fails if they drift:
@@ -41,8 +41,8 @@ repository's branch protection settings for `main`.
    ```powershell
    git switch main
    git pull
-   git tag -a v1.0.0 -m "v1.0.0"
-   git push origin v1.0.0
+   git tag -a v1.1.0 -m "v1.1.0"
+   git push origin v1.1.0
    ```
 
 Tags before `v1.0.0` (up to `v0.13.0`) mark the sprint freezes below.

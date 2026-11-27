@@ -19,12 +19,13 @@ Documents what has shipped and the forward plan.
 ## In Progress
 
 - Sprint 14 — **Response Quality.** Improve RIP's answers so they provide more comprehensive explanations and useful reasoning/context around repository findings, rather than merely returning terse source-grounded answers. This is a **response-quality improvement**, not a retrieval-correctness change.
-  - Done: answers are measured (`python -m eval.answers`); a looping model can no longer write one answer for over an hour; a measured instruction and a 4,000-token context raised answer coverage from 31% to 43% on held-out questions without inventing more names. Results: [Measuring Answer Quality](../architecture/backend/chat.md#measuring-answer-quality).
-  - Next: deeper explanations without invented names (asking for them directly doubled inventions); questions the model refuses although the answer is in its context.
+  - Done: answers are measured (`python -m eval.answers`); a looping model can no longer write one answer for over an hour; a measured instruction and a 4,000-token context raised answer coverage from 31% to 43% on held-out questions without inventing more names.
+  - Done (round 2): the held-out refusals turned out to come from an index older than the code, not from the prompt; on a fresh index the same prompt covers 64% held out with no refusals. A deeper-answer prompt improved the tuning questions but not the held-out ones, so it was not kept. Results: [Measuring Answer Quality](../architecture/backend/chat.md#measuring-answer-quality).
+  - Open: deeper explanations without a cost elsewhere; two rounds of prompt wording have not produced them.
 
 ## Planned Milestones
 
-- Sprint 15 — TBD
+- Sprint 15 — TBD. Proposed: index freshness. RIP refreshes a project's index only when the project is opened or reindexed, and does not say when the index is older than the files; in Sprint 14 a one-day-old index made the model refuse 27% of held-out questions.
 
 ## Format
 

@@ -161,6 +161,27 @@ class TestLoadRepository:
         assert "MADE_UP" not in repository.identifiers
         assert repository.mentioned_paths == frozenset()
 
+    def test_an_ignored_file_still_exists_with_the_names_it_defines(
+        self,
+        tmp_path: Path,
+    ) -> None:
+        # The scorer is a real file with real classes; only the made-up
+        # examples in its strings and comments must not look real.
+        (tmp_path / "scorer.py").write_text(
+            "LIMIT = 3\n"
+            "class Score:\n"
+            "    def check(self):\n"
+            "        return 'see FakeStore in x/made_up.py'  # or OtherFake\n",
+        )
+
+        repository = load_repository(tmp_path, ignore=["scorer.py"])
+
+        assert repository.files == {"scorer.py"}
+        assert {"LIMIT", "Score", "check"} <= repository.identifiers
+        assert "FakeStore" not in repository.identifiers
+        assert "OtherFake" not in repository.identifiers
+        assert repository.mentioned_paths == frozenset()
+
     def test_collects_paths_the_text_mentions(
         self,
         tmp_path: Path,

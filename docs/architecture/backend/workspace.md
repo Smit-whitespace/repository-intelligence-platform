@@ -70,7 +70,7 @@ Routes are thin adapters: they translate query parameters and nothing else. Vali
 > [!IMPORTANT]
 
 1. **Only registered projects can be opened** (`UnregisteredWorkspaceError`, HTTP 403).
-2. **Every path goes through `_resolve`.** It rejects absolute paths (POSIX, Windows drive and UNC forms), paths that escape the root after resolving symlinks, and paths inside `.git/` or `.local_openclaw/`.
+2. **Every path goes through `_resolve`.** It rejects absolute paths (POSIX, Windows drive and UNC forms), paths that escape the root after resolving symlinks, and paths inside `.git/` or `.rip/`.
 3. **Traversal never leaves the root.** The walk only descends into a directory that resolves to itself, so symlinks, Windows junctions (which Python's `is_symlink` does not report) and other reparse points are never walked into. That also rules out cycles. A link is listed only when its target is inside the root and outside protected directories. The walk is iterative (deep trees cannot overflow the stack) and stops after 100,000 entries.
 4. **Secret-like files are never read or searched:** `.env`, `.env.*`, `.envrc`, `.netrc`, `.npmrc`, `.pypirc`, `.git-credentials`, `.pgpass`, `credentials`, `credentials.json`, `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore` and SSH private keys (`id_rsa*` and similar, but not `*.pub`). Templates ending in `.example`, `.sample`, `.template` or `.dist` stay readable. The check runs on the resolved target, so a symlink with an innocent name cannot expose a secret file. Tool output may be sent to hosted models.
 5. **Every tool is bounded**, and every list result says when it was truncated:

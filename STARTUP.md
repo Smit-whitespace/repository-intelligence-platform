@@ -15,17 +15,17 @@ From the repository root:
 uv sync
 ```
 
-Optional environment overrides use the existing `LOC_` prefix:
+Optional environment overrides use the `RIP_` prefix (the former `LOC_` prefix still works, with a warning):
 
 ```powershell
-$env:LOC_SERVER_HOST="127.0.0.1"
-$env:LOC_SERVER_PORT="8000"
-$env:LOC_OLLAMA_BASE_URL="http://localhost:11434"
-$env:LOC_OLLAMA_CHAT_MODEL="qwen3:8b"
-$env:LOC_OLLAMA_EMBEDDING_MODEL="nomic-embed-text"
+$env:RIP_SERVER_HOST="127.0.0.1"
+$env:RIP_SERVER_PORT="8000"
+$env:RIP_OLLAMA_BASE_URL="http://localhost:11434"
+$env:RIP_OLLAMA_CHAT_MODEL="qwen3:8b"
+$env:RIP_OLLAMA_EMBEDDING_MODEL="nomic-embed-text"
 ```
 
-> The `LOC_STORAGE_ROOT_DIRECTORY` and `LOC_CHROMA_PERSIST_DIRECTORY` keys in the sample `.env` are legacy and ignored. Persistence identity is derived from the opened project root, never from the process working directory: `<project root>/.local_openclaw/` contains `project.json`, `index/chroma/`, and `snapshots/`.
+> The `RIP_STORAGE_ROOT_DIRECTORY` and `RIP_CHROMA_PERSIST_DIRECTORY` keys in the sample `.env` are legacy and ignored. Persistence identity is derived from the opened project root, never from the process working directory: `<project root>/.rip/` contains `project.json`, `index/chroma/`, and `snapshots/`.
 
 ## Ollama Setup
 
@@ -101,9 +101,9 @@ uv run ruff check backend/app backend/tests backend/scripts backend/eval
 
 ## Troubleshooting
 
-- If `/api/v1/models` fails, confirm Ollama is running and `LOC_OLLAMA_BASE_URL` points to it.
+- If `/api/v1/models` fails, confirm Ollama is running and `RIP_OLLAMA_BASE_URL` points to it.
 - If chat fails, confirm the active chat model appears in `ollama list`.
 - If retrieval fails, confirm the embedding model appears in `ollama list`.
-- If storage fails, confirm the process can create and write `.local_openclaw` inside the opened project root.
+- If storage fails, confirm the process can create and write `.rip` inside the opened project root.
 - If `uv` is not found, install `uv` or add it to `PATH`.
 - If `uv run` fails with `uv trampoline failed to canonicalize script path`, use the project virtual environment directly (see Start Backend).

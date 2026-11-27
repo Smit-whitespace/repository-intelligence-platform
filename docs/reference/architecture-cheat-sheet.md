@@ -86,7 +86,7 @@ opened Project
     ↓
 Project.root_directory / Project.storage_directory
     ↓
-<project root>/.local_openclaw/            (project.json, index/chroma/, snapshots/)
+<project root>/.rip/            (project.json, index/chroma/, snapshots/)
     ↓
 same store regardless of process CWD
 ```
@@ -106,14 +106,14 @@ uv run python -m pytest tests -q
 
 | Setting (env key) | Default | Notes |
 |---------|---------|-------|
-| `LOC_SERVER_HOST` / `LOC_SERVER_PORT` | `127.0.0.1` / `8000` | HTTP server |
-| `LOC_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `LOC_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model |
-| `LOC_OLLAMA_CHAT_MODEL` | `qwen3:8b` | Chat model |
-| `LOC_CHROMA_COLLECTION_NAME` | `repository_chunks` | Chroma collection name |
-| Persist directory | `<project root>/.local_openclaw/index/chroma` | Derived from the opened project — not configurable |
+| `RIP_SERVER_HOST` / `RIP_SERVER_PORT` | `127.0.0.1` / `8000` | HTTP server |
+| `RIP_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `RIP_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model |
+| `RIP_OLLAMA_CHAT_MODEL` | `qwen3:8b` | Chat model |
+| `RIP_CHROMA_COLLECTION_NAME` | `repository_chunks` | Chroma collection name |
+| Persist directory | `<project root>/.rip/index/chroma` | Derived from the opened project — not configurable |
 
-> Legacy keys `LOC_STORAGE_ROOT_DIRECTORY` and `LOC_CHROMA_PERSIST_DIRECTORY` are ignored (kept in the sample `.env` only as historical documentation).
+> Legacy keys `RIP_STORAGE_ROOT_DIRECTORY` and `RIP_CHROMA_PERSIST_DIRECTORY` are ignored (kept in the sample `.env` only as historical documentation).
 
 ---
 

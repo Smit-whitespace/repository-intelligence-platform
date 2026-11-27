@@ -104,7 +104,7 @@ sequenceDiagram
 
 - **File:** `app/indexing/store_resolver.py`
 - **Implementations:** `ProjectChromaStoreResolver` (per-project Chroma stores, `create=False` yields `None` for never-indexed projects), `StaticVectorStoreResolver` (test helper)
-- **Key file:** `app/core/storage/locations.py` — canonical project storage layout (`<root>/.local_openclaw/`, `index/chroma/`, `snapshots/`, `project.json`)
+- **Key file:** `app/core/storage/locations.py` — canonical project storage layout (`<root>/.rip/`, `index/chroma/`, `snapshots/`, `project.json`)
 
 ### IndexingResult
 
@@ -120,7 +120,7 @@ sequenceDiagram
 
 1. Indexing **never performs retrieval**. The retrieval subsystem is a separate consumer of the vector store.
 2. Indexing **never owns vector persistence logic**. Persistence is delegated to `VectorStore`, resolved through `VectorStoreResolver`.
-3. **Persistence identity comes from the opened project, not the process CWD.** Chroma persistence always resolves to `<project root>/.local_openclaw/index/chroma` for the indexed project.
+3. **Persistence identity comes from the opened project, not the process CWD.** Chroma persistence always resolves to `<project root>/.rip/index/chroma` for the indexed project.
 4. `IndexingResult` is the sole output contract — callers receive summary counts.
 5. Indexing skips directories and non-text files silently.
 6. **Indexing respects the repository's git ignore rules.** `RepositoryIgnoreRules` (`app/repository/ignore.py`) applies every `.gitignore` (deeper files take precedence, `!` re-includes work) and `.git/info/exclude`, on top of the names RIP always skips. Ignored directories are never entered. A file ignored after it was indexed is removed on the next run. Committed dependency lock files (`uv.lock`, `package-lock.json`, `yarn.lock`, `Cargo.lock` and similar, see `NOT_INDEXED_FILE_NAMES`) are also left out of the index, but stay listable and searchable in the workspace tools.
@@ -155,7 +155,7 @@ Indexing is independent of retrieval by design — `RetrievalService` never inde
 - Indexing processes all text files synchronously. For very large repositories this can be slow.
 - Python files are chunked by their top-level definitions. A function or class chunk starts at its first decorator (a route's URL lives there), and consecutive top-level statements (docstring, imports, constants) form one module chunk of at most 100 lines, so single import lines never fill search results. Other languages use 100-line chunks. Changing these boundaries changes chunk ids, so the first reindex after such a change re-embeds the affected files once.
 - Every run still scans, hashes and chunks every file (cheap), but only embeds chunks not already in the index (the expensive part). Chunk ids include the file's content hash, so unchanged files are recognized without any extra bookkeeping; `IndexingResult.unchanged_files` reports them, and `indexed_chunks` counts only newly embedded chunks.
-- Indexing holds an inter-process OS file lock (`.local_openclaw/index/index.lock`), so the RIP app and an MCP server never write one index at once; a second indexer gets `IndexingBusyError` (HTTP 409).
+- Indexing holds an inter-process OS file lock (`.rip/index/index.lock`), so the RIP app and an MCP server never write one index at once; a second indexer gets `IndexingBusyError` (HTTP 409).
 - ChromaDB is created with anonymized telemetry disabled (offline-first, ADR-0001).
 - When every file fails to index (typically the embedding provider is down), stale-chunk removal is skipped, so the existing index is kept instead of being emptied. A single file that fails temporarily (locked, briefly unreadable) keeps its existing chunks too.
 - Ignore files are repository content, so they are read defensively: symlinked ones and files over 1 MB are skipped, as are patterns with more than three `*` in one path segment, which would make matching exponentially slow.

@@ -160,7 +160,7 @@ Context assembly is a separate abstraction because prompt construction strategy 
 `python -m eval.answers` asks the search questions (`backend/eval/benchmarks.py`, and the held-out `backend/eval/holdout.py` with `--set holdout`) through the same chat service the app uses, with the configured chat model, and scores every answer:
 
 - **Coverage:** the share of the question's expected files the answer cites, symbols it names and concepts it explains, averaged.
-- **Invented names:** file paths, and names in code spans, that exist nowhere in the repository. Runtime files the code mentions (such as `.local_openclaw/project.json`) count as real. The scorer's own files count only for their paths and the names they define, since their examples are made up on purpose.
+- **Invented names:** file paths, and names in code spans, that exist nowhere in the repository. Runtime files the code mentions (such as `.rip/project.json`) count as real. The scorer's own files count only for their paths and the names they define, since their examples are made up on purpose.
 - **Refusals**, length and time per answer.
 
 ```powershell

@@ -48,7 +48,7 @@ graph LR
     PIS --> RS["RepositoryService"]
     PIS --> IS["IndexingService"]
     PS --> PR["ProjectRepository"]
-    PR --> FS["Filesystem (.local_openclaw/)"]
+    PR --> FS["Filesystem (.rip/)"]
 ```
 
 ---
@@ -98,7 +98,7 @@ sequenceDiagram
 ### ProjectRepository
 
 - **File:** `app/projects/repository.py`
-- **Responsibilities:** Save/load `Project` metadata as JSON in `.local_openclaw/`
+- **Responsibilities:** Save/load `Project` metadata as JSON in `.rip/`
 
 ---
 
@@ -108,7 +108,7 @@ sequenceDiagram
 
 1. A project must be persisted **before** indexing begins. `ProjectService.open_project()` runs first.
 2. Project identity is derived from the root directory path. Two opens of the same directory produce the same project name.
-3. Storage directory is always `<root_directory>/.local_openclaw/` — persistence identity comes from the opened project, never the process working directory.
+3. Storage directory is always `<root_directory>/.rip/` — persistence identity comes from the opened project, never the process working directory.
 4. `ProjectInitializationService` must never contain business logic — only orchestration.
 
 ---

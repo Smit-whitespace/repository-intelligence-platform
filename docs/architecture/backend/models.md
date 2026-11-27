@@ -12,7 +12,7 @@
 
 RIP can use local models (Ollama) and hosted models (OpenAI-compatible APIs, Anthropic). Configuration is progressive: set one **primary** model and stop there, or override it per **capability** or per **task**. The **embedding** model is configured separately because changing it invalidates the search index. The Settings page shows which model every operation uses and why.
 
-With no configuration saved, RIP uses your `LOC_OLLAMA_*` settings, exactly as before.
+With no configuration saved, RIP uses your `RIP_OLLAMA_*` settings, exactly as before.
 
 ---
 
@@ -34,7 +34,7 @@ If a configured model cannot do what is asked, or its API key is missing, RIP re
 
 ## Configuration file
 
-The file lives at `~/.local_openclaw/models.json` (override the location with `LOC_MODEL_CONFIG_PATH`). It is per user, so it can never be committed with a repository. Edit it, or send it to `PUT /api/v1/models/configuration`. Changes apply on the next request, with no restart.
+The file lives at `~/.rip/models.json` (override the location with `RIP_MODEL_CONFIG_PATH`). It is per user, so it can never be committed with a repository. Edit it, or send it to `PUT /api/v1/models/configuration`. Changes apply on the next request, with no restart.
 
 API keys are **never** stored. Each provider names an environment variable (`api_key_env`), which is read when the model is used. Set the variable before starting RIP. The name must end in `_API_KEY` (so a configuration can never read, say, `AWS_SECRET_ACCESS_KEY`), and a key is only sent to a non-local server over `https://`.
 
@@ -60,7 +60,7 @@ Changes apply on the next request in every RIP process, including MCP servers st
 
 | `type` | Covers | `base_url` | Embeddings |
 |--------|--------|------------|------------|
-| `ollama` | Local Ollama | Optional (defaults to `LOC_OLLAMA_BASE_URL`) | Yes |
+| `ollama` | Local Ollama | Optional (defaults to `RIP_OLLAMA_BASE_URL`) | Yes |
 | `openai_compatible` | OpenAI (`https://api.openai.com/v1`), OpenRouter, LM Studio (`http://localhost:1234/v1`), vLLM, Gemini's OpenAI-compatible endpoint | Required | Yes |
 | `anthropic` | Anthropic Messages API, via the official SDK | Optional | No |
 
@@ -115,7 +115,7 @@ Changing generation models never touches the index.
 |------|---------|
 | `app/llm/config.py` | Configuration schema and validation |
 | `app/llm/resolver.py` | Task → capability → primary resolution; effective-model table |
-| `app/llm/store.py` | Per-user file, atomic save, `LOC_OLLAMA_*` defaults |
+| `app/llm/store.py` | Per-user file, atomic save, `RIP_OLLAMA_*` defaults |
 | `app/llm/factory.py` | Builds adapters; reads API keys from the environment |
 | `app/llm/providers/` | OpenAI-compatible (`httpx`) and Anthropic (official SDK) adapters |
 | `app/dependencies/providers.py` | `apply_model_configuration` saves and rebuilds dependent services |

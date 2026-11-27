@@ -35,7 +35,7 @@ graph LR
 - Resolve the root directory path
 - Validate that the directory exists and is accessible
 - Construct a `Project` object (name, root_directory, storage_directory)
-- Persist project metadata to `<root>/.local_openclaw/project.json`
+- Persist project metadata to `<root>/.rip/project.json`
 
 **Output:** `Project` domain model
 
@@ -69,7 +69,7 @@ graph LR
 - Load document content
 - Chunk documents (AST-aware for Python, line-based for others)
 - Generate embeddings via `OllamaEmbeddingProvider`
-- Resolve and persist vectors through `VectorStoreResolver` → `ChromaVectorStore` at `<root>/.local_openclaw/index/chroma`
+- Resolve and persist vectors through `VectorStoreResolver` → `ChromaVectorStore` at `<root>/.rip/index/chroma`
 
 **Output:** `IndexingResult` (scanned, indexed, skipped, failed counts)
 
@@ -127,9 +127,9 @@ sequenceDiagram
 
 | Stage | Service | Output | Persistence | Reversible |
 |-------|---------|--------|-------------|------------|
-| 1. Project Open | `ProjectService` | `Project` | `.local_openclaw/project.json` | Manual delete |
+| 1. Project Open | `ProjectService` | `Project` | `.rip/project.json` | Manual delete |
 | 2. Index Build | `RepositoryService` | `RepositoryIndex` | In-memory only | Re-scan |
-| 3. Repository Index | `IndexingService` | `IndexingResult` | ChromaDB vectors at `<root>/.local_openclaw/index/chroma` | Re-index |
+| 3. Repository Index | `IndexingService` | `IndexingResult` | ChromaDB vectors at `<root>/.rip/index/chroma` | Re-index |
 | 4. Ready | — | — | All of the above | Re-open |
 
 ---

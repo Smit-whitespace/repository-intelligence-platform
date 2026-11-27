@@ -1,5 +1,7 @@
 # ADR-0019: Signed State in Project Storage
 
+> **Amended by [ADR-0021](adr-0021-rip-storage-and-settings-names.md):** the storage directory is now `.rip` and the environment prefix `RIP_`. `.local_openclaw` and `LOC_` below are the former names.
+
 **Status:** Adopted
 
 **Context:**

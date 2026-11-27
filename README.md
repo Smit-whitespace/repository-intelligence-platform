@@ -101,7 +101,7 @@ RIP is designed around local execution.
 - **Project-local storage** — Indexes, snapshots, and project metadata live inside:
 
 ```text
-<project-root>/.local_openclaw/
+<project-root>/.rip/
 ```
 
 Persistence identity comes from the **opened project root**, not the process working directory.
@@ -169,9 +169,9 @@ cd frontend
 npm run dev
 ```
 
-Open the **sign-in link** the backend prints when it starts (the `open_this_link=http://localhost:5173/?code=…` line). It signs the app in with your API token, which RIP creates in `~/.local_openclaw/api.token`; you only need to do this once per browser. The link works for one browser tab, for ten minutes, and never contains the token itself; if signing in times out, the app offers to try again. Restart the backend for a new one, or paste the token from that file.
+Open the **sign-in link** the backend prints when it starts (the `open_this_link=http://localhost:5173/?code=…` line). It signs the app in with your API token, which RIP creates in `~/.rip/api.token`; you only need to do this once per browser. The link works for one browser tab, for ten minutes, and never contains the token itself; if signing in times out, the app offers to try again. Restart the backend for a new one, or paste the token from that file.
 
-> The backend resolves project persistence from the **opened project root** (`<project-root>/.local_openclaw/`), never from the process working directory. The backend can therefore be started from a different directory without changing the persistence identity of the opened project.
+> The backend resolves project persistence from the **opened project root** (`<project-root>/.rip/`), never from the process working directory. The backend can therefore be started from a different directory without changing the persistence identity of the opened project.
 
 ### Connect an AI agent (optional)
 

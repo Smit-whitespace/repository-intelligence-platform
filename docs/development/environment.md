@@ -39,21 +39,21 @@ On Windows, if `uv` fails with `uv trampoline failed to canonicalize script path
 ..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
 ```
 
-> The backend resolves all project persistence from the **opened project root** (`<project root>/.local_openclaw/`), never from the process working directory. The backend may be started from any directory.
+> The backend resolves all project persistence from the **opened project root** (`<project root>/.rip/`), never from the process working directory. The backend may be started from any directory.
 
 ## Configuration
 
-Configuration is managed via `app/core/config/models.py` (`ApplicationSettings`) and assembled from `EnvironmentSettings` in `app/core/config/provider.py`. Settings load from environment variables (prefix `LOC_`) with sensible defaults. See the [Configuration Reference](../reference/configuration.md).
+Configuration is managed via `app/core/config/models.py` (`ApplicationSettings`) and assembled from `EnvironmentSettings` in `app/core/config/provider.py`. Settings load from environment variables (prefix `RIP_`; the former `LOC_` still works, with a warning) with sensible defaults. See the [Configuration Reference](../reference/configuration.md).
 
 Key configuration:
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| `LOC_SERVER_HOST` / `LOC_SERVER_PORT` | `127.0.0.1` / `8000` | HTTP server |
-| `LOC_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `LOC_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model |
-| `LOC_OLLAMA_CHAT_MODEL` | `qwen3:8b` | Chat model |
-| Persist directory | `<project root>/.local_openclaw/index/chroma` | Derived from the opened project — not configurable |
+| `RIP_SERVER_HOST` / `RIP_SERVER_PORT` | `127.0.0.1` / `8000` | HTTP server |
+| `RIP_OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
+| `RIP_OLLAMA_EMBEDDING_MODEL` | `nomic-embed-text` | Embedding model |
+| `RIP_OLLAMA_CHAT_MODEL` | `qwen3:8b` | Chat model |
+| Persist directory | `<project root>/.rip/index/chroma` | Derived from the opened project — not configurable |
 
 ## Required Ollama Models
 

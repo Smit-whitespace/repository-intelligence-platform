@@ -1,7 +1,7 @@
 # Naming Conventions
 
 > **Status:** Complete
-> **Last Updated:** Sprint 13
+> **Last Updated:** Sprint 14
 
 ---
 
@@ -17,12 +17,14 @@
 
 ### Public vs. Internal Identifiers
 
-Public identity is **Repository Intelligence Platform (RIP)**. Some internal compatibility identifiers from the Local OpenClaw era were intentionally retained:
+Public identity is **Repository Intelligence Platform (RIP)**. The last identifiers from the Local OpenClaw era were renamed in Sprint 14 ([ADR-0021](../adr/adr-0021-rip-storage-and-settings-names.md)):
 
 | Identifier | Status | Where it appears |
 |------------|--------|------------------|
-| `.local_openclaw` | Active internal storage directory | `<project root>/.local_openclaw/` (project metadata, Chroma index, snapshots) |
-| `LOC_` | Active environment variable prefix | `LOC_SERVER_PORT`, `LOC_OLLAMA_*`, `LOC_CHROMA_*`, `LOC_INDEXING_*` |
+| `.rip` | Active storage directory | `<project root>/.rip/` (project metadata, Chroma index, snapshots) and `~/.rip/` (API token, integrity key, `models.json`) |
+| `RIP_` | Active environment variable prefix | `RIP_SERVER_PORT`, `RIP_OLLAMA_*`, `RIP_CHROMA_*`, `RIP_INDEXING_*` |
+| `.local_openclaw` | Former storage directory | Renamed to `.rip` automatically on first use; still protected and never indexed |
+| `LOC_` | Former environment variable prefix | Still read, with a warning, when the `RIP_` name is not set |
 | `local-openclaw` | Historical (package/logger names in legacy references) | Historical docs and records |
 
 > [!NOTE] `.repository-intelligence-platform` appears only as a **stale historical index store** from the pre-Sprint-13 era. It is not the current RIP index and is not described as active.
@@ -55,4 +57,4 @@ Public identity is **Repository Intelligence Platform (RIP)**. Some internal com
 ## Database / Collection Naming
 
 - Vector collections: named by the app (ChromaDB manages internally)
-- Filesystem storage: `.local_openclaw/` directory in project root
+- Filesystem storage: `.rip/` directory in project root

@@ -93,7 +93,7 @@ sequenceDiagram
 4. **Retrieval never indexes.** `RetrievalService` performs search only.
 5. **Storage never contains business logic.** Storage owns persistence mechanisms only.
 6. **ProjectInitializationService orchestrates only.** It delegates all work and contains no business logic.
-7. **Persistence identity comes from the opened project.** All project-local persistence (metadata, vectors, snapshots) lives under `<project root>/.local_openclaw/` and is independent of the process working directory.
+7. **Persistence identity comes from the opened project.** All project-local persistence (metadata, vectors, snapshots) lives under `<project root>/.rip/` and is independent of the process working directory.
 
 ---
 

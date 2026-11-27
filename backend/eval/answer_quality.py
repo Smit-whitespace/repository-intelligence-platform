@@ -54,6 +54,11 @@ _PATH = re.compile(
 
 _IDENTIFIER = re.compile(r"[A-Za-z_][A-Za-z0-9_]{2,}")
 
+_DEFINITION = re.compile(
+    r"^\s*(?:(?:async\s+)?def|class)\s+([A-Za-z_]\w*)|^([A-Za-z_]\w*)\s*[:=]",
+    re.MULTILINE,
+)
+
 _INLINE_CODE = re.compile(r"`([^`\n]+)`")
 
 _FENCED_CODE = re.compile(r"```[^\n]*\n(.*?)```", re.DOTALL)
@@ -95,9 +100,11 @@ def load_repository(
 ) -> Repository:
     """Read the file list and identifiers of a repository on disk.
 
-    ``ignore`` lists files or folders, relative to the root, left out: the
-    scorer's own code and tests spell out invented names as examples, and
-    must not make them look real.
+    ``ignore`` lists files or folders, relative to the root, whose text must
+    not make names look real: the scorer's own code and tests spell out
+    invented names as examples. An ignored file still exists, with the
+    names it defines (``def``, ``class``, top-level assignments); the rest
+    of its text is left out. An ignored folder is left out entirely.
     """
 
     ignored = tuple(item.rstrip("/") for item in ignore)
@@ -119,10 +126,7 @@ def load_repository(
 
             relative = path.relative_to(root).as_posix()
 
-            if any(
-                relative == item or relative.startswith(item + "/")
-                for item in ignored
-            ):
+            if any(relative.startswith(item + "/") for item in ignored):
                 continue
 
             files.add(relative)
@@ -131,6 +135,12 @@ def load_repository(
                 text = path.read_text(encoding="utf-8", errors="ignore")
 
             except OSError:
+                continue
+
+            if relative in ignored:
+                for match in _DEFINITION.finditer(text):
+                    identifiers.add(match.group(1) or match.group(2))
+
                 continue
 
             for name in _IDENTIFIER.findall(text):

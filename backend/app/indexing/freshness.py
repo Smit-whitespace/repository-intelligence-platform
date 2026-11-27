@@ -234,14 +234,26 @@ class IndexFreshness:
         self,
         root_directory: Path,
     ) -> ChangeSet | None:
-        """Files that differ from the index; None if not indexed or incompatible."""
+        """Files that differ from the index; None if not indexed or incompatible.
 
-        root_directory = root_directory.resolve()
+        Never raises: a failure is logged and reported as None.
+        """
 
-        if self._skip_state(root_directory) is not None:
+        try:
+            root_directory = root_directory.resolve()
+
+            if self._skip_state(root_directory) is not None:
+                return None
+
+            return self._detect(root_directory)
+
+        except Exception:
+            logger.exception(
+                "Could not detect changed files for %s",
+                root_directory,
+            )
+
             return None
-
-        return self._detect(root_directory)
 
     def refresh(
         self,
@@ -257,11 +269,13 @@ class IndexFreshness:
         ``refresh``.
         """
 
-        started = self._clock()
-
-        root_directory = root_directory.resolve()
+        started = 0.0
 
         try:
+            started = self._clock()
+
+            root_directory = root_directory.resolve()
+
             # Checked even when the caller passes changes: the model may
             # have changed since, and update_files never rebuilds an index.
             skipped = self._skip_state(root_directory)

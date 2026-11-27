@@ -183,6 +183,10 @@ def test_openapi_contract_metadata() -> None:
             "GET",
             "/api/v1/workspace/search/semantic",
         ): "searchWorkspaceSemantic",
+        (
+            "GET",
+            "/api/v1/workspace/index-status",
+        ): "getIndexStatus",
     }
 
     for key, operation_id in expected_operation_ids.items():

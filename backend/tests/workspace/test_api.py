@@ -93,10 +93,11 @@ def test_tree_text_symbols_and_semantic(
 
     assert semantic.status_code == 200
 
-    assert semantic.json() == {
-        "indexed": False,
-        "hits": [],
-    }
+    assert semantic.json()["indexed"] is False
+
+    assert semantic.json()["hits"] == []
+
+    assert semantic.json()["index"]["state"] == "not_indexed"
 
 
 @pytest.mark.parametrize(

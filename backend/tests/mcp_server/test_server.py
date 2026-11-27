@@ -17,10 +17,14 @@ from mcp import Client, StdioServerParameters
 
 from app.core.storage.locations import (
     is_registered_project,
+    project_chroma_directory,
     project_metadata_path,
 )
 from app.indexing.exceptions import IndexingBusyError
+from app.indexing.freshness import IndexFreshness
 from app.indexing.models import (
+    FreshnessResult,
+    FreshnessState,
     IndexingResult,
     IndexStatus,
 )
@@ -283,6 +287,133 @@ async def test_index_tools_use_the_bound_root(
     indexing.index_repository.assert_called_once_with(
         project,
     )
+
+
+def _freshness(
+    project: Path,
+    state: FreshnessState,
+) -> tuple[MagicMock, Client, MagicMock]:
+    index_freshness = MagicMock(
+        spec=IndexFreshness,
+    )
+
+    index_freshness.refresh.return_value = FreshnessResult(
+        state=state,
+        changed_files=1,
+        updated_files=1,
+    )
+
+    index_freshness.status.return_value = FreshnessResult(
+        state=FreshnessState.STALE,
+        changed_files=2,
+        pending_files=2,
+    )
+
+    retrieval = MagicMock()
+
+    retrieval.search.return_value = MagicMock(
+        results=[],
+    )
+
+    workspace = RepositoryWorkspace.open(
+        root_directory=project,
+        retrieval_service=retrieval,
+        symbol_extractor=PythonSymbolExtractor(),
+    )
+
+    indexing = MagicMock(
+        spec=IndexingService,
+    )
+
+    indexing.status.return_value = IndexStatus(
+        indexed=True,
+        configured_embedding_model="ollama:nomic-embed-text",
+        compatible=True,
+    )
+
+    return (
+        index_freshness,
+        Client(
+            build_server(
+                workspace=workspace,
+                indexing_service=indexing,
+                index_freshness=index_freshness,
+            ),
+        ),
+        retrieval,
+    )
+
+
+@pytest.mark.anyio
+async def test_mcp_search_semantic_refreshes_first(
+    project: Path,
+) -> None:
+    index_freshness, client, retrieval = _freshness(
+        project,
+        FreshnessState.UPDATED,
+    )
+
+    # The workspace only searches a project that has an index directory.
+    project_chroma_directory(
+        project,
+    ).mkdir(
+        parents=True,
+    )
+
+    calls: list[str] = []
+
+    index_freshness.refresh.side_effect = lambda root: (
+        calls.append("refresh")
+        or FreshnessResult(state=FreshnessState.UPDATED, updated_files=1)
+    )
+
+    retrieval.search.side_effect = lambda query: (
+        calls.append("search") or MagicMock(results=[])
+    )
+
+    async with client:
+        result = await client.call_tool(
+            "search_semantic",
+            {
+                "query": "where",
+            },
+        )
+
+    assert not result.is_error
+
+    assert calls == ["refresh", "search"]
+
+    index_freshness.refresh.assert_called_once_with(
+        project,
+    )
+
+    assert result.structured_content["index"]["state"] == "updated"
+
+
+@pytest.mark.anyio
+async def test_mcp_index_status_includes_freshness(
+    project: Path,
+) -> None:
+    index_freshness, client, _ = _freshness(
+        project,
+        FreshnessState.UPDATED,
+    )
+
+    async with client:
+        result = await client.call_tool(
+            "index_status",
+            {},
+        )
+
+    assert result.structured_content["indexed"] is True
+
+    assert result.structured_content["freshness"]["state"] == "stale"
+
+    index_freshness.status.assert_called_once_with(
+        project,
+    )
+
+    index_freshness.refresh.assert_not_called()
 
 
 @pytest.mark.anyio

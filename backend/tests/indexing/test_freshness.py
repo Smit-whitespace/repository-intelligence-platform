@@ -657,6 +657,27 @@ def test_an_unexpected_error_becomes_the_failure_note(
     assert "boom" in caplog.text
 
 
+def test_changes_never_raises(
+    project,
+    resolver,
+    make_freshness,
+    monkeypatch,
+    caplog,
+):
+    _index(project, CountingEmbedder(), resolver)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("detection broke")
+
+    monkeypatch.setattr(freshness, "detect_changes", boom)
+
+    with caplog.at_level("ERROR"):
+        result = make_freshness(CountingEmbedder()).changes(project)
+
+    assert result is None
+    assert "detection broke" in caplog.text
+
+
 def test_an_error_while_updating_counts_the_known_changes(
     project,
     resolver,

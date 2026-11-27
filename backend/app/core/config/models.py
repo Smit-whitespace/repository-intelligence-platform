@@ -116,6 +116,9 @@ class IndexingSettings(BaseModel):
     chunk_size: int = 512
     chunk_overlap: int = 64
 
+    refresh_seconds: int = 15
+    """Most time spent updating changed files before an answer; 0 = never."""
+
 
 class ApplicationSettings(BaseModel):
     """Application configuration root."""

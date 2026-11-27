@@ -32,6 +32,7 @@ from app.editing.validation import ValidationRunner
 from app.editing.snapshot_store import (
     SnapshotStore,
 )
+from app.indexing.freshness import IndexFreshness
 from app.indexing.indexer import (
     RepositoryIndexer,
 )
@@ -190,6 +191,25 @@ def get_indexing_service() -> IndexingService:
         document_loader=get_repository_document_loader(),
         chunker=get_repository_chunker(),
         indexer=get_repository_indexer(),
+    )
+
+
+@lru_cache(maxsize=1)
+def get_index_freshness() -> IndexFreshness:
+    """Return the process-wide index freshness service.
+
+    Deliberately not rebuilt when the model configuration changes: it
+    holds this process's per-project update claims and background
+    threads, which a second instance would not see. Its indexer's
+    embedding provider follows configuration changes by itself.
+    """
+
+    return IndexFreshness(
+        indexing_service=get_indexing_service(),
+        scanner=get_repository_scanner(),
+        metadata_extractor=get_repository_metadata_extractor(),
+        indexer=get_repository_indexer(),
+        refresh_seconds=settings.indexing.refresh_seconds,
     )
 
 

@@ -1,6 +1,7 @@
 """Indexing domain models."""
 
 from datetime import datetime
+from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -111,6 +112,80 @@ class FileUpdateResult(BaseModel):
 
     failed: list[str] = Field(
         description="Files that could not be indexed; they keep their previous chunks.",
+    )
+
+
+class FreshnessState(StrEnum):
+    """How a project's index compares with the files on disk."""
+
+    UP_TO_DATE = "up_to_date"
+    """Nothing changed since indexing."""
+
+    UPDATED = "updated"
+    """Every changed file was updated before answering."""
+
+    PARTIAL = "partial"
+    """Some changed files are not in the index yet (still updating, or failed)."""
+
+    BUSY = "busy"
+    """Another process holds the index lock; nothing was updated."""
+
+    UPDATING = "updating"
+    """This process is updating the index (``status`` only)."""
+
+    STALE = "stale"
+    """Files changed and nothing is updating them (``status`` only)."""
+
+    OFF = "off"
+    """Automatic updates are off; the change set is reported only."""
+
+    NOT_INDEXED = "not_indexed"
+
+    INCOMPATIBLE = "incompatible"
+    """Built with a different embedding model; never updated automatically."""
+
+    FAILED = "failed"
+    """The freshness step itself failed; see the note."""
+
+
+class FreshnessResult(BaseModel):
+    """What the freshness step found and did for one project."""
+
+    state: FreshnessState
+
+    changed_files: int = Field(
+        default=0,
+        description="Indexed files whose content changed.",
+    )
+
+    added_files: int = Field(
+        default=0,
+        description="Files not in the index yet.",
+    )
+
+    removed_files: int = Field(
+        default=0,
+        description="Indexed files that are gone or no longer indexable.",
+    )
+
+    updated_files: int = Field(
+        default=0,
+        description="Files brought in sync with the index by this call.",
+    )
+
+    pending_files: int = Field(
+        default=0,
+        description="Changed files still not in the index after this call.",
+    )
+
+    seconds: float = Field(
+        default=0.0,
+        description="Time this call spent.",
+    )
+
+    note: str | None = Field(
+        default=None,
+        description="One line for the answer when it may miss changed files.",
     )
 
 

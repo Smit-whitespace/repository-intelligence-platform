@@ -1,16 +1,25 @@
-"""Index freshness: per-file hashes and updating a given set of files."""
+"""Index freshness: hashes, updating given files, and the freshness service."""
 
 import os
-from collections.abc import Sequence
+import threading
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
 
+from app.core.config.models import IndexingSettings
+from app.core.config.provider import read_environment
 from app.indexing import freshness
-from app.indexing.freshness import ChangeSet, FileHashCache, detect_changes
+from app.indexing.freshness import (
+    ChangeSet,
+    FileHashCache,
+    IndexFreshness,
+    detect_changes,
+)
 from app.indexing.indexer import RepositoryIndexer
 from app.indexing.lock import IndexingBusyError, project_index_lock
-from app.indexing.models import EmbeddingVector
+from app.indexing.models import EmbeddingVector, FreshnessResult, FreshnessState
+from app.indexing.providers import EmbeddingProvider
 from app.indexing.store_resolver import ProjectChromaStoreResolver
 from app.repository.hashing import calculate_sha256
 from app.repository.metadata import RepositoryMetadataExtractor
@@ -309,3 +318,470 @@ def test_to_index_lists_the_most_recently_modified_first(project, resolver):
         "utils.py",
         "main.py",
     ]
+
+
+# --- The freshness service -------------------------------------------------
+
+
+class _Clock:
+    """A fake monotonic clock; tests move it on events, never per call."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+class _ScriptedEmbedder(CountingEmbedder):
+    """Embeds like CountingEmbedder, with hooks the tests drive by events.
+
+    - ``after_first`` runs once, after the first embed call (to move the clock).
+    - ``fail_on`` makes any batch containing that text raise.
+    - ``block`` (an Event) makes every call after the first wait for it
+      (every call, with ``block_first``); ``blocked`` is set once one waits.
+    """
+
+    def __init__(self, identity: str = "fake:model-a") -> None:
+        super().__init__(identity)
+        self.after_first: Callable[[], None] | None = None
+        self.fail_on: str | None = None
+        self.block: threading.Event | None = None
+        self.block_first = False
+        self.blocked = threading.Event()
+        self._calls = 0
+
+    def embed(self, texts: Sequence[str]) -> list[EmbeddingVector]:
+        if self.fail_on is not None and any(self.fail_on in text for text in texts):
+            raise RuntimeError("provider down")
+        self._calls += 1
+        if self.block is not None and (self.block_first or self._calls > 1):
+            self.blocked.set()
+            assert self.block.wait(10), "test never released the embedder"
+        vectors = super().embed(texts)
+        if self._calls == 1 and self.after_first is not None:
+            self.after_first()
+        return vectors
+
+
+@pytest.fixture
+def make_freshness(project, resolver):
+    """Build IndexFreshness over real services; joins background work after."""
+
+    built: list[IndexFreshness] = []
+
+    def build(
+        embedder: EmbeddingProvider,
+        refresh_seconds: int = 15,
+        clock: Callable[[], float] | None = None,
+    ) -> IndexFreshness:
+        freshness_service = IndexFreshness(
+            indexing_service=_service(embedder, resolver),
+            scanner=RepositoryScanner(),
+            metadata_extractor=RepositoryMetadataExtractor(),
+            indexer=RepositoryIndexer(
+                embedding_provider=embedder,
+                vector_store_resolver=resolver,
+            ),
+            refresh_seconds=refresh_seconds,
+            clock=clock or _Clock(),
+        )
+        built.append(freshness_service)
+        return freshness_service
+
+    yield build
+
+    for freshness_service in built:
+        assert freshness_service.wait_for_background(project, 10)
+
+
+def _edit(project: Path, *names: str) -> None:
+    for name in names:
+        stem = name.removesuffix(".py")
+        (project / name).write_text(
+            f"def {stem}():\n    return 'changed'\n",
+            encoding="utf-8",
+        )
+
+
+def _forbid_update_files(monkeypatch, freshness_service: IndexFreshness) -> None:
+    def fail(*args, **kwargs):
+        raise AssertionError("update_files must not be called")
+
+    monkeypatch.setattr(
+        freshness_service._indexing_service,  # noqa: SLF001
+        "update_files",
+        fail,
+    )
+
+
+def test_up_to_date_does_nothing(project, resolver, make_freshness):
+    _index(project, CountingEmbedder(), resolver)
+    embedder = CountingEmbedder()
+
+    result = make_freshness(embedder).refresh(project)
+
+    assert result.state == FreshnessState.UP_TO_DATE
+    assert result.note is None
+    assert embedder.embedded == []
+
+
+def test_changes_are_updated_before_returning(project, resolver, make_freshness):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py")
+    (project / "utils.py").unlink()
+
+    result = make_freshness(CountingEmbedder()).refresh(project)
+
+    assert result.state == FreshnessState.UPDATED
+    assert (result.changed_files, result.added_files, result.removed_files) == (1, 0, 1)
+    assert result.updated_files == 2  # the edit and the removal
+    assert result.pending_files == 0
+    assert result.note is None
+    assert _changes(project, resolver).total == 0
+
+
+def test_past_the_limit_the_rest_finishes_in_the_background(
+    project,
+    resolver,
+    make_freshness,
+):
+    (project / "other.py").write_text("X = 1\n", encoding="utf-8")
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py", "utils.py", "other.py")
+    clock = _Clock()
+    embedder = _ScriptedEmbedder()
+    embedder.after_first = lambda: setattr(clock, "now", 99.0)
+    freshness_service = make_freshness(embedder, refresh_seconds=1, clock=clock)
+
+    result = freshness_service.refresh(project)
+
+    assert result.state == FreshnessState.PARTIAL
+    assert result.updated_files == 1
+    assert result.pending_files == 2
+    assert result.note == (
+        "The index is still updating; 2 changed files are not included in this answer."
+    )
+    assert freshness_service.wait_for_background(project, 10) is True
+    assert _changes(project, resolver).total == 0
+    assert freshness_service.status(project).state == FreshnessState.UP_TO_DATE
+
+
+def test_a_second_refresh_during_the_background_update_reports_partial(
+    project,
+    resolver,
+    make_freshness,
+    monkeypatch,
+):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py", "utils.py")
+    clock = _Clock()
+    embedder = _ScriptedEmbedder()
+    embedder.after_first = lambda: setattr(clock, "now", 99.0)
+    embedder.block = threading.Event()  # holds the background update
+    freshness_service = make_freshness(embedder, refresh_seconds=1, clock=clock)
+
+    try:
+        first = freshness_service.refresh(project)
+        assert first.state == FreshnessState.PARTIAL
+        assert embedder.blocked.wait(10)
+        _forbid_update_files(monkeypatch, freshness_service)
+
+        second = freshness_service.refresh(project)
+        during = freshness_service.status(project)
+
+    finally:
+        embedder.block.set()
+
+    assert second.state == FreshnessState.PARTIAL
+    assert second.pending_files == 1
+    assert second.updated_files == 0
+    assert second.note == (
+        "The index is still updating; 1 changed files are not included in this answer."
+    )
+    assert during.state == FreshnessState.UPDATING
+    assert freshness_service.wait_for_background(project, 10) is True
+    assert freshness_service.status(project).state == FreshnessState.UP_TO_DATE
+
+
+def test_concurrent_refreshes_update_only_once(
+    project,
+    resolver,
+    make_freshness,
+    monkeypatch,
+):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py")
+    embedder = _ScriptedEmbedder()
+    embedder.block = threading.Event()
+    embedder.block_first = True  # holds the first refresh inside update_files
+    freshness_service = make_freshness(embedder)
+    results: list[FreshnessResult] = []
+    first = threading.Thread(
+        target=lambda: results.append(freshness_service.refresh(project)),
+    )
+
+    first.start()
+    try:
+        assert embedder.blocked.wait(10)
+        _forbid_update_files(monkeypatch, freshness_service)
+
+        second = freshness_service.refresh(project)
+
+    finally:
+        embedder.block.set()
+        first.join(10)
+
+    assert not first.is_alive()
+    assert second.state == FreshnessState.PARTIAL
+    assert second.pending_files == 1
+    assert [result.state for result in results] == [FreshnessState.UPDATED]
+
+
+def test_busy_lock_answers_without_waiting(project, resolver, make_freshness):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py", "utils.py")
+    embedder = CountingEmbedder()
+    freshness_service = make_freshness(embedder)
+
+    with project_index_lock(project.resolve()):
+        result = freshness_service.refresh(project)
+        during = freshness_service.status(project)
+
+    assert result.state == FreshnessState.BUSY
+    assert result.pending_files == 2
+    assert result.note == (
+        "Another RIP process is updating the index; 2 changed files may not be "
+        "included in this answer."
+    )
+    assert embedder.embedded == []
+    assert during.state == FreshnessState.STALE  # no background thread here
+
+
+def test_off_reports_the_change_set_only(project, resolver, make_freshness, monkeypatch):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py")
+    embedder = CountingEmbedder()
+    freshness_service = make_freshness(embedder, refresh_seconds=0)
+    _forbid_update_files(monkeypatch, freshness_service)
+
+    result = freshness_service.refresh(project)
+
+    assert result.state == FreshnessState.OFF
+    assert result.changed_files == 1
+    assert result.pending_files == 1
+    assert result.note == (
+        "Automatic index updates are off; 1 files changed since indexing are not included."
+    )
+    assert embedder.embedded == []
+    assert freshness_service.status(project).state == FreshnessState.OFF
+
+
+def test_not_indexed_and_incompatible_do_nothing(
+    project,
+    resolver,
+    make_freshness,
+    monkeypatch,
+):
+    embedder = CountingEmbedder()
+    unindexed = make_freshness(embedder)
+    _forbid_update_files(monkeypatch, unindexed)
+
+    assert unindexed.refresh(project).state == FreshnessState.NOT_INDEXED
+    assert unindexed.status(project).state == FreshnessState.NOT_INDEXED
+    assert unindexed.changes(project) is None
+
+    _index(project, CountingEmbedder("fake:model-a"), resolver)
+    _edit(project, "main.py")
+    other_model = CountingEmbedder("fake:model-b")
+    incompatible = make_freshness(other_model)
+    _forbid_update_files(monkeypatch, incompatible)
+
+    assert incompatible.refresh(project).state == FreshnessState.INCOMPATIBLE
+    assert incompatible.status(project).state == FreshnessState.INCOMPATIBLE
+    assert incompatible.changes(project) is None
+    assert other_model.embedded == []
+    assert embedder.embedded == []
+
+
+def test_a_file_that_fails_to_embed_stays_pending(project, resolver, make_freshness):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py")
+    embedder = _ScriptedEmbedder()
+    embedder.fail_on = "changed"
+    freshness_service = make_freshness(embedder)
+
+    result = freshness_service.refresh(project)
+
+    assert result.state == FreshnessState.PARTIAL
+    assert result.updated_files == 0
+    assert result.pending_files == 1
+    assert result.note == (
+        "The index is still updating; 1 changed files are not included in this answer."
+    )
+    contents = _contents(project, resolver, "main.py")
+    assert contents and all("'main'" in content for content in contents)
+    # Failed files get no background update: nothing is running.
+    assert freshness_service.status(project).state == FreshnessState.STALE
+
+    embedder.fail_on = None
+    retried = freshness_service.refresh(project)
+
+    assert retried.state == FreshnessState.UPDATED
+    assert retried.updated_files == 1
+    assert _changes(project, resolver).total == 0
+
+
+def test_an_unexpected_error_becomes_the_failure_note(
+    project,
+    resolver,
+    make_freshness,
+    monkeypatch,
+    caplog,
+):
+    _index(project, CountingEmbedder(), resolver)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(freshness, "detect_changes", boom)
+
+    with caplog.at_level("ERROR"):
+        result = make_freshness(CountingEmbedder()).refresh(project)
+
+    assert result.state == FreshnessState.FAILED
+    assert result.note == (
+        "The index could not be updated (boom); 0 changed files may not be "
+        "included in this answer."
+    )
+    assert "boom" in caplog.text
+
+
+def test_an_error_while_updating_counts_the_known_changes(
+    project,
+    resolver,
+    make_freshness,
+    monkeypatch,
+):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py", "utils.py")
+    freshness_service = make_freshness(CountingEmbedder())
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("store unavailable")
+
+    monkeypatch.setattr(
+        freshness_service._indexing_service,  # noqa: SLF001
+        "update_files",
+        broken,
+    )
+
+    result = freshness_service.refresh(project)
+
+    assert result.state == FreshnessState.FAILED
+    assert result.note == (
+        "The index could not be updated (store unavailable); 2 changed files may "
+        "not be included in this answer."
+    )
+    # The claim is released: a later refresh tries again.
+    monkeypatch.undo()
+    assert freshness_service.refresh(project).state == FreshnessState.UPDATED
+
+
+def test_a_failing_background_update_is_logged_and_released(
+    project,
+    resolver,
+    make_freshness,
+    monkeypatch,
+    caplog,
+):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py", "utils.py")
+    clock = _Clock()
+    embedder = _ScriptedEmbedder()
+    embedder.after_first = lambda: setattr(clock, "now", 99.0)
+    freshness_service = make_freshness(embedder, refresh_seconds=1, clock=clock)
+    service = freshness_service._indexing_service  # noqa: SLF001
+    real = service.update_files
+
+    def foreground_only(root, to_index, to_remove, deadline=None, **kwargs):
+        if deadline is None:
+            raise RuntimeError("background broke")
+        return real(root, to_index, to_remove, deadline=deadline, **kwargs)
+
+    monkeypatch.setattr(service, "update_files", foreground_only)
+
+    with caplog.at_level("ERROR"):
+        assert freshness_service.refresh(project).state == FreshnessState.PARTIAL
+        assert freshness_service.wait_for_background(project, 10) is True
+
+    assert "background broke" in caplog.text
+    assert freshness_service.status(project).state == FreshnessState.STALE
+
+
+def test_a_busy_background_update_stops_quietly(
+    project,
+    resolver,
+    make_freshness,
+    monkeypatch,
+    caplog,
+):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py", "utils.py")
+    clock = _Clock()
+    embedder = _ScriptedEmbedder()
+    embedder.after_first = lambda: setattr(clock, "now", 99.0)
+    freshness_service = make_freshness(embedder, refresh_seconds=1, clock=clock)
+    service = freshness_service._indexing_service  # noqa: SLF001
+    real = service.update_files
+
+    def busy_in_background(root, to_index, to_remove, deadline=None, **kwargs):
+        if deadline is None:
+            raise IndexingBusyError("another process")
+        return real(root, to_index, to_remove, deadline=deadline, **kwargs)
+
+    monkeypatch.setattr(service, "update_files", busy_in_background)
+
+    with caplog.at_level("ERROR"):
+        assert freshness_service.refresh(project).state == FreshnessState.PARTIAL
+        assert freshness_service.wait_for_background(project, 10) is True
+
+    assert caplog.records == []
+    assert freshness_service.status(project).state == FreshnessState.STALE
+
+
+def test_status_never_updates(project, resolver, make_freshness):
+    _index(project, CountingEmbedder(), resolver)
+    _edit(project, "main.py")
+    embedder = CountingEmbedder()
+
+    result = make_freshness(embedder).status(project)
+
+    assert result.state == FreshnessState.STALE
+    assert result.changed_files == 1
+    assert result.pending_files == 1
+    assert embedder.embedded == []
+    assert _changes(project, resolver).total == 1
+
+
+def test_the_hash_cache_forgets_files_that_are_gone(project, resolver):
+    _index(project, CountingEmbedder(), resolver)
+    cache = FileHashCache()
+    _changes(project, resolver, cache)
+    (project / "utils.py").unlink()
+
+    _changes(project, resolver, cache)
+
+    assert [path.name for path in cache._entries] == ["main.py"]  # noqa: SLF001
+
+
+def test_refresh_seconds_setting(monkeypatch):
+    for name in ("RIP_INDEXING_REFRESH_SECONDS", "LOC_INDEXING_REFRESH_SECONDS"):
+        monkeypatch.delenv(name, raising=False)
+
+    assert read_environment(env_file=None).indexing_refresh_seconds == 15
+    assert IndexingSettings().refresh_seconds == 15
+
+    monkeypatch.setenv("RIP_INDEXING_REFRESH_SECONDS", "7")
+
+    assert read_environment(env_file=None).indexing_refresh_seconds == 7

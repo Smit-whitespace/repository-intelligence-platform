@@ -12,7 +12,7 @@ const responses: Record<string, unknown> = {
   "/api/v1/health": {
     status: "healthy",
     application: "Repository Intelligence Platform (RIP)",
-    version: "1.0.0",
+    version: "1.1.0",
   },
   "/api/v1/system/status": {
     backend_health: "healthy",
@@ -25,9 +25,9 @@ const responses: Record<string, unknown> = {
   },
   "/api/v1/system/version": {
     application_name: "Repository Intelligence Platform (RIP)",
-    application_version: "1.0.0",
+    application_version: "1.1.0",
     api_version: "v1",
-    backend_version: "1.0.0",
+    backend_version: "1.1.0",
   },
   "/api/v1/models": {
     models: [{ provider: "ollama", name: "qwen3.6" }],

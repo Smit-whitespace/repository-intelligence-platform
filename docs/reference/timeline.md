@@ -150,6 +150,22 @@ gantt
 
 ---
 
+### Sprint 14 — Response Quality (v1.1.0)
+
+**Objective:** Make chat answers explain how the code works, without inventing names, and measure every change.
+
+**Delivered:**
+- Answer evaluation (`python -m eval.answers`) with tuning and held-out questions
+- "Explain the flow" instruction and 4,000-token context: held-out answer coverage 31% → 43%
+- Output cap and working timeout for Ollama answers
+- `.rip` / `RIP_` replacing `.local_openclaw` / `LOC_`, with automatic migration
+
+**Key ADRs:** 0021
+
+**See:** [Sprint 14 freeze report](../sprints/sprint-14.md)
+
+---
+
 ## Next Sprints
 
 See [Roadmap](../roadmap/) for planned sprints 14 through 18.
@@ -165,4 +181,5 @@ See [Roadmap](../roadmap/) for planned sprints 14 through 18.
 | Sprint 12.1 | [../sprints/sprint-12.1.md](../sprints/sprint-12.1.md) |
 | Sprint 12.2 | [../sprints/sprint-12.2.md](../sprints/sprint-12.2.md) |
 | Sprint 13 | [../sprints/sprint-13.md](../sprints/sprint-13.md) |
+| Sprint 14 | [../sprints/sprint-14.md](../sprints/sprint-14.md) |
 | ADR Index | [../adr/](../adr/README.md) |

@@ -1,15 +1,20 @@
 """Index freshness: per-file hashes and updating a given set of files."""
 
+import os
 from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
+from app.indexing import freshness
+from app.indexing.freshness import ChangeSet, FileHashCache, detect_changes
 from app.indexing.indexer import RepositoryIndexer
 from app.indexing.lock import IndexingBusyError, project_index_lock
 from app.indexing.models import EmbeddingVector
 from app.indexing.store_resolver import ProjectChromaStoreResolver
 from app.repository.hashing import calculate_sha256
+from app.repository.metadata import RepositoryMetadataExtractor
+from app.repository.scanner import RepositoryScanner
 from tests.indexing.conftest import (
     CountingEmbedder,
     _index,
@@ -135,3 +140,172 @@ def test_update_files_raises_when_the_index_lock_is_held(project, resolver):
     with project_index_lock(project.resolve()):
         with pytest.raises(IndexingBusyError):
             _service(CountingEmbedder(), resolver).update_files(project, ["main.py"], [])
+
+
+def _changes(
+    project: Path,
+    resolver: ProjectChromaStoreResolver,
+    cache: FileHashCache | None = None,
+) -> ChangeSet:
+    return detect_changes(
+        project.resolve(),
+        RepositoryScanner(),
+        RepositoryMetadataExtractor(),
+        RepositoryIndexer(
+            embedding_provider=CountingEmbedder(),
+            vector_store_resolver=resolver,
+        ),
+        cache or FileHashCache(),
+    )
+
+
+def test_nothing_changed_right_after_indexing(project, resolver):
+    (project / "pkg").mkdir()
+    (project / "pkg" / "deep.py").write_text("X = 1\n", encoding="utf-8")
+
+    _index(project, CountingEmbedder(), resolver)
+
+    assert _changes(project, resolver).total == 0
+
+
+def test_edit_add_and_delete_are_reported(project, resolver):
+    _index(project, CountingEmbedder(), resolver)
+
+    (project / "main.py").write_text("changed\n", encoding="utf-8")
+    (project / "new.py").write_text("new\n", encoding="utf-8")
+    (project / "utils.py").unlink()
+
+    changes = _changes(project, resolver)
+
+    assert (changes.changed, changes.added, changes.removed) == (
+        ["main.py"],
+        ["new.py"],
+        ["utils.py"],
+    )
+
+
+def test_an_edit_that_is_undone_counts_as_unchanged(project, resolver):
+    _index(project, CountingEmbedder(), resolver)
+
+    original = (project / "main.py").read_text(encoding="utf-8")
+    (project / "main.py").write_text("changed\n", encoding="utf-8")
+    (project / "main.py").write_text(original, encoding="utf-8")
+
+    assert _changes(project, resolver).total == 0
+
+
+def test_a_newly_ignored_file_is_removed(project, resolver):
+    _index(project, CountingEmbedder(), resolver)
+
+    (project / ".gitignore").write_text("utils.py\n", encoding="utf-8")
+
+    changes = _changes(project, resolver)
+
+    assert changes.removed == ["utils.py"]
+    assert changes.changed == []
+
+
+def test_a_file_that_is_no_longer_text_is_removed(
+    project,
+    resolver,
+    monkeypatch,
+):
+    _index(project, CountingEmbedder(), resolver)
+
+    real = RepositoryMetadataExtractor.enrich_fast
+
+    def not_text(self, entry):
+        entry = real(self, entry)
+        if entry.name == "utils.py":
+            entry.is_text_file = False
+        return entry
+
+    monkeypatch.setattr(RepositoryMetadataExtractor, "enrich_fast", not_text)
+
+    changes = _changes(project, resolver)
+
+    assert changes.removed == ["utils.py"]
+    assert changes.changed == []
+
+
+def test_a_file_that_vanishes_while_hashing_is_removed(
+    project,
+    resolver,
+    monkeypatch,
+):
+    _index(project, CountingEmbedder(), resolver)
+
+    real = FileHashCache.sha256
+
+    def vanishing(self, path):
+        if path.name == "utils.py":
+            raise FileNotFoundError(str(path))
+        return real(self, path)
+
+    monkeypatch.setattr(FileHashCache, "sha256", vanishing)
+
+    changes = _changes(project, resolver)
+
+    assert changes.removed == ["utils.py"]
+    assert changes.total == 1
+
+
+def test_a_new_file_that_vanishes_while_hashing_is_ignored(
+    project,
+    resolver,
+    monkeypatch,
+):
+    _index(project, CountingEmbedder(), resolver)
+
+    (project / "new.py").write_text("new\n", encoding="utf-8")
+
+    real = FileHashCache.sha256
+
+    def vanishing(self, path):
+        if path.name == "new.py":
+            raise FileNotFoundError(str(path))
+        return real(self, path)
+
+    monkeypatch.setattr(FileHashCache, "sha256", vanishing)
+
+    assert _changes(project, resolver).total == 0
+
+
+def test_unchanged_files_are_not_read_again(project, resolver, monkeypatch):
+    _index(project, CountingEmbedder(), resolver)
+
+    calls: list[Path] = []
+    real = freshness.calculate_sha256
+
+    def counting(path):
+        calls.append(path)
+        return real(path)
+
+    monkeypatch.setattr(freshness, "calculate_sha256", counting)
+
+    cache = FileHashCache()
+
+    _changes(project, resolver, cache)
+    first = len(calls)
+    _changes(project, resolver, cache)
+
+    assert first == 2
+    assert len(calls) == first
+
+
+def test_to_index_lists_the_most_recently_modified_first(project, resolver):
+    _index(project, CountingEmbedder(), resolver)
+
+    (project / "main.py").write_text("changed\n", encoding="utf-8")
+    (project / "new.py").write_text("new\n", encoding="utf-8")
+    (project / "utils.py").write_text("changed too\n", encoding="utf-8")
+
+    os.utime(project / "main.py", (1_000_000, 1_000_000))
+    os.utime(project / "new.py", (3_000_000, 3_000_000))
+    os.utime(project / "utils.py", (2_000_000, 2_000_000))
+
+    assert _changes(project, resolver).to_index == [
+        "new.py",
+        "utils.py",
+        "main.py",
+    ]

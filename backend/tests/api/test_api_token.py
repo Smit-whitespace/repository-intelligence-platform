@@ -142,7 +142,7 @@ def test_sign_in_link_carries_a_code_never_the_token() -> None:
 def test_the_configured_frontend_may_call_the_api(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Graphify: a custom LOC_SERVER_FRONTEND_URL got a sign-in link to an
+    """Graphify: a custom RIP_SERVER_FRONTEND_URL got a sign-in link to an
     app whose browser requests the API then refused (CORS)."""
 
     from app import main

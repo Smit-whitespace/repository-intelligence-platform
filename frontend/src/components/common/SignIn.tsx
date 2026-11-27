@@ -55,7 +55,7 @@ export function SignIn() {
         </code>{" "}
         line; it works in one browser tab, for ten minutes), or paste the token from{" "}
         <code className="break-anywhere font-mono text-xs text-[#22D3EE]">
-          ~/.local_openclaw/api.token
+          ~/.rip/api.token
         </code>
         .
       </p>

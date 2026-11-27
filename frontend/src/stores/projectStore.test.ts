@@ -9,7 +9,7 @@ describe("projectStore", () => {
     useProjectStore.getState().setActiveProject({
       name: "example",
       root_directory: "A:/repo",
-      storage_directory: "A:/repo/.local_openclaw",
+      storage_directory: "A:/repo/.rip",
       created_at: "2026-07-15T10:30:00Z",
     });
 

@@ -26,7 +26,7 @@ class OllamaEmbeddingProvider(
         """Initialize the Ollama client.
 
         ``model`` and ``base_url`` come from the model configuration;
-        without them the ``LOC_OLLAMA_*`` settings apply.
+        without them the ``RIP_OLLAMA_*`` settings apply.
         """
 
         self._settings = settings

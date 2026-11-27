@@ -101,7 +101,7 @@ def test_scan_ignores_internal_directories(
 ) -> None:
     """Scanner should ignore the canonical and legacy internal dirs."""
 
-    canonical = tmp_path / ".local_openclaw"
+    canonical = tmp_path / ".rip"
 
     canonical.mkdir()
 

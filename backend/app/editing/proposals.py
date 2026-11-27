@@ -2,7 +2,7 @@
 
 A proposal is built from search/replace operations, whether an agent
 supplies them over MCP or RIP's edit model generates them. It is stored
-in the project (``.local_openclaw/proposals/``) and applied later *by
+in the project (``.rip/proposals/``) and applied later *by
 id*, so what a person reviewed is exactly what gets written. Clients
 never send file contents at apply time.
 
@@ -660,7 +660,7 @@ class ProposalStore:
             ) from error
 
         # Only proposals this installation wrote (and signed) are used:
-        # a repository can ship a .local_openclaw/proposals directory
+        # a repository can ship a .rip/proposals directory
         # whose stored contents differ from the diff they display.
         signature = data.pop(
             "signature",

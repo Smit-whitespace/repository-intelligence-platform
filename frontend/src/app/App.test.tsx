@@ -55,7 +55,7 @@ const responses: Record<string, unknown> = {
     ],
   },
   "/api/v1/models/configuration": {
-    path: "~/.local_openclaw/models.json",
+    path: "~/.rip/models.json",
     saved: false,
     api_keys_present: {},
   },

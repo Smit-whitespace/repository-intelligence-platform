@@ -18,12 +18,17 @@ from pathlib import Path, PurePosixPath
 
 from pathspec import GitIgnoreSpec
 
-from app.core.storage.locations import is_link
+from app.core.storage.locations import (
+    LEGACY_STORAGE_DIRECTORY_NAMES,
+    PROJECT_STORAGE_DIRECTORY_NAME,
+    is_link,
+)
 
 _INTERNAL_EXCLUDED_NAMES = {
     ".git",
     ".repository-intelligence-platform",
-    ".local_openclaw",
+    PROJECT_STORAGE_DIRECTORY_NAME,
+    *LEGACY_STORAGE_DIRECTORY_NAMES,
     ".venv",
     "__pycache__",
     ".pytest_cache",

@@ -4,7 +4,7 @@ The API listens on 127.0.0.1 and accepts only local Host headers, but
 any process on the machine could still call it, including processes of
 other user accounts. Every request except ``/health`` must therefore
 send ``Authorization: Bearer <token>``. The token is created on first
-use in a per-user file (``~/.local_openclaw/api.token``, readable only
+use in a per-user file (``~/.rip/api.token``, readable only
 by its owner). At startup the backend prints a sign-in link carrying a
 single-use code, never the token itself, which the app exchanges for the
 token once.
@@ -28,26 +28,26 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config.settings import settings
-from app.core.storage.locations import PROJECT_STORAGE_DIRECTORY_NAME
+from app.core.storage.locations import user_storage_directory
 from app.core.storage.secret_file import read_or_create_secret
 
 API_TOKEN_FILE_NAME = "api.token"
 
 _bearer = HTTPBearer(
     auto_error=False,
-    description="The token in ~/.local_openclaw/api.token.",
+    description="The token in ~/.rip/api.token.",
 )
 
 
 def api_token_path() -> Path:
-    """Return the token file path (``LOC_API_TOKEN_PATH`` overrides it)."""
+    """Return the token file path (``RIP_API_TOKEN_PATH`` overrides it)."""
 
     if settings.security.api_token_path:
         return Path(
             settings.security.api_token_path,
         ).expanduser()
 
-    return Path.home() / PROJECT_STORAGE_DIRECTORY_NAME / API_TOKEN_FILE_NAME
+    return user_storage_directory() / API_TOKEN_FILE_NAME
 
 
 @lru_cache(maxsize=1)

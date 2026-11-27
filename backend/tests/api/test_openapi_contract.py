@@ -269,7 +269,7 @@ def test_project_not_found_response_is_documented_shape(
     )
 
     assert response.json() == {
-        "detail": f"Project metadata not found: {tmp_path / '.local_openclaw'}",
+        "detail": f"Project metadata not found: {tmp_path / '.rip'}",
     }
 
 

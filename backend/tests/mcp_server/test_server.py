@@ -6,6 +6,7 @@ subprocess, exactly as Claude Code or another MCP client does, which
 also proves nothing but protocol messages reaches stdout.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -327,7 +328,20 @@ def _server_parameters(
             "PYTHONPATH": str(
                 BACKEND_DIRECTORY,
             ),
-            "LOC_LOGGING_LEVEL": "WARNING",
+            "RIP_LOGGING_LEVEL": "WARNING",
+            # The server is a separate process: without these it would use
+            # (and move) the developer's real ~/.rip, as conftest.py
+            # prevents for everything in-process.
+            **{
+                name: os.environ[name]
+                for name in (
+                    "RIP_MODEL_CONFIG_PATH",
+                    "RIP_INTEGRITY_KEY_PATH",
+                    "RIP_API_TOKEN_PATH",
+                )
+            },
+            "HOME": str(root.parent / "home"),
+            "USERPROFILE": str(root.parent / "home"),
         },
     )
 
@@ -386,7 +400,15 @@ async def test_stdio_server_registers_root_and_serves_tools(
     assert status.structured_content["indexed"] is False
 
 
-def test_stdio_server_refuses_a_home_directory_root() -> None:
+def test_stdio_server_refuses_a_home_directory_root(
+    tmp_path: Path,
+) -> None:
+    # A stand-in home: resolving storage under the real one would move
+    # the developer's ~/.local_openclaw to ~/.rip.
+    home = tmp_path / "home"
+
+    home.mkdir()
+
     result = subprocess.run(
         [
             sys.executable,
@@ -394,10 +416,15 @@ def test_stdio_server_refuses_a_home_directory_root() -> None:
             "app.mcp_server",
             "--root",
             str(
-                Path.home(),
+                home,
             ),
         ],
         cwd=BACKEND_DIRECTORY,
+        env={
+            **os.environ,
+            "HOME": str(home),
+            "USERPROFILE": str(home),
+        },
         capture_output=True,
         text=True,
         timeout=60,

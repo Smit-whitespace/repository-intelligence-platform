@@ -244,7 +244,7 @@ def test_project_management_workflow(
         list,
     )
 
-    assert (tmp_path / ".local_openclaw" / "project.json").exists()
+    assert (tmp_path / ".rip" / "project.json").exists()
 
     info_response = client.get(
         "/api/v1/projects/info",
@@ -333,7 +333,7 @@ def test_repository_intelligence_workflow(
         encoding="utf-8",
     )
 
-    internal_directory = tmp_path / ".local_openclaw"
+    internal_directory = tmp_path / ".rip"
 
     internal_directory.mkdir()
 

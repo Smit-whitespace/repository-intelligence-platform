@@ -23,6 +23,7 @@ from eval.models import RetrievalTestCase
 # Folders that are never part of the repository's own code or docs.
 _SKIPPED_DIRECTORIES = {
     ".git",
+    ".rip",
     ".local_openclaw",
     ".mypy_cache",
     ".pytest_cache",
@@ -87,7 +88,7 @@ class Repository:
 
     mentioned_paths: frozenset[str] = frozenset()
     """Every file path the text mentions, such as runtime files that exist
-    only once the app runs (``.local_openclaw/project.json``)."""
+    only once the app runs (``.rip/project.json``)."""
 
     @property
     def basenames(self) -> frozenset[str]:
@@ -161,8 +162,8 @@ def _normal_path(
 ) -> str:
     """POSIX separators, without ``./``, ``~/`` or a dot folder's dot.
 
-    ``~/.local_openclaw/models.json`` and ``backend/.local_openclaw/x.json``
-    become ``local_openclaw/models.json`` and ``backend/local_openclaw/x.json``.
+    ``~/.rip/models.json`` and ``backend/.rip/x.json``
+    become ``rip/models.json`` and ``backend/rip/x.json``.
     """
 
     parts = (part.lstrip("~.") for part in path.replace("\\", "/").split("/"))

@@ -266,7 +266,7 @@ def get_snapshot_store_factory() -> Callable[[Path], SnapshotStore]:
     """Return a project-scoped snapshot store factory.
 
     Each project persists snapshots under its own canonical storage
-    directory (``<root>/.local_openclaw/snapshots``), derived from the
+    directory (``<root>/.rip/snapshots``), derived from the
     project root — never from the process working directory.
     """
 

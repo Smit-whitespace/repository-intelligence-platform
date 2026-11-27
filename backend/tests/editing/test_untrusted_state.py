@@ -1,6 +1,6 @@
 """Regression tests for repository-supplied RIP state (security review).
 
-A cloned repository can contain a ``.local_openclaw`` directory. These
+A cloned repository can contain a ``.rip`` directory. These
 tests replay the attacks the security review confirmed and check that
 RIP only uses state files it signed itself.
 """

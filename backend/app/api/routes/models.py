@@ -128,7 +128,7 @@ class ModelConfigurationView(BaseModel):
     )
 
     saved: bool = Field(
-        description="False while the defaults from LOC_OLLAMA_* are in use.",
+        description="False while the defaults from RIP_OLLAMA_* are in use.",
     )
 
     api_keys_present: dict[str, bool] = Field(

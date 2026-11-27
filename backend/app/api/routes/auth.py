@@ -45,7 +45,7 @@ class SignInResponse(BaseModel):
         "Open endpoint: the code is the credential. Each code works for one "
         "app (identified by its verifier, so that app may retry) and for "
         "ten minutes; restart the backend for a new link, or paste the "
-        "token from ~/.local_openclaw/api.token."
+        "token from ~/.rip/api.token."
     ),
     responses={
         401: {
@@ -69,7 +69,7 @@ def sign_in(
             detail=(
                 "This sign-in link has expired or was already used. Restart "
                 "the backend for a new link, or paste the token from "
-                "~/.local_openclaw/api.token."
+                "~/.rip/api.token."
             ),
         )
 

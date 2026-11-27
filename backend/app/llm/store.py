@@ -2,12 +2,12 @@
 
 The configuration is per user, not per project: provider credentials and
 model choices are personal, and a file inside a repository could be
-committed by accident. It lives at ``~/.local_openclaw/models.json`` by
-default (override with ``LOC_MODEL_CONFIG_PATH``). A home directory can
+committed by accident. It lives at ``~/.rip/models.json`` by
+default (override with ``RIP_MODEL_CONFIG_PATH``). A home directory can
 never be a RIP project, so this never collides with project storage.
 
 Until a configuration is saved, the defaults come from the existing
-``LOC_OLLAMA_*`` settings, so existing setups keep working unchanged.
+``RIP_OLLAMA_*`` settings, so existing setups keep working unchanged.
 """
 
 import json
@@ -18,7 +18,7 @@ from pathlib import Path
 from pydantic import ValidationError
 
 from app.core.config.models import OllamaSettings
-from app.core.storage.locations import PROJECT_STORAGE_DIRECTORY_NAME
+from app.core.storage.locations import user_storage_directory
 from app.llm.config import (
     ModelConfiguration,
     ModelRef,
@@ -35,17 +35,13 @@ DEFAULT_PROVIDER_NAME = "ollama"
 def default_config_path() -> Path:
     """Return the per-user configuration file path."""
 
-    return (
-        Path.home()
-        / PROJECT_STORAGE_DIRECTORY_NAME
-        / MODEL_CONFIG_FILE_NAME
-    )
+    return user_storage_directory() / MODEL_CONFIG_FILE_NAME
 
 
 def configuration_from_ollama_settings(
     settings: OllamaSettings,
 ) -> ModelConfiguration:
-    """Build the default configuration from the ``LOC_OLLAMA_*`` settings."""
+    """Build the default configuration from the ``RIP_OLLAMA_*`` settings."""
 
     return ModelConfiguration(
         providers={

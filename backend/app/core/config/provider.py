@@ -1,5 +1,6 @@
 """Configuration provider implementations."""
 
+import logging
 from functools import lru_cache
 from pathlib import Path
 
@@ -20,12 +21,21 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[4]
 
 _ENV_FILE = _PROJECT_ROOT / ".env"
 
+ENVIRONMENT_PREFIX = "RIP_"
+
+LEGACY_ENVIRONMENT_PREFIX = "LOC_"
+"""The prefix until Sprint 14, from the project's working title (Local
+OpenClaw). Still read, with a warning, so existing ``.env`` files and
+scripts keep working (ADR-0021)."""
+
+logger = logging.getLogger(__name__)
+
 
 class EnvironmentSettings(BaseSettings):
     """Environment-backed application settings."""
 
     model_config = SettingsConfigDict(
-        env_prefix="LOC_",
+        env_prefix=ENVIRONMENT_PREFIX,
         env_file=_ENV_FILE,
         env_file_encoding="utf-8",
         extra="ignore",
@@ -65,11 +75,57 @@ class EnvironmentSettings(BaseSettings):
     indexing_chunk_overlap: int = 64
 
 
+class _LegacyEnvironmentSettings(EnvironmentSettings):
+    """The same settings under the former ``LOC_`` prefix."""
+
+    model_config = SettingsConfigDict(
+        env_prefix=LEGACY_ENVIRONMENT_PREFIX,
+    )
+
+
+def read_environment(
+    env_file: Path | None = _ENV_FILE,
+) -> EnvironmentSettings:
+    """Read settings from ``RIP_*`` variables, falling back to ``LOC_*``.
+
+    A ``RIP_`` value always wins. A setting given only under its former
+    ``LOC_`` name is used, and a warning names the variable to rename.
+    """
+
+    current = EnvironmentSettings(
+        _env_file=env_file,  # type: ignore[call-arg]
+    )
+
+    legacy = _LegacyEnvironmentSettings(
+        _env_file=env_file,  # type: ignore[call-arg]
+    )
+
+    carried = sorted(
+        legacy.model_fields_set - current.model_fields_set,
+    )
+
+    for field in carried:
+        logger.warning(
+            "%s%s is deprecated; rename it to %s%s",
+            LEGACY_ENVIRONMENT_PREFIX,
+            field.upper(),
+            ENVIRONMENT_PREFIX,
+            field.upper(),
+        )
+
+    return current.model_copy(
+        update={
+            field: getattr(legacy, field)
+            for field in carried
+        },
+    )
+
+
 @lru_cache(maxsize=1)
 def get_settings() -> ApplicationSettings:
     """Return cached application settings."""
 
-    environment = EnvironmentSettings()
+    environment = read_environment()
 
     return ApplicationSettings(
         server=ServerSettings(

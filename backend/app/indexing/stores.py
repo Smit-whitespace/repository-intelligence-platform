@@ -84,6 +84,20 @@ class VectorStore(ABC):
 
         return None
 
+    def get_file_hashes(
+        self,
+        where: dict | None = None,
+    ) -> dict[str, str] | None:
+        """Map each indexed file's relative path to its stored SHA-256.
+
+        ``None`` when the store cannot report this; freshness checks then
+        have nothing to compare the files on disk against.
+        """
+
+        del where
+
+        return None
+
     def set_index_metadata(
         self,
         metadata: dict[str, str | int | float | bool],

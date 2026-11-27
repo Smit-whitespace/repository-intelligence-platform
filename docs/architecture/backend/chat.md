@@ -2,7 +2,7 @@
 
 > **Status:** Complete
 > **Sprint Introduced:** Sprint 6
-> **Last Updated:** Sprint 12.1
+> **Last Updated:** Sprint 14
 > **Reading Time:** 4 minutes
 > **Audience:** Backend contributors
 > **Prerequisites:** [Retrieval](retrieval.md)
@@ -160,7 +160,7 @@ Context assembly is a separate abstraction because prompt construction strategy 
 `python -m eval.answers` asks the search questions (`backend/eval/benchmarks.py`, and the held-out `backend/eval/holdout.py` with `--set holdout`) through the same chat service the app uses, with the configured chat model, and scores every answer:
 
 - **Coverage:** the share of the question's expected files the answer cites, symbols it names and concepts it explains, averaged.
-- **Invented names:** file paths, and names in code spans, that exist nowhere in the repository. Runtime files the code mentions (such as `.local_openclaw/project.json`) count as real.
+- **Invented names:** file paths, and names in code spans, that exist nowhere in the repository. Runtime files the code mentions (such as `.local_openclaw/project.json`) count as real. The scorer's own files count only for their paths and the names they define, since their examples are made up on purpose.
 - **Refusals**, length and time per answer.
 
 ```powershell
@@ -170,7 +170,9 @@ cd backend
 
 Keyword coverage only stands in for a useful explanation, so read the answers in the JSON report too. The model answers differently every run: run each version at least twice, and count a change only if it beats the gap between two runs of the same version. Keep the JSON report outside the repository, or the next run will treat its invented names as real.
 
-**Prompt changes (2026-11-26, Sprint 14; `qwen3:8b`, thinking off).** The baseline answered tersely and cited few files. Each version was run twice on the 34 tuning questions:
+Index the copy right before measuring, and do not edit it during the runs. An index older than the code makes the model refuse, correctly, questions about code it was never shown, which looks like an over-cautious prompt: every held-out refusal in round 1 below came from an index one day older than the code.
+
+**Round 1: prompt changes (2026-11-26, Sprint 14; `qwen3:8b`, thinking off).** These ran against an index built on 2026-11-25, older than some of the code the questions ask about. Every version used the same index, so the comparisons between versions hold; the absolute numbers do not (see round 2). The baseline answered tersely and cited few files. Each version was run twice on the 34 tuning questions:
 
 | Version | Coverage | Answers inventing a name | Refusals | Words | Kept? |
 |---|---|---|---|---|---|
@@ -189,9 +191,26 @@ Confirmed on the 15 held-out questions, never used for tuning:
 | Baseline | 33.9% / 28.9% | 13% / 0% | 27% / 27% |
 | explain4k | **42.2% / 43.9%** | **0% / 0%** | 27% / 27% |
 
-What is left:
-- **explain4k grounds answers better rather than explaining more.** File citations doubled (about 24% to 48% on the tuning set), but answers got shorter and concept coverage stayed level. "thorough4k" explains more (concept coverage up to 51-56%, about 190 words), but invents more; making that depth safe is the next step.
-- **4 held-out questions are refused in every run.** For two, search never returns the file (`authStore.ts`, `SignIn.tsx`), so no prompt can help. For the other two, the expected file is in the context and the model still refuses.
+explain4k grounds answers better rather than explaining more: file citations doubled (about 24% to 48% on the tuning set), but answers got shorter and concept coverage stayed level. "thorough4k" explained more but invented more. Its inventions were of three kinds: shortened real names (`Indexer` for `RepositoryIndexer`), "for example" implementations the code does not have (Pinecone, Weaviate), and real paths written as dotted modules (`app.indexing.service.py`).
+
+**Round 2: a fresh index, and deeper answers (2026-11-27).** Measured against a copy of `main` at `72c8f06` indexed just before the runs (344 files, 1,337 chunks), so editing the code during the runs could not change what was measured. Two variants added one rule aimed at all three kinds of invention ("copy paths and names exactly as they appear in the context; give no examples the context does not show"): "exact4k" added it to explain4k, "thoroughexact4k" to thorough4k.
+
+| Version (tuning, 34) | Coverage | Answers inventing a name | Refusals | Words | Seconds |
+|---|---|---|---|---|---|
+| explain4k (in use) | 52.3% / 50.3% | 3% / 6% | 0% / 0% | ~135 | 26 |
+| exact4k | 53.0% / 50.5% | 3% / 3% | 0% / 0% | ~132 | 25 |
+| thoroughexact4k | 54.3% / 55.3% | 6% / 3% | 0% / 0% | ~203 | 37 |
+
+| Version (held out, 15) | Coverage | Answers inventing a name | Refusals | Words |
+|---|---|---|---|---|
+| explain4k (in use) | **66.7% / 61.7%** | 7% / 0% | 0% / 0% | ~148 |
+| thoroughexact4k | 53.3% / 55.0% | 0% / 0% | 0% / 0% | ~227 |
+
+- **The fresh index did more than any prompt.** With no prompt change, explain4k went from 46% to 51% on the tuning questions and from 43% to 64% held out, and held-out refusals fell from 27% to 0%. Three of the four questions refused in round 1 asked about code newer than the old index (the API token, the sign-in link, Ollama's `think` setting). The fourth expects `SignIn.tsx`, which search still misses; the model now answers from what search does find.
+- **exact4k made no measurable difference** and is not used.
+- **thoroughexact4k was rejected.** It was better on the tuning questions (16 better, 7 worse, 11 unchanged; about 50% longer answers) but worse held out (2 better, 6 worse, 7 unchanged). Its held-out answers name classes instead of files (`ChangeApplier` rather than `change_applier.py`), so file citations fell from 57-63% to 33-40%, while concept coverage rose only slightly (67-70% to 70-73%). A tuning gain that reverses on held-out questions is what the held-out set exists to catch.
+
+What is left: deeper answers are still open. Two rounds of prompt wording have not produced them without a cost elsewhere, while a stale index cost more coverage than any wording gained.
 
 ---
 

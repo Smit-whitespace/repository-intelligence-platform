@@ -98,6 +98,22 @@ class IndexingResult(BaseModel):
     diagnostics: IndexingDiagnostics | None = None
 
 
+class FileUpdateResult(BaseModel):
+    """Outcome of updating a given set of files in the index."""
+
+    done: list[str] = Field(
+        description="Files now in sync with the index (re-indexed, or removed because gone).",
+    )
+
+    remaining: list[str] = Field(
+        description="Files not started because the deadline passed; still stale.",
+    )
+
+    failed: list[str] = Field(
+        description="Files that could not be indexed; they keep their previous chunks.",
+    )
+
+
 class RepositoryIndex(BaseModel):
     """Indexed repository."""
 

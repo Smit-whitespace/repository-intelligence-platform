@@ -1,7 +1,7 @@
 """Repository indexing service."""
 
 import logging
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 
 from app.indexing.exceptions import EmbeddingError
 from app.indexing.models import (
@@ -361,6 +361,85 @@ class RepositoryIndexer:
             chunk_id
             for chunk_id in existing_chunk_ids
             if chunk_id not in keep
+        ]
+
+        if stale_chunk_ids:
+            vector_store.delete(
+                stale_chunk_ids,
+            )
+
+        return len(
+            stale_chunk_ids,
+        )
+
+    def remove_paths(
+        self,
+        root_directory: str,
+        relative_paths: Sequence[str],
+    ) -> int:
+        """Delete every chunk of the given files; return how many."""
+
+        if not relative_paths:
+            return 0
+
+        return self._delete_chunks_where(
+            root_directory=root_directory,
+            relative_path_filter={
+                "$in": list(relative_paths),
+            },
+            keep_chunk_ids=(),
+        )
+
+    def remove_chunks_of_path_except(
+        self,
+        root_directory: str,
+        relative_path: str,
+        keep_chunk_ids: Collection[str],
+    ) -> int:
+        """Delete one file's chunks that are not in ``keep_chunk_ids``."""
+
+        return self._delete_chunks_where(
+            root_directory=root_directory,
+            relative_path_filter=relative_path,
+            keep_chunk_ids=keep_chunk_ids,
+        )
+
+    def _delete_chunks_where(
+        self,
+        root_directory: str,
+        relative_path_filter: str | dict[str, list[str]],
+        keep_chunk_ids: Collection[str],
+    ) -> int:
+        """Delete the project's chunks matching a path filter, except kept ids."""
+
+        if not root_directory:
+            return 0
+
+        vector_store = self._vector_store_resolver.for_project(
+            root_directory=root_directory,
+        )
+
+        if vector_store is None:
+            return 0
+
+        by_path = vector_store.get_chunk_ids_by_path(
+            where={
+                "$and": [
+                    {
+                        "root_directory": root_directory,
+                    },
+                    {
+                        "relative_path": relative_path_filter,
+                    },
+                ],
+            },
+        ) or {}
+
+        stale_chunk_ids = [
+            chunk_id
+            for chunk_ids in by_path.values()
+            for chunk_id in chunk_ids
+            if chunk_id not in keep_chunk_ids
         ]
 
         if stale_chunk_ids:

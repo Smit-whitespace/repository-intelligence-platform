@@ -6,6 +6,8 @@ export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
+  /** One-line index notice shown above this answer. */
+  note?: string;
 };
 
 type ChatState = {
@@ -14,6 +16,7 @@ type ChatState = {
   addUserMessage: (content: string) => void;
   startAssistantMessage: () => string;
   appendAssistantChunk: (id: string, content: string) => void;
+  setAssistantNote: (id: string, note: string) => void;
   finishStreaming: () => void;
   clearConversation: () => void;
 };
@@ -62,6 +65,12 @@ export const useChatStore = create<ChatState>((set) => ({
               content: `${message.content}${content}`,
             }
           : message,
+      ),
+    })),
+  setAssistantNote: (id, note) =>
+    set((state) => ({
+      messages: state.messages.map((message) =>
+        message.id === id ? { ...message, note } : message,
       ),
     })),
   finishStreaming: () =>

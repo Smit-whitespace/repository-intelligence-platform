@@ -3,11 +3,13 @@ import { LoadingState } from "@/components/common/LoadingState";
 import {
   useActiveModel,
   useBackendHealth,
+  useIndexStatus,
   useModels,
   useRepositoryIndex,
   useSystemStatus,
   useSystemVersion,
 } from "@/lib/api/queries";
+import type { FreshnessResult } from "@/types/api";
 import { formatBytes } from "@/lib/utils/format";
 import { useProjectStore } from "@/stores/projectStore";
 
@@ -19,6 +21,7 @@ export function DashboardPage() {
   const models = useModels();
   const activeProject = useProjectStore((state) => state.activeProject);
   const repository = useRepositoryIndex(activeProject?.root_directory ?? null);
+  const indexStatus = useIndexStatus(activeProject?.root_directory ?? null);
 
   if (health.isLoading || status.isLoading || version.isLoading) {
     return <LoadingState label="Loading dashboard" />;
@@ -71,7 +74,15 @@ export function DashboardPage() {
             />
             <Row
               label="Indexing"
-              value={repository.data ? "available" : status.data?.indexing_state ?? "unknown"}
+              value={
+                !activeProject
+                  ? "No project"
+                  : indexStatus.data
+                    ? indexingLabel(indexStatus.data)
+                    : repository.data
+                      ? "available"
+                      : status.data?.indexing_state ?? "unknown"
+              }
             />
           </dl>
         </Panel>
@@ -106,6 +117,28 @@ export function DashboardPage() {
       </div>
     </section>
   );
+}
+
+function indexingLabel(result: FreshnessResult): string {
+  switch (result.state) {
+    case "up_to_date":
+    case "updated":
+      return "Up to date";
+    case "updating":
+      return "Updating";
+    case "failed":
+      return "Update failed";
+    case "not_indexed":
+      return "Not indexed";
+    case "incompatible":
+      return "Needs reindex (different embedding model)";
+    default: {
+      const n =
+        result.changed_files + result.added_files + result.removed_files;
+
+      return `${n} files changed since indexing`;
+    }
+  }
 }
 
 type MetricProps = {

@@ -23,6 +23,8 @@ export const queryKeys = {
     ["projects", "info", rootDirectory] as const,
   repositoryIndex: (rootDirectory: string) =>
     ["repository", "index", rootDirectory] as const,
+  indexStatus: (rootDirectory: string) =>
+    ["workspace", "index-status", rootDirectory] as const,
 };
 
 export function useBackendHealth() {
@@ -185,6 +187,14 @@ export function useRepositoryIndex(rootDirectory: string | null) {
   return useQuery({
     queryKey: queryKeys.repositoryIndex(rootDirectory ?? ""),
     queryFn: () => api.repositoryIndex(rootDirectory ?? ""),
+    enabled: Boolean(rootDirectory),
+  });
+}
+
+export function useIndexStatus(rootDirectory: string | null) {
+  return useQuery({
+    queryKey: queryKeys.indexStatus(rootDirectory ?? ""),
+    queryFn: () => api.indexStatus(rootDirectory ?? ""),
     enabled: Boolean(rootDirectory),
   });
 }

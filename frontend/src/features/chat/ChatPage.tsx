@@ -21,10 +21,12 @@ export function ChatPage() {
   const addUserMessage = useChatStore((state) => state.addUserMessage);
   const startAssistantMessage = useChatStore((state) => state.startAssistantMessage);
   const appendAssistantChunk = useChatStore((state) => state.appendAssistantChunk);
+  const setAssistantNote = useChatStore((state) => state.setAssistantNote);
   const finishStreaming = useChatStore((state) => state.finishStreaming);
   const clearConversation = useChatStore((state) => state.clearConversation);
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [indexProgress, setIndexProgress] = useState<number | null>(null);
   const streamRef = useRef<StreamClient | null>(null);
   const hadContentRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
@@ -58,6 +60,7 @@ export function ChatPage() {
     }
 
     setError(null);
+    setIndexProgress(null);
     setQuery("");
     hadContentRef.current = false;
     addUserMessage(trimmedQuery);
@@ -74,12 +77,37 @@ export function ChatPage() {
     streamRef.current = createSseClient(
       `/chat/stream?${new URLSearchParams(params).toString()}`,
       {
+        onEvent: (event, data) => {
+          const payload = parseJson(data);
+
+          if (event === "index-progress") {
+            setIndexProgress(Number(payload?.files ?? 0));
+          } else if (event === "index") {
+            setIndexProgress(null);
+
+            if (typeof payload?.note === "string" && payload.note) {
+              setAssistantNote(assistantId, payload.note);
+            }
+          } else if (event === "error") {
+            streamRef.current?.close();
+            streamRef.current = null;
+            setIndexProgress(null);
+            finishStreaming();
+            setError(
+              typeof payload?.detail === "string" && payload.detail
+                ? payload.detail
+                : "Chat stream failed before a response was received.",
+            );
+          }
+        },
         onMessage: (message) => {
           hadContentRef.current = true;
+          setIndexProgress(null);
           appendAssistantChunk(assistantId, message);
         },
         onDone: () => {
           streamRef.current = null;
+          setIndexProgress(null);
           finishStreaming();
 
           if (!hadContentRef.current) {
@@ -89,6 +117,7 @@ export function ChatPage() {
         onError: () => {
           streamRef.current?.close();
           streamRef.current = null;
+          setIndexProgress(null);
           finishStreaming();
 
           if (!hadContentRef.current) {
@@ -146,6 +175,11 @@ export function ChatPage() {
             {messages.map((message) => (
               <MessageBlock key={message.id} message={message} />
             ))}
+            {isStreaming && indexProgress !== null ? (
+              <p className="pl-9 text-xs text-[#7A8599]">
+                {`Updating index (${indexProgress} files)…`}
+              </p>
+            ) : null}
             {isStreaming ? (
               <div className="flex items-center gap-2 pl-9">
                 <span className="h-1.5 w-1.5 animate-pulse-blue rounded-full bg-[#4F8CFF]" />
@@ -217,6 +251,18 @@ export function ChatPage() {
   );
 }
 
+function parseJson(data: string): Record<string, unknown> | null {
+  try {
+    const value: unknown = JSON.parse(data);
+
+    return value !== null && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 function MessageBlock({ message }: { message: ChatMessage }) {
   const isUser = message.role === "user";
 
@@ -249,6 +295,9 @@ function MessageBlock({ message }: { message: ChatMessage }) {
               <Copy className="h-3 w-3 text-[#7A8599] hover:text-[#F8FAFC]" />
             </button>
           </div>
+          {message.note ? (
+            <p className="mb-2 text-xs text-[#F59E0B]">{message.note}</p>
+          ) : null}
           <div className="break-anywhere text-sm leading-relaxed text-[#AAB4C5]">
             {isUser ? (
               <p className="whitespace-pre-wrap">{message.content}</p>

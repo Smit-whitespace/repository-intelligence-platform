@@ -111,7 +111,21 @@ class FileUpdateResult(BaseModel):
     )
 
     failed: list[str] = Field(
-        description="Files that could not be indexed; they keep their previous chunks.",
+        description="Files that could not be indexed (for example the provider "
+        "failed); they keep their previous chunks and are retried.",
+    )
+
+    unindexable: list[str] = Field(
+        default_factory=list,
+        description="Files whose own content could not be indexed (for example "
+        "not UTF-8); they keep their previous chunks, and retrying is useless "
+        "until they change.",
+    )
+
+    model_changed: bool = Field(
+        default=False,
+        description="The configured embedding model changed during the update, "
+        "so it stopped; the files not started are in remaining.",
     )
 
 
@@ -128,7 +142,8 @@ class FreshnessState(StrEnum):
     """Some changed files are not in the index yet (still updating, or failed)."""
 
     BUSY = "busy"
-    """Another process holds the index lock; nothing was updated."""
+    """Another indexing run (in this process or another) holds the index
+    lock; nothing was updated."""
 
     UPDATING = "updating"
     """This process is updating the index (``status`` only)."""

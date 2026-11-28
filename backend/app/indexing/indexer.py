@@ -3,7 +3,7 @@
 import logging
 from collections.abc import Collection, Sequence
 
-from app.indexing.exceptions import EmbeddingError
+from app.indexing.exceptions import EmbeddingError, EmbeddingModelChangedError
 from app.indexing.models import (
     EmbeddingVector,
     IndexedChunk,
@@ -45,6 +45,14 @@ class RepositoryIndexer:
         self._pending_rebuilds: dict[str, str] = {}
         """Project roots whose index must be cleared before the next write,
         mapped to the model that built the old index (for logging)."""
+
+    @property
+    def configured_embedding_model(
+        self,
+    ) -> str:
+        """Identity of the embedding model the configuration selects now."""
+
+        return self._embedding_provider.identity
 
     def status(
         self,
@@ -207,8 +215,15 @@ class RepositoryIndexer:
     def index(
         self,
         chunks: Sequence[RepositoryChunk],
+        expected_model: str | None = None,
     ) -> IndexingResult:
-        """Index repository chunks."""
+        """Index repository chunks.
+
+        With ``expected_model``, the chunks are written only if that is
+        still the configured model after embedding, and the index is
+        stamped with it; otherwise ``EmbeddingModelChangedError`` is
+        raised and nothing is written.
+        """
 
         if not chunks:
             return IndexingResult(
@@ -241,6 +256,14 @@ class RepositoryIndexer:
 
         texts = [chunk.content for chunk in chunks]
 
+        # Read before embedding: the stamp names the model asked to embed.
+        identity = self._embedding_provider.identity
+
+        self._check_model(
+            expected_model,
+            identity,
+        )
+
         embeddings = self._embedding_provider.embed(
             texts,
         )
@@ -249,6 +272,13 @@ class RepositoryIndexer:
             raise EmbeddingError(
                 "Embedding provider returned an unexpected number of embedding vectors."
             )
+
+        # The configuration may have changed while embedding; the lazy
+        # provider would then have embedded with the new model.
+        self._check_model(
+            expected_model,
+            self._embedding_provider.identity,
+        )
 
         indexed_chunks = [
             IndexedChunk(
@@ -287,6 +317,7 @@ class RepositoryIndexer:
 
         self._record_embedding_model(
             vector_store=vector_store,
+            identity=identity,
             dimension=len(
                 embeddings[0].values,
             ),
@@ -300,9 +331,21 @@ class RepositoryIndexer:
             failed_files=0,
         )
 
+    @staticmethod
+    def _check_model(
+        expected_model: str | None,
+        identity: str,
+    ) -> None:
+        if expected_model is not None and identity != expected_model:
+            raise EmbeddingModelChangedError(
+                f"The embedding model changed from {expected_model} to "
+                f"{identity} during the update.",
+            )
+
     def _record_embedding_model(
         self,
         vector_store: VectorStore,
+        identity: str,
         dimension: int,
     ) -> None:
         """Stamp the index with the embedding model that wrote it."""
@@ -311,8 +354,6 @@ class RepositoryIndexer:
 
         if metadata is None:
             return
-
-        identity = self._embedding_provider.identity
 
         if metadata.get(EMBEDDING_MODEL_METADATA_KEY) == identity:
             return

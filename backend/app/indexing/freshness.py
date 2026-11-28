@@ -8,7 +8,7 @@ and finishes the rest in a background thread.
 import logging
 import threading
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -24,25 +24,56 @@ from app.repository.scanner import RepositoryScanner
 
 logger = logging.getLogger(__name__)
 
-PARTIAL_NOTE = (
-    "The index is still updating; {n} changed files are not included in "
-    "this answer."
-)
+def _files(
+    n: int,
+    noun: str = "changed file",
+) -> str:
+    """``1 changed file``, ``2 changed files``."""
 
-BUSY_NOTE = (
-    "Another RIP process is updating the index; {n} changed files may not "
-    "be included in this answer."
-)
+    return f"{n} {noun}" if n == 1 else f"{n} {noun}s"
 
-OFF_NOTE = (
-    "Automatic index updates are off; {n} files changed since indexing are "
-    "not included."
-)
 
-FAILURE_NOTE = (
-    "The index could not be updated ({error}); {n} changed files may not be "
-    "included in this answer."
-)
+def _are(
+    n: int,
+) -> str:
+    return "is" if n == 1 else "are"
+
+
+def partial_note(
+    n: int,
+) -> str:
+    return (
+        f"The index is still updating; {_files(n)} {_are(n)} not included "
+        "in this answer."
+    )
+
+
+def busy_note(
+    n: int,
+) -> str:
+    return (
+        f"Another index update is running; {_files(n)} may not be included "
+        "in this answer."
+    )
+
+
+def off_note(
+    n: int,
+) -> str:
+    return (
+        f"Automatic index updates are off; {_files(n, 'file')} changed since "
+        f"indexing {_are(n)} not included."
+    )
+
+
+def failure_note(
+    error: Exception,
+    n: int,
+) -> str:
+    return (
+        f"The index could not be updated ({error}); {_files(n)} may not be "
+        "included in this answer."
+    )
 
 
 @dataclass(frozen=True)
@@ -60,6 +91,13 @@ class ChangeSet:
         compare=False,
         repr=False,
     )
+
+    digests: dict[str, str] = field(
+        default_factory=dict,
+        compare=False,
+        repr=False,
+    )
+    """SHA-256 of every current file, as hashed by this detection."""
 
     @property
     def to_index(self) -> list[str]:
@@ -128,6 +166,7 @@ def detect_changes(
     metadata_extractor: RepositoryMetadataExtractor,
     indexer: RepositoryIndexer,
     cache: FileHashCache,
+    unindexable: Mapping[str, str] | None = None,
 ) -> ChangeSet:
     """Compare the files on disk with what the index holds.
 
@@ -136,7 +175,13 @@ def detect_changes(
     is not indexed is ignored. A file that vanishes mid-scan counts as
     removed if it was indexed, and is ignored otherwise. Cache entries for
     files under the root that this scan did not hash are dropped.
+
+    ``unindexable`` maps paths to the SHA-256 of content that could not
+    be indexed; while a file still has that content it is current, not
+    changed or added, so it is not retried on every check.
     """
+
+    unindexable = unindexable or {}
 
     root_directory = root_directory.resolve()
 
@@ -149,6 +194,8 @@ def detect_changes(
     added: list[str] = []
 
     modified_ns: dict[str, int] = {}
+
+    digests: dict[str, str] = {}
 
     seen: set[str] = set()
 
@@ -177,6 +224,11 @@ def detect_changes(
 
         seen.add(relative_path)
 
+        digests[relative_path] = digest
+
+        if unindexable.get(relative_path) == digest:
+            continue
+
         stored = indexed.get(relative_path)
 
         if stored is None:
@@ -196,6 +248,7 @@ def detect_changes(
         added=added,
         removed=sorted(set(indexed) - seen),
         modified_ns=modified_ns,
+        digests=digests,
     )
 
 
@@ -212,6 +265,11 @@ class IndexFreshness:
     ``refresh`` and ``status`` never raise: a failure is logged and
     returned as a note. An unindexed project, or an index built with a
     different embedding model, is never updated.
+
+    A file whose own content cannot be indexed (say, not UTF-8) is
+    remembered with its hash, logged once, and left out of later checks
+    until it changes; a file that failed for another reason (the
+    provider was down) is retried by the next ``refresh``.
     """
 
     def __init__(
@@ -230,11 +288,13 @@ class IndexFreshness:
         self._refresh_seconds = refresh_seconds
         self._clock = clock
 
-        # Guards the three collections below; never held during I/O.
+        # Guards the collections below; never held during I/O.
         self._lock = threading.Lock()
         self._caches: dict[Path, FileHashCache] = {}
         self._claimed: set[Path] = set()
         self._background: dict[Path, threading.Thread] = {}
+        # Per root: path -> SHA-256 of content that could not be indexed.
+        self._unindexable: dict[Path, dict[str, str]] = {}
 
     def changes(
         self,
@@ -413,7 +473,7 @@ class IndexFreshness:
                 changes,
                 started,
                 pending=changes.total,
-                note=PARTIAL_NOTE.format(n=changes.total),
+                note=partial_note(changes.total),
             )
 
         handed_off = False
@@ -434,13 +494,22 @@ class IndexFreshness:
                     changes,
                     started,
                     pending=changes.total,
-                    note=BUSY_NOTE.format(n=changes.total),
+                    note=busy_note(changes.total),
                 )
 
-            if update.remaining:
+            self._remember_unindexable(
+                root_directory,
+                update.unindexable,
+                changes.digests,
+            )
+
+            # After a model change nothing more is written: the next
+            # refresh finds the index incompatible and leaves it alone.
+            if update.remaining and not update.model_changed:
                 self._start_background(
                     root_directory,
                     update.remaining,
+                    changes.digests,
                 )
 
                 handed_off = True
@@ -452,19 +521,64 @@ class IndexFreshness:
 
         pending = len(update.remaining) + len(update.failed)
 
+        updated = len(update.done) + len(changes.removed)
+
+        if update.model_changed:
+            return self._result(
+                FreshnessState.INCOMPATIBLE,
+                changes,
+                started,
+                updated=updated,
+                pending=pending,
+            )
+
         return self._result(
             FreshnessState.PARTIAL if pending else FreshnessState.UPDATED,
             changes,
             started,
-            updated=len(update.done) + len(changes.removed),
+            updated=updated,
             pending=pending,
-            note=PARTIAL_NOTE.format(n=pending) if pending else None,
+            note=partial_note(pending) if pending else None,
         )
+
+    def _remember_unindexable(
+        self,
+        root_directory: Path,
+        paths: Iterable[str],
+        digests: Mapping[str, str],
+    ) -> None:
+        """Leave files whose content failed out of checks until they change.
+
+        Keyed by the hash detection saw: if the file changed before it was
+        read, the new content is simply tried again.
+        """
+
+        for path in paths:
+            digest = digests.get(path)
+
+            if digest is None:
+                continue
+
+            with self._lock:
+                known = self._unindexable.setdefault(root_directory, {})
+
+                if known.get(path) == digest:
+                    continue
+
+                known[path] = digest
+
+            logger.warning(
+                "Leaving %s out of index updates for %s until it changes: "
+                "its content could not be indexed",
+                path,
+                root_directory,
+            )
 
     def _start_background(
         self,
         root_directory: Path,
         files: list[str],
+        digests: Mapping[str, str],
     ) -> None:
         """Hand this root's claim to a thread that finishes ``files``.
 
@@ -474,7 +588,7 @@ class IndexFreshness:
 
         thread = threading.Thread(
             target=self._finish_in_background,
-            args=(root_directory, files),
+            args=(root_directory, files, digests),
             name=f"rip-index-refresh:{root_directory.name}",
             daemon=True,
         )
@@ -495,6 +609,7 @@ class IndexFreshness:
         self,
         root_directory: Path,
         files: list[str],
+        digests: Mapping[str, str],
     ) -> None:
         """Update ``files`` with no deadline, then release the claim; never raises."""
 
@@ -506,19 +621,27 @@ class IndexFreshness:
                 deadline=None,
             )
 
+            self._remember_unindexable(
+                root_directory,
+                update.unindexable,
+                digests,
+            )
+
             logger.info(
                 "Finished updating the index for %s in the background: "
-                "%d files updated, %d failed",
+                "%d files updated, %d failed, %d unindexable, %d not started",
                 root_directory,
                 len(update.done),
                 len(update.failed),
+                len(update.unindexable),
+                len(update.remaining),
             )
 
         except IndexingBusyError:
-            # Another process started indexing; it brings these files in.
+            # Another indexing run took the lock; it brings these files in.
             logger.info(
-                "Background index update for %s stopped: another process "
-                "is indexing",
+                "Background index update for %s stopped: another index "
+                "update is running",
                 root_directory,
             )
 
@@ -562,13 +685,29 @@ class IndexFreshness:
                 FileHashCache(),
             )
 
-        return detect_changes(
+            unindexable = dict(
+                self._unindexable.get(root_directory, {}),
+            )
+
+        changes = detect_changes(
             root_directory,
             self._scanner,
             self._metadata_extractor,
             self._indexer,
             cache,
+            unindexable,
         )
+
+        if unindexable:
+            with self._lock:
+                known = self._unindexable.get(root_directory, {})
+
+                # Forget files that changed or are gone: they are tried again.
+                for path, digest in unindexable.items():
+                    if changes.digests.get(path) != digest and known.get(path) == digest:
+                        del known[path]
+
+        return changes
 
     def _off(
         self,
@@ -580,7 +719,7 @@ class IndexFreshness:
             changes,
             started,
             pending=changes.total,
-            note=OFF_NOTE.format(n=changes.total),
+            note=off_note(changes.total),
         )
 
     def _failure(
@@ -596,7 +735,7 @@ class IndexFreshness:
             changes,
             started,
             pending=total,
-            note=FAILURE_NOTE.format(error=exc, n=total),
+            note=failure_note(exc, total),
         )
 
     def _result(

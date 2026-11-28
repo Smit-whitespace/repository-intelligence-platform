@@ -47,9 +47,11 @@ def project_index_lock(
         if not _try_lock(
             descriptor,
         ):
+            # The holder may be this process (a background update) or
+            # another one (the app and an MCP server), so name neither.
             raise IndexingBusyError(
-                "Another process is indexing this project. Try again when "
-                "it finishes.",
+                "Another index update is running for this project; try "
+                "again shortly.",
             )
 
         try:

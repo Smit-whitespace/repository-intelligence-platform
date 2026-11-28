@@ -6,6 +6,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.indexing.exceptions import EmbeddingModelChangedError
 from app.indexing.indexer import RepositoryIndexer
 from app.indexing.lock import project_index_lock
 from app.indexing.models import (
@@ -34,6 +35,16 @@ class _FileOutcome:
     chunk_ids: list[str] = field(default_factory=list)
     embedded_chunks: int = 0
     failure: FileFailureInfo | None = None
+    content_failure: bool = False
+    """The failure comes from the file's own content (it cannot be decoded
+    or chunked), so retrying is useless until the file changes."""
+    model_changed: bool = False
+    """The configured embedding model was no longer ``expected_model``;
+    nothing was written for this file."""
+
+
+_CONTENT_STAGES = frozenset({"load", "chunking"})
+"""Stages whose non-OS errors come from the file's content."""
 
 
 class IndexingService:
@@ -90,7 +101,14 @@ class IndexingService:
         order; no new file is started once ``clock()`` reaches
         ``deadline``, and the rest is reported as ``remaining``. A file
         that is gone or no longer indexable is removed instead. A failing
-        file keeps its existing chunks.
+        file keeps its existing chunks; it is ``unindexable`` when its own
+        content is the cause, ``failed`` otherwise.
+
+        The configured embedding model is read once the lock is held. If
+        it changes, or no longer matches the index, no further file is
+        written: the rest is reported as ``remaining`` with
+        ``model_changed``, so vectors are never stamped with a model that
+        did not make them.
 
         Holds the project's inter-process index lock for the whole call;
         a concurrent attempt raises ``IndexingBusyError``.
@@ -110,6 +128,14 @@ class IndexingService:
                 to_remove,
             )
 
+            index_status = self._indexer.status(
+                root_directory_str,
+            )
+
+            expected_model = index_status.configured_embedding_model
+
+            model_changed = index_status.indexed and not index_status.compatible
+
             existing_chunk_ids = self._indexer.existing_chunk_ids(
                 root_directory_str,
             )
@@ -120,10 +146,19 @@ class IndexingService:
 
             failed: list[str] = []
 
+            unindexable: list[str] = []
+
             for relative_path in to_index:
+                if not (remaining or model_changed):
+                    model_changed = (
+                        self._indexer.configured_embedding_model
+                        != expected_model
+                    )
+
                 if (
-                    deadline is not None
-                    and (remaining or clock() >= deadline)
+                    remaining
+                    or model_changed
+                    or (deadline is not None and clock() >= deadline)
                 ):
                     remaining.append(
                         relative_path,
@@ -147,6 +182,7 @@ class IndexingService:
                         entry,
                         root_directory_str,
                         existing_chunk_ids,
+                        expected_model=expected_model,
                     )
                     if absolute_path.is_file()
                     and is_indexable_file_name(
@@ -155,8 +191,17 @@ class IndexingService:
                     else None
                 )
 
+                if outcome is not None and outcome.model_changed:
+                    model_changed = True
+
+                    remaining.append(
+                        relative_path,
+                    )
+
+                    continue
+
                 if outcome is not None and outcome.failure is not None:
-                    failed.append(
+                    (unindexable if outcome.content_failure else failed).append(
                         relative_path,
                     )
 
@@ -180,10 +225,23 @@ class IndexingService:
                     relative_path,
                 )
 
+        if model_changed:
+            logger.warning(
+                "Stopped updating the index for %s: the embedding model "
+                "changed from %s to %s; %d files were not updated. "
+                "Reindex to use the new model.",
+                root_directory,
+                expected_model,
+                self._indexer.configured_embedding_model,
+                len(remaining),
+            )
+
         return FileUpdateResult(
             done=done,
             remaining=remaining,
             failed=failed,
+            unindexable=unindexable,
+            model_changed=model_changed,
         )
 
     def status(
@@ -362,6 +420,7 @@ class IndexingService:
         entry: RepositoryEntry,
         root_directory_str: str,
         existing_chunk_ids: set[str],
+        expected_model: str | None = None,
     ) -> _FileOutcome:
         """Load, chunk and embed one file; never raises.
 
@@ -369,7 +428,8 @@ class IndexingService:
         file's content hash, so a chunk whose id is already indexed is
         unchanged and keeps its vector: only new or edited content is
         embedded. A failure is returned, not raised, so the caller can
-        keep the file's existing chunks.
+        keep the file's existing chunks. With ``expected_model``, nothing
+        is written once another model is configured (``model_changed``).
         """
 
         relative_path = str(
@@ -422,7 +482,13 @@ class IndexingService:
             if new_chunks:
                 outcome.embedded_chunks = self._indexer.index(
                     new_chunks,
+                    expected_model=expected_model,
                 ).indexed_chunks
+
+        except EmbeddingModelChangedError:
+            outcome.model_changed = True
+
+            return outcome
 
         except Exception as exc:
             outcome.failure = FileFailureInfo(
@@ -434,6 +500,13 @@ class IndexingService:
                 message=str(
                     exc,
                 ),
+            )
+
+            # A decode or chunking error repeats until the file changes;
+            # an OS error (locked, vanished) or a provider error may not.
+            outcome.content_failure = stage in _CONTENT_STAGES and not isinstance(
+                exc,
+                OSError,
             )
 
             logger.warning(

@@ -22,7 +22,10 @@ Documents what has shipped and the forward plan.
 
 ## Planned Milestones
 
-- None scheduled.
+Not yet scheduled or numbered. Each gets a full entry (Objective, Scope, Deliverables, Out of Scope, Exit Criteria) when it is planned.
+
+- **Code graph.** A Graphify-like graph of the repository: which code calls which, what each file imports and exports, how files relate, and what a change affects. Retrieval and context assembly could use it to bring in related code that a semantic search alone misses. Measuring where held-out answers miss today (does retrieval return the expected files?) shows how much it would help.
+- **Voice.** Ask questions by voice and hear the answer read aloud. Comes after the code graph. Speech recognition and speech output must run locally, in line with the offline-first design ([ADR-0001](../adr/adr-0001-offline-first.md)), and any new dependency is agreed before it is added.
 
 ## Format
 

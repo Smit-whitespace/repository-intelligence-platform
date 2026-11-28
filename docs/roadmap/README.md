@@ -20,7 +20,7 @@ Documents what has shipped and the forward plan.
 
 ## In Progress
 
-- Sprint 15 — Index freshness ([ADR-0022](../adr/adr-0022-index-freshness.md)). Every chat answer and semantic search (app and MCP) first updates the files changed since indexing, for at most `RIP_INDEXING_REFRESH_SECONDS` (default 15), finishes the rest in the background and says when files could not be included. Measured on a deliberately stale index: held-out coverage 53.9% / 56.7% without it, 65.6% / 65.0% with it (fresh index: 66.7% / 61.7%); a check with nothing changed takes 0.12 s warm. Results: [Round 3](../architecture/backend/chat.md#measuring-answer-quality). Not frozen yet.
+- Sprint 15 — Index freshness ([ADR-0022](../adr/adr-0022-index-freshness.md)). Every chat answer and semantic search (app and MCP) first updates the files changed since indexing, for at most `RIP_INDEXING_REFRESH_SECONDS` (default 15), finishes the rest in the background and says when files could not be included. Measured on a deliberately stale index: held-out coverage 53.9% / 56.7% without it, 65.6% / 65.0% with it (fresh index: 66.7% / 61.7%); a check with nothing changed takes 0.12 s warm, 0.53 to 0.64 s in a fresh process. Results: [Round 3](../architecture/backend/chat.md#measuring-answer-quality). Not frozen yet.
 
 ## Planned Milestones
 

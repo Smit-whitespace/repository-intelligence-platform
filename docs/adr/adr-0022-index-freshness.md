@@ -11,10 +11,11 @@ Constraints from earlier decisions: retrieval and chat never index (ADR-0004, AD
 **Decision:**
 
 - Update the files that changed since indexing before every chat answer and semantic search.
-- Do it at the entry points, not in the services: the chat routes and the workspace semantic-search route call `IndexFreshness.refresh`, and so does the MCP tool `search_semantic`, before they call `ChatService` or `RepositoryWorkspace.search_semantic`. Those services still never index.
+- Do it at the entry points, not in the services: the chat routes, the workspace semantic-search route and the edit-planning route (`POST /editing/proposals/plan`, whose planner adds semantic hits to the edit model's context) call `IndexFreshness.refresh`, and so does the MCP tool `search_semantic`, before they call `ChatService`, `RepositoryWorkspace.search_semantic` or the proposal service. Those services still never index. A test finds every route whose dependencies are, or are built from, `RetrievalService`, `ChatService` or the edit planner, and fails until each is listed as an entry point or as one that never searches.
 - Detect changes by content hash (SHA-256 of each indexable text file against the hash stored in the index), with an in-memory mtime and size cache so unchanged files are not re-read.
 - Spend at most `RIP_INDEXING_REFRESH_SECONDS` (default 15) on the update, most recently modified files first. No new file is started after the limit. The rest is finished by one background thread per project, and the response says how many files were not included (a note in the chat and search results; an `index` event in the chat stream).
-- Never block on another process: a held index lock gives state `busy` and a note. Never rebuild: an unindexed project or an index built with another embedding model is left alone (`not_indexed`, `incompatible`). `0` turns updating off and reports the number of changed files.
+- Never wait for the index lock: when another indexing run holds it (in this process or another), the state is `busy` with a note. Never rebuild: an unindexed project or an index built with another embedding model is left alone (`not_indexed`, `incompatible`). If the embedding model changes while an update runs, the update starts no further file and nothing is stamped with the new model; the next check reports `incompatible`. `0` turns updating off and reports the number of changed files.
+- A file whose own content cannot be indexed (it is not UTF-8, or it cannot be chunked) is remembered in the process with its hash, logged once, and left out of the checks until it changes, so it does not make every answer say the index is still updating. A file that failed for another reason (the provider was down, the file was locked) is retried on the next check.
 - `index_status` reports the freshness it finds but updates nothing. `reindex` remains for a full rebuild (for example after changing the embedding model); agents no longer need it after editing files.
 
 **Consequences:**
@@ -25,7 +26,7 @@ Positive:
 - No new dependency, no watcher process, nothing running when RIP is idle.
 
 Negative:
-- Every chat and search scans the project and hashes the files whose mtime or size changed. With nothing changed this took 0.12 s warm and 0.5 s in a fresh process on RIP's own repository.
+- Every chat and search scans the project and hashes the files whose mtime or size changed. With nothing changed this took 0.12 s warm and 0.53 to 0.64 s in a fresh process on RIP's own repository (measured with the index `up_to_date`, 2026-11-28).
 - The first question after a large change is slower (7 to 8 s for 7 files in the measurement; up to the limit for more).
 - The answer that triggers a long update does not include the files still pending; it says so.
 

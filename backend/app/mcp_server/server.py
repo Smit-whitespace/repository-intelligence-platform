@@ -63,9 +63,12 @@ Repository Intelligence Platform (RIP): read-only tools for one repository.
 - Results are bounded. When a result says truncated, narrow the query
   (path_glob, a smaller line range) instead of repeating it.
 - search_semantic needs an index. Check index_status first; call reindex
-  if the project is not indexed or the index is incompatible, and after
-  editing files so search sees the new content. Reindexing only embeds
-  changed files, so it is cheap to repeat.
+  if the project is not indexed or the index is incompatible. Once
+  indexed, search_semantic updates the files changed since indexing
+  before it searches (within a time limit; its result says when files
+  were still pending), so there is no need to reindex after editing
+  files. Use reindex to rebuild the whole index, for example after
+  changing the embedding model.
 - Files excluded by the repository's .gitignore are not listed, searched
   or indexed, but read_file can still open them by path.
 - Secret-like files (.env, credentials, private keys) and the .git and

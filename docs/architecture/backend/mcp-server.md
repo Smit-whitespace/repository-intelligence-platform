@@ -22,9 +22,9 @@ RIP can run as a [Model Context Protocol](https://modelcontextprotocol.io) serve
 | `list_tree` | Paginated directory tree | No |
 | `search_text` | Literal or regex line search, optional `path_glob` | No |
 | `find_symbols` | Where Python classes, functions and methods are defined | No |
-| `search_semantic` | Code ranked by meaning ("where are edits applied?") | No |
-| `index_status` | Whether the repository is indexed, with which embedding model | No |
-| `reindex` | Updates the semantic index (changed files only) | RIP's own index only, never repository files |
+| `search_semantic` | Code ranked by meaning ("where are edits applied?"); first updates the files changed since indexing (ADR-0022), within `RIP_INDEXING_REFRESH_SECONDS`, and reports in `index` how many it could not include | RIP's own index only, never repository files |
+| `index_status` | Whether the repository is indexed, with which embedding model, and its `freshness` (files changed since indexing; read only, nothing is updated) | No |
+| `reindex` | Updates the semantic index (changed files only); needed to build the first index or after changing the embedding model, not after editing files | RIP's own index only, never repository files |
 | `propose_edit` | Stores search/replace edits as a reviewable proposal with a diff | No (a proposal in RIP's storage) |
 | `get_proposal` | One proposal's diff, status and validation results | No |
 | `list_proposals` | Recent proposals with per-file line counts, no diffs (`{"proposals": [...]}`) | No |
@@ -169,7 +169,7 @@ RepositoryWorkspace (read tools)   IndexingService (index_status, reindex)
 ## Known Limitations
 
 - **Only the stdio transport.** That is what local agents use. A Streamable HTTP endpoint for remote agents would need authentication first.
-- **The semantic index goes stale as the agent edits files** until `reindex` runs. Reindexing only embeds changed files, so the server instructions tell agents to reindex after editing.
+- **A large change is only partly indexed for the first search.** `search_semantic` updates changed files for at most `RIP_INDEXING_REFRESH_SECONDS` (default 15) and finishes the rest in a background thread, so agents do not need `reindex` after editing files; the result's `index.note` says when files are still pending. An unindexed project or an index built with another embedding model is never updated this way: call `reindex`.
 - **Edits cannot delete or rename files.** Agents with their own file tools can still do so outside RIP.
 - **Concurrent reads of one ChromaDB directory from two processes** (the app and an MCP server) are expected to work, but only writes are locked.
 

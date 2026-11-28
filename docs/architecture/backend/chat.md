@@ -61,11 +61,14 @@ graph LR
 ```mermaid
 sequenceDiagram
     participant API
+    participant FR as IndexFreshness
     participant CS as ChatService
     participant RS as RetrievalService
     participant CA as ContextAssembly
     participant LLM as ChatProvider
 
+    API->>FR: refresh(root) (at the route, before ChatService)
+    FR-->>API: FreshnessResult
     API->>CS: chat(ChatRequest)
     CS->>RS: search(SearchQuery)
     RS-->>CS: SearchResponse
@@ -75,6 +78,10 @@ sequenceDiagram
     LLM-->>CS: ChatResponse
     CS-->>API: ChatResponse
 ```
+
+The freshness step belongs to the route, not to `ChatService`: `POST /chat` and `GET /chat/stream` first call `IndexFreshness.refresh` (ADR-0022), which updates the files changed since indexing for at most `RIP_INDEXING_REFRESH_SECONDS` and finishes the rest in a background thread. The result is returned with the answer (the `index` field of the `POST /chat` response), including a note when files could not be included. `ChatService` itself still never indexes.
+
+`GET /chat/stream` sends named server-sent events before the answer's own events: `index-progress` (`{"files": n}`, when files changed, before the update starts), `index` (the `FreshnessResult`, except when the index is up to date, not built or incompatible), and `error` (`{"status", "detail"}`) when the chat fails after the stream has started and an HTTP status is no longer possible.
 
 ---
 
@@ -142,7 +149,7 @@ sequenceDiagram
 
 ## Why This Design
 
-Chat is intentionally decoupled from indexing. Project initialization ensures indexing is complete before chat begins, but chat itself never triggers indexing. This prevents accidental performance issues and keeps the architectural boundary clear.
+Chat is intentionally decoupled from indexing. Project initialization indexes the project, and the route's freshness step (not `ChatService`) updates files changed since; `ChatService` itself never triggers indexing. This prevents accidental performance issues and keeps the architectural boundary clear.
 
 Context assembly is a separate abstraction because prompt construction strategy may evolve independently of chat orchestration.
 
@@ -211,6 +218,18 @@ explain4k grounds answers better rather than explaining more: file citations dou
 - **thoroughexact4k was rejected.** It was better on the tuning questions (16 better, 7 worse, 11 unchanged; about 50% longer answers) but worse held out (2 better, 6 worse, 7 unchanged). Its held-out answers name classes instead of files (`ChangeApplier` rather than `change_applier.py`), so file citations fell from 57-63% to 33-40%, while concept coverage rose only slightly (67-70% to 70-73%). A tuning gain that reverses on held-out questions is what the held-out set exists to catch.
 
 What is left: deeper answers are still open. Two rounds of prompt wording have not produced them without a cost elsewhere, while a stale index cost more coverage than any wording gained.
+
+**Round 3 (Sprint 15): a stale index with and without freshness (2026-11-28).** The same frozen snapshot of `main` at `72c8f06` and the same 15 held-out questions, answered with the app's own instruction and the 4,000-token context (explain4k's setting). The index was made stale for exactly the six files the four round-1 refusals need (`authStore.ts`, `SignIn.tsx`, `ollama_provider.py`, `llm/config.py`, `main.py`, `api_token.py`): they were indexed as of `7fb2b68` (2026-11-25), then the `72c8f06` versions were written back, leaving 7 files out of date (the six, plus the empty `.pre-commit-config.yaml`, see [indexing](indexing.md#known-limitations)). The index was re-staled before every run. "Freshness off" calls `ChatService` directly, as the eval always did; "freshness on" first calls `IndexFreshness.refresh` before each question, as the routes do.
+
+| Held out, 15 questions | Coverage | Files cited | Answers inventing a name | Refusals |
+|---|---|---|---|---|
+| Fresh index (round 2, explain4k) | 66.7% / 61.7% | 63% / 57% | 7% / 0% | 0% / 0% |
+| Stale index, freshness off | 53.9% / 56.7% | 37% / 37% | 7% / 0% | 0% / 0% |
+| Stale index, freshness on | 65.6% / 65.0% | 60% / 53% | 0% / 0% | 0% / 0% |
+
+With freshness on, the first question of each run updated the 7 changed files in 7.5 s and 8.1 s; every later check took 0.2 to 0.7 s.
+
+Conclusion: without freshness, a stale index cost 10 to 13 points of coverage (mostly files cited, 63% to 37%); with it, coverage matched the fresh index within the 5-point gap between the two fresh runs. The expected refusals did not return: this time the model answered from what search found instead of refusing, so the stale index showed up as answers that cite fewer of the right files, not as refusals. Run times in this round (41 to 114 s per answer) are not comparable with round 2's (about 27 s): the laptop was slower.
 
 ---
 

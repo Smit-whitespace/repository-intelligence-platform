@@ -83,6 +83,18 @@ sequenceDiagram
 
 ---
 
+## Freshness
+
+`IndexFreshness` (`app/indexing/freshness.py`, ADR-0022) keeps the index in step with the files between full indexing runs. The chat routes, the semantic-search route and the MCP tool `search_semantic` call `refresh(root)` before they answer; `index_status` and `GET /workspace/index-status` call `status(root)`, which updates nothing.
+
+- **Change detection.** Every file indexing would index (not a directory, indexable by name, text) is hashed with SHA-256 and compared with the hash stored in the index. The result is a `ChangeSet`: changed, added (not in the index) and removed (indexed but gone or no longer indexable). Hashes are cached per project in memory and reused while a file's mtime and size are unchanged, so a check with nothing changed hashes nothing. A file edited and then reverted counts as unchanged.
+- **Updating.** `IndexingService.update_files(root, to_index, to_remove, deadline)` drops removed files from the index, then embeds the given files one at a time (most recently modified first), holding the inter-process index lock. No new file is started once the deadline passes; the rest is returned as `remaining`. A failing file keeps its existing chunks.
+- **Time limit and background thread.** `refresh` spends at most `RIP_INDEXING_REFRESH_SECONDS` (default 15) on `update_files`. Files left over are finished, with no limit, by one background thread per project root; while it runs, other `refresh` calls for that root report `partial` without touching the lock.
+- **States** (`FreshnessResult.state`): `up_to_date` (nothing changed), `updated` (everything was updated before answering), `partial` (some files are not in the index yet: still updating, or failed), `busy` (another process holds the index lock), `updating` (this process is updating; `status` only), `stale` (files changed and nothing is updating them; `status` only), `off` (limit is `0`), `failed` (the update raised; logged), `not_indexed`, `incompatible`. Every state other than the first two carries a `note` saying how many files may be missing.
+- **What it never does.** It never rebuilds an index (an unindexed project, or one built with a different embedding model, is left alone: use `reindex`), never waits for the index lock, never raises (a failure becomes a `failed` result), never indexes a project nobody asked a question about, and never runs while RIP is idle: there is no file watcher.
+
+---
+
 ## Key Files
 
 ### IndexingService
@@ -158,6 +170,7 @@ Indexing is independent of retrieval by design — `RetrievalService` never inde
 - Indexing holds an inter-process OS file lock (`.rip/index/index.lock`), so the RIP app and an MCP server never write one index at once; a second indexer gets `IndexingBusyError` (HTTP 409).
 - ChromaDB is created with anonymized telemetry disabled (offline-first, ADR-0001).
 - When every file fails to index (typically the embedding provider is down), stale-chunk removal is skipped, so the existing index is kept instead of being emptied. A single file that fails temporarily (locked, briefly unreadable) keeps its existing chunks too.
+- A file that produces no chunks (an empty file, for example the repository's own `.pre-commit-config.yaml`) never enters the index, so freshness counts it as an added file on every check: the state is `updated` with one file instead of `up_to_date`, at the cost of one cheap `update_files` call that embeds nothing. Measured on RIP's own repository: 0.12 s warm, 0.5 s in a fresh process.
 - Ignore files are repository content, so they are read defensively: symlinked ones and files over 1 MB are skipped, as are patterns with more than three `*` in one path segment, which would make matching exponentially slow.
 - Only the repository's own git ignore files are honored (`.gitignore` files and `.git/info/exclude`); a global `core.excludesFile` is not read.
 

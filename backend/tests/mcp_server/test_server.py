@@ -422,7 +422,7 @@ async def test_reindex_reports_a_busy_index_as_a_tool_error(
     indexing: MagicMock,
 ) -> None:
     indexing.index_repository.side_effect = IndexingBusyError(
-        "Another process is indexing this project.",
+        "Another index update is running for this project; try again shortly.",
     )
 
     async with client:
@@ -433,7 +433,7 @@ async def test_reindex_reports_a_busy_index_as_a_tool_error(
 
     assert result.is_error
 
-    assert "Another process is indexing" in result.content[0].text
+    assert "Another index update is running" in result.content[0].text
 
 
 # --- Real stdio subprocess -----------------------------------------------

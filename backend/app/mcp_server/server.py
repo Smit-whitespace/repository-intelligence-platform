@@ -139,8 +139,9 @@ _EDITING_INSTRUCTIONS = {
 - To change files, call propose_edit with search/replace operations. Each
   'search' must be copied exactly from the current file (read_file it
   first) and occur exactly once. Then apply_proposal writes it and runs
-  the project's validation commands; rollback_proposal undoes it. Call
-  reindex after applying so search sees the change.
+  the project's validation commands; rollback_proposal undoes it. There
+  is no need to reindex after applying: search_semantic updates the
+  changed files itself.
 """,
 }
 
@@ -367,7 +368,7 @@ def build_server(
         first run (or a run after the embedding model changed) embeds
         everything and can take minutes on a large repository. Only RIP's
         own index is written; repository files are never modified. Fails
-        if another process is indexing.
+        if another index update is running for this project.
         """
 
         result = await call(

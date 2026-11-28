@@ -28,7 +28,6 @@ Negative:
 - Every chat and search scans the project and hashes the files whose mtime or size changed. With nothing changed this took 0.12 s warm and 0.5 s in a fresh process on RIP's own repository.
 - The first question after a large change is slower (7 to 8 s for 7 files in the measurement; up to the limit for more).
 - The answer that triggers a long update does not include the files still pending; it says so.
-- A file that produces no chunks (an empty file) never enters the index, so it counts as changed on every check (see Known Limitations in the indexing document).
 
 **Alternatives Considered:**
 

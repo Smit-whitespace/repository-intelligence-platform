@@ -170,7 +170,6 @@ Indexing is independent of retrieval by design — `RetrievalService` never inde
 - Indexing holds an inter-process OS file lock (`.rip/index/index.lock`), so the RIP app and an MCP server never write one index at once; a second indexer gets `IndexingBusyError` (HTTP 409).
 - ChromaDB is created with anonymized telemetry disabled (offline-first, ADR-0001).
 - When every file fails to index (typically the embedding provider is down), stale-chunk removal is skipped, so the existing index is kept instead of being emptied. A single file that fails temporarily (locked, briefly unreadable) keeps its existing chunks too.
-- A file that produces no chunks (an empty file, for example the repository's own `.pre-commit-config.yaml`) never enters the index, so freshness counts it as an added file on every check: the state is `updated` with one file instead of `up_to_date`, at the cost of one cheap `update_files` call that embeds nothing. Measured on RIP's own repository: 0.12 s warm, 0.5 s in a fresh process.
 - Ignore files are repository content, so they are read defensively: symlinked ones and files over 1 MB are skipped, as are patterns with more than three `*` in one path segment, which would make matching exponentially slow.
 - Only the repository's own git ignore files are honored (`.gitignore` files and `.git/info/exclude`); a global `core.excludesFile` is not read.
 

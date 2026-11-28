@@ -177,6 +177,78 @@ def test_nothing_changed_right_after_indexing(project, resolver):
     assert _changes(project, resolver).total == 0
 
 
+def test_an_empty_file_is_not_counted_as_added(project, resolver):
+    (project / ".pre-commit-config.yaml").write_bytes(b"")
+    _index(project, CountingEmbedder(), resolver)
+
+    assert _changes(project, resolver).total == 0
+
+
+def test_whitespace_only_files_make_chunks_and_are_current(project, resolver):
+    (project / "blank.txt").write_text("  \n\n", encoding="utf-8")
+    _index(project, CountingEmbedder(), resolver)
+
+    assert "blank.txt" in _indexed_paths(project, resolver)
+    assert _changes(project, resolver).total == 0
+
+
+def test_an_empty_python_file_is_indexed_and_current(project, resolver):
+    (project / "__init__.py").write_bytes(b"")
+    _index(project, CountingEmbedder(), resolver)
+
+    assert "__init__.py" in _indexed_paths(project, resolver)
+    assert _changes(project, resolver).total == 0
+
+
+def test_the_no_chunk_rule_matches_the_chunker(tmp_path):
+    from app.repository.chunking import RepositoryChunker, yields_no_chunks
+    from app.repository.documents import RepositoryDocumentLoader
+
+    contents = {
+        "a.py": b"",
+        "a.yaml": b"",
+        "a.txt": b"",
+        "b.txt": b"\n",
+        "c.txt": b"  ",
+        "c.py": b"  \n",
+        "d.md": b"\n\n",
+    }
+    for name, data in contents.items():
+        (tmp_path / name).write_bytes(data)
+
+    for entry in RepositoryScanner().scan(tmp_path):
+        RepositoryMetadataExtractor().enrich(entry)
+        chunks = RepositoryChunker().chunk(RepositoryDocumentLoader().load(entry))
+
+        assert yields_no_chunks(entry) == (not chunks), entry.name
+
+
+def test_an_indexed_file_that_is_emptied_is_changed_then_removed(
+    project, resolver, make_freshness
+):
+    (project / "notes.txt").write_text("some notes\n", encoding="utf-8")
+    _index(project, CountingEmbedder(), resolver)
+    (project / "notes.txt").write_bytes(b"")
+
+    assert _changes(project, resolver).changed == ["notes.txt"]
+
+    freshness_service = make_freshness(CountingEmbedder())
+
+    assert freshness_service.refresh(project).state == FreshnessState.UPDATED
+    assert "notes.txt" not in _indexed_paths(project, resolver)
+    assert _changes(project, resolver).total == 0
+    assert freshness_service.refresh(project).state == FreshnessState.UP_TO_DATE
+
+
+def test_refresh_is_up_to_date_with_an_empty_file(project, resolver, make_freshness):
+    (project / ".pre-commit-config.yaml").write_bytes(b"")
+    _index(project, CountingEmbedder(), resolver)
+
+    result = make_freshness(CountingEmbedder()).refresh(project)
+
+    assert result.state == FreshnessState.UP_TO_DATE
+
+
 def test_edit_add_and_delete_are_reported(project, resolver):
     _index(project, CountingEmbedder(), resolver)
 

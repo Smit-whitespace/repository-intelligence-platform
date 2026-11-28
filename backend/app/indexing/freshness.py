@@ -16,6 +16,7 @@ from app.indexing.exceptions import IndexingBusyError
 from app.indexing.indexer import RepositoryIndexer
 from app.indexing.models import FreshnessResult, FreshnessState
 from app.indexing.service import IndexingService
+from app.repository.chunking import yields_no_chunks
 from app.repository.hashing import calculate_sha256
 from app.repository.ignore import is_indexable_file_name
 from app.repository.metadata import RepositoryMetadataExtractor
@@ -131,7 +132,8 @@ def detect_changes(
     """Compare the files on disk with what the index holds.
 
     "Current" files are the ones indexing would index: not directories,
-    indexable by name, and text. A file that vanishes mid-scan counts as
+    indexable by name, and text. A file that would produce no chunks and
+    is not indexed is ignored. A file that vanishes mid-scan counts as
     removed if it was indexed, and is ignored otherwise. Cache entries for
     files under the root that this scan did not hash are dropped.
     """
@@ -178,7 +180,11 @@ def detect_changes(
         stored = indexed.get(relative_path)
 
         if stored is None:
-            added.append(relative_path)
+            # A file that makes no chunks never enters the index; it is
+            # not "added" on every check. Once an indexed file is emptied
+            # it is "changed" (stored is set) and its chunks are removed.
+            if not yields_no_chunks(entry):
+                added.append(relative_path)
 
         elif stored != digest:
             changed.append(relative_path)

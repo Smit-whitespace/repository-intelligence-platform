@@ -1,47 +1,156 @@
 """Every semantic entry point updates the index before it answers."""
 
 import json
-from collections.abc import Iterator
+import typing
+from collections.abc import Callable, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from fastapi.dependencies.models import Dependant
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
+from app.api.routes.auth import router as auth_router
 from app.api.routes.chat import router as chat_router
+from app.api.routes.editing import router as editing_router
+from app.api.routes.health import router as health_router
+from app.api.routes.models import router as models_router
+from app.api.routes.projects import router as projects_router
+from app.api.routes.repository import router as repository_router
+from app.api.routes.system import router as system_router
 from app.api.routes.workspace import router as workspace_router
 from app.chat.models import ChatChunk, ChatRequest, ChatResponse
+from app.chat.service import ChatService
 from app.core.storage.locations import project_metadata_path
 from app.dependencies.providers import (
     get_chat_service,
     get_index_freshness,
+    get_proposal_service,
 )
+from app.editing.planner import EditPlanner
+from app.editing.proposals import EditProposalView, ProposalSource, ProposalStatus
 from app.indexing.exceptions import IndexIncompatibleError
 from app.indexing.freshness import ChangeSet
 from app.indexing.models import FreshnessResult, FreshnessState
+from app.indexing.retrieval_service import RetrievalService
 from app.main import app
 from app.workspace.models import SemanticSearchResult
+
+API_ROUTERS = (
+    auth_router,
+    chat_router,
+    editing_router,
+    health_router,
+    models_router,
+    projects_router,
+    repository_router,
+    system_router,
+    workspace_router,
+)
+"""Every router app.api.router mounts under /api/v1."""
 
 ENTRY_POINTS = {
     ("POST", "/api/v1/chat"),
     ("GET", "/api/v1/chat/stream"),
     ("GET", "/api/v1/workspace/search/semantic"),
+    ("POST", "/api/v1/editing/proposals/plan"),
 }
+"""Routes that search the index semantically, so update it first."""
+
+NO_SEMANTIC_SEARCH = {
+    # The workspace holds a RetrievalService, but these routes only read
+    # files, list them, search text or symbols, or report index status.
+    ("GET", "/api/v1/workspace/file"),
+    ("GET", "/api/v1/workspace/tree"),
+    ("GET", "/api/v1/workspace/search/text"),
+    ("GET", "/api/v1/workspace/symbols"),
+    ("GET", "/api/v1/workspace/index-status"),
+    # The proposal service holds the edit planner, but only /plan plans:
+    # these store explicit operations, list, show, apply, reject or roll
+    # back proposals, or manage validation.
+    ("POST", "/api/v1/editing/proposals"),
+    ("GET", "/api/v1/editing/proposals"),
+    ("GET", "/api/v1/editing/proposals/{proposal_id}"),
+    ("POST", "/api/v1/editing/proposals/{proposal_id}/apply"),
+    ("POST", "/api/v1/editing/proposals/{proposal_id}/reject"),
+    ("POST", "/api/v1/editing/proposals/{proposal_id}/rollback"),
+    ("GET", "/api/v1/editing/validation"),
+    ("PUT", "/api/v1/editing/validation"),
+    ("POST", "/api/v1/editing/validation/run"),
+}
+"""Routes that reach a semantic consumer but never search with it."""
+
+SEMANTIC_CONSUMERS = (RetrievalService, ChatService, EditPlanner)
+"""Types that run, or plan with, semantic search."""
 
 
-def _semantic_routes() -> set[tuple[str, str]]:
-    """Routes that reach semantic search: they use ChatService or end in /semantic."""
+def _reaches_semantic_search(
+    annotation: object,
+    seen: set[type],
+) -> bool:
+    """True when a type is, or is built from, a semantic consumer.
+
+    Follows constructor annotations, so ``RepositoryWorkspace`` (built
+    with a RetrievalService) and ``ProposalService`` (built with the edit
+    planner) count, whatever their routes are called.
+    """
+
+    candidates = typing.get_args(annotation) or (annotation,)
+
+    for candidate in candidates:
+        if not isinstance(candidate, type) or candidate in seen:
+            continue
+
+        seen.add(candidate)
+
+        if issubclass(candidate, SEMANTIC_CONSUMERS):
+            return True
+
+        try:
+            hints = typing.get_type_hints(candidate.__init__)
+        except Exception:
+            continue
+
+        if any(
+            _reaches_semantic_search(hint, seen)
+            for name, hint in hints.items()
+            if name != "return"
+        ):
+            return True
+
+    return False
+
+
+def _dependency_calls(dependant: Dependant) -> Iterator[Callable[..., object]]:
+    for dependency in dependant.dependencies:
+        if dependency.call is not None:
+            yield dependency.call
+
+        yield from _dependency_calls(dependency)
+
+
+def _uses_semantic_consumer(route: APIRoute) -> bool:
+    for call in _dependency_calls(route.dependant):
+        try:
+            returned = typing.get_type_hints(call).get("return")
+        except Exception:
+            continue
+
+        if returned is not None and _reaches_semantic_search(returned, set()):
+            return True
+
+    return False
+
+
+def _routes_with_semantic_consumers() -> set[tuple[str, str]]:
+    """Every API route whose dependencies reach a semantic consumer."""
 
     routes = set()
 
-    for router in (chat_router, workspace_router):
+    for router in API_ROUTERS:
         for route in router.routes:
-            if not isinstance(route, APIRoute):
-                continue
-
-            calls = {dependency.call for dependency in route.dependant.dependencies}
-
-            if get_chat_service in calls or route.path.endswith("/semantic"):
+            if isinstance(route, APIRoute) and _uses_semantic_consumer(route):
                 for method in route.methods:
                     routes.add((method, f"/api/v1{route.path}"))
 
@@ -135,8 +244,20 @@ def _stream(root: Path | None) -> str:
 UPDATED = _result(FreshnessState.UPDATED, changed_files=2, updated_files=2)
 
 
-def test_every_semantic_route_is_covered() -> None:
-    assert _semantic_routes() == ENTRY_POINTS
+def test_every_route_with_a_semantic_consumer_is_classified() -> None:
+    # A new route that depends on retrieval, chat or the edit planner
+    # fails here until it is listed as an entry point (and refreshes) or
+    # as one that never searches.
+    assert not ENTRY_POINTS & NO_SEMANTIC_SEARCH
+    assert _routes_with_semantic_consumers() == ENTRY_POINTS | NO_SEMANTIC_SEARCH
+
+
+def test_detection_finds_routes_by_dependency_not_by_path() -> None:
+    # The plan route neither uses ChatService nor ends in /semantic; it
+    # reaches the planner through ProposalService.
+    assert ("POST", "/api/v1/editing/proposals/plan") in (
+        _routes_with_semantic_consumers()
+    )
 
 
 def test_chat_refreshes_first_and_returns_the_result(log, tmp_path) -> None:
@@ -329,3 +450,54 @@ def test_without_a_root_a_stream_error_is_still_an_http_status(log) -> None:
 
     assert response.status_code == 409
     assert response.json() == {"detail": "Wrong model."}
+
+
+def test_the_router_list_matches_the_app() -> None:
+    listed = {
+        f"/api/v1{route.path}"
+        for router in API_ROUTERS
+        for route in router.routes
+        if isinstance(route, APIRoute) and route.include_in_schema
+    }
+
+    assert listed == {
+        path for path in app.openapi()["paths"] if path.startswith("/api/v1")
+    }
+
+
+class FakeProposalService:
+    def __init__(self, log: list[str]) -> None:
+        self.log = log
+
+    def plan(
+        self,
+        repository_root: Path,
+        instruction: str,
+        files: list[str],
+    ) -> EditProposalView:
+        self.log.append("plan")
+        now = datetime.now(UTC)
+        return EditProposalView(
+            proposal_id="p1",
+            created_at=now,
+            updated_at=now,
+            status=ProposalStatus.PENDING,
+            source=ProposalSource.PLANNER,
+            description=instruction,
+            files=[],
+            diff="",
+        )
+
+
+def test_edit_planning_refreshes_first(log, tmp_path) -> None:
+    fake = _install(log, UPDATED)
+    app.dependency_overrides[get_proposal_service] = lambda: FakeProposalService(log)
+
+    response = TestClient(app).post(
+        "/api/v1/editing/proposals/plan",
+        json={"repository_root": str(tmp_path), "instruction": "add a docstring"},
+    )
+
+    assert response.status_code == 200
+    assert log == ["refresh", "plan"]
+    assert fake.roots == [tmp_path.resolve()]

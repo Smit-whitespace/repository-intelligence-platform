@@ -212,7 +212,7 @@ def test_health_endpoint_is_ready_after_startup() -> None:
     assert response.json() == {
         "status": "healthy",
         "application": "Repository Intelligence Platform (RIP)",
-        "version": "1.1.0",
+        "version": "1.2.0",
     }
 
 

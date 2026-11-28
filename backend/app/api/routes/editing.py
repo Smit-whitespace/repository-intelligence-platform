@@ -29,6 +29,7 @@ from app.api.routes.editing_schemas import (
 )
 from app.dependencies.providers import (
     get_editing_service,
+    get_index_freshness,
     get_proposal_service,
 )
 from app.editing.proposal_service import ProposalService
@@ -44,6 +45,7 @@ from app.editing.models import (
 from app.editing.service import (
     EditingService,
 )
+from app.indexing.freshness import IndexFreshness
 
 router = APIRouter(
     prefix="/editing",
@@ -209,8 +211,19 @@ def plan_edit_proposal(
     proposal_service: ProposalService = Depends(
         get_proposal_service,
     ),
+    index_freshness: IndexFreshness = Depends(
+        get_index_freshness,
+    ),
 ) -> EditProposalView:
     """Create a proposal from an instruction."""
+
+    # The planner adds semantic hits to the edit model's context, so
+    # update changed files first, as the other semantic routes do. The
+    # planner and retrieval never index (ADR-0004, ADR-0012); refresh
+    # never raises, and its result is not part of a proposal.
+    index_freshness.refresh(
+        request.repository_root,
+    )
 
     return proposal_service.plan(
         repository_root=request.repository_root,

@@ -37,6 +37,7 @@ Architecture Decision Records document every significant architectural decision 
 | 0019 | [Signed State in Project Storage](adr-0019-signed-project-state.md) | Adopted | V1 |
 | 0020 | [Local API Token](adr-0020-local-api-token.md) | Adopted | V1 |
 | 0021 | [`.rip` Storage and `RIP_` Settings](adr-0021-rip-storage-and-settings-names.md) | Adopted (amends 0010, 0018-0020) | 14 |
+| 0022 | [Index Freshness](adr-0022-index-freshness.md) | Adopted | 15 |
 
 ## Template
 

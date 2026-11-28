@@ -9,6 +9,8 @@ from enum import StrEnum
 from pydantic import BaseModel
 from pydantic import Field
 
+from app.indexing.models import FreshnessResult
+
 
 class FileContent(BaseModel):
     """A line range of one text file."""
@@ -187,3 +189,9 @@ class SemanticSearchResult(BaseModel):
     )
 
     hits: list[SemanticHit]
+
+    index: FreshnessResult | None = Field(
+        default=None,
+        description="How the index was brought up to date before this "
+        "search; absent when freshness was not checked.",
+    )

@@ -22,9 +22,17 @@ function streamOf(...parts: string[]) {
 
 describe("parseEvent", () => {
   it("joins data lines with line breaks, as EventSource does", () => {
-    expect(parseEvent("data: first\ndata: second")).toBe("first\nsecond");
-    expect(parseEvent("data:no space")).toBe("no space");
+    expect(parseEvent("data: first\ndata: second")?.data).toBe("first\nsecond");
+    expect(parseEvent("data:no space")?.data).toBe("no space");
     expect(parseEvent(": comment")).toBeNull();
+  });
+
+  it("separates named events from answer text", () => {
+    expect(parseEvent('event: index\ndata: {"state":"updated"}')).toEqual({
+      event: "index",
+      data: '{"state":"updated"}',
+    });
+    expect(parseEvent("data: Hello")).toEqual({ event: null, data: "Hello" });
   });
 });
 
@@ -77,5 +85,34 @@ describe("createSseClient", () => {
 
     expect(error.message).toContain("401");
     expect(useAuthStore.getState().rejected).toBe(true);
+  });
+
+  it("sends named events to onEvent and unnamed ones to onMessage", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(
+          streamOf(
+            'event: index-progress\ndata: {"files":3}\n\n',
+            "data: Hi\n\n",
+          ),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const messages: string[] = [];
+    const events: Array<[string, string]> = [];
+
+    await new Promise<void>((resolve) => {
+      createSseClient("/chat/stream?query=x", {
+        onMessage: (message) => messages.push(message),
+        onEvent: (event, data) => events.push([event, data]),
+        onDone: resolve,
+      });
+    });
+
+    expect(messages).toEqual(["Hi"]);
+    expect(events).toEqual([["index-progress", '{"files":3}']]);
   });
 });

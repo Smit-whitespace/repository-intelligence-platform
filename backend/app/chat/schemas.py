@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from pydantic import ConfigDict
 from pydantic import Field
 
+from app.indexing.models import FreshnessResult
+
 
 class ChatRequest(BaseModel):
     """Chat request."""
@@ -41,6 +43,12 @@ class ChatResponse(BaseModel):
         examples=[
             "The editing workflow creates a ChangeSet before applying it.",
         ],
+    )
+
+    index: FreshnessResult | None = Field(
+        default=None,
+        description="How the index was brought up to date before this "
+        "answer; absent when no project root was given.",
     )
 
     model_config = ConfigDict(

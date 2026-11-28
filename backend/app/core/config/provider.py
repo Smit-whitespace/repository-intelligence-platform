@@ -74,6 +74,8 @@ class EnvironmentSettings(BaseSettings):
 
     indexing_chunk_overlap: int = 64
 
+    indexing_refresh_seconds: int = 15
+
 
 class _LegacyEnvironmentSettings(EnvironmentSettings):
     """The same settings under the former ``LOC_`` prefix."""
@@ -161,5 +163,6 @@ def get_settings() -> ApplicationSettings:
         indexing=IndexingSettings(
             chunk_size=environment.indexing_chunk_size,
             chunk_overlap=environment.indexing_chunk_overlap,
+            refresh_seconds=environment.indexing_refresh_seconds,
         ),
     )

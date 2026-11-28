@@ -3,6 +3,8 @@ import { authorizationHeader, useAuthStore } from "@/stores/authStore";
 
 type SseClientOptions = {
   onMessage: (message: string) => void;
+  /** Named events (`event: <name>`), such as index progress. Never passed to onMessage. */
+  onEvent?: (event: string, data: string) => void;
   /** Called once if the stream fails; not called after close(). */
   onError?: (error: Error) => void;
   /** Called once when the server ends the stream normally. */
@@ -51,8 +53,14 @@ export function createSseClient(path: string, options: SseClientOptions) {
           buffer = buffer.slice(boundary + 2);
           boundary = buffer.indexOf("\n\n");
 
-          if (message !== null) {
-            options.onMessage(message);
+          if (message === null) {
+            continue;
+          }
+
+          if (message.event === null) {
+            options.onMessage(message.data);
+          } else {
+            options.onEvent?.(message.event, message.data);
           }
         }
       }
@@ -70,12 +78,24 @@ export function createSseClient(path: string, options: SseClientOptions) {
   };
 }
 
-/** Join an event's `data:` lines with "\n", as EventSource does. */
-export function parseEvent(block: string): string | null {
-  const data = block
-    .split("\n")
+/**
+ * Read one event block: its optional `event:` name and its `data:` lines
+ * joined with "\n", as EventSource does.
+ */
+export function parseEvent(
+  block: string,
+): { event: string | null; data: string } | null {
+  const lines = block.split("\n");
+  const data = lines
     .filter((line) => line.startsWith("data:"))
     .map((line) => line.slice(5).replace(/^ /, ""));
 
-  return data.length ? data.join("\n") : null;
+  if (!data.length) {
+    return null;
+  }
+
+  const name = lines.find((line) => line.startsWith("event:"));
+  const event = name ? name.slice(6).trim() : "";
+
+  return { event: event || null, data: data.join("\n") };
 }

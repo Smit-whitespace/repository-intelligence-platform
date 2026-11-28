@@ -172,6 +172,7 @@ def test_application_factory_registers_routes_and_openapi() -> None:
         "/api/v1/workspace/search/text",
         "/api/v1/workspace/symbols",
         "/api/v1/workspace/search/semantic",
+        "/api/v1/workspace/index-status",
     }
 
 

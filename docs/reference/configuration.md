@@ -68,6 +68,7 @@ Configuration is managed by `app/core/config/models.py` (`ApplicationSettings` a
 |---------|------|---------|-------------|
 | `RIP_INDEXING_CHUNK_SIZE` | `int` | `512` | Chunk size (characters) |
 | `RIP_INDEXING_CHUNK_OVERLAP` | `int` | `64` | Chunk overlap |
+| `RIP_INDEXING_REFRESH_SECONDS` | `int` | `15` | Most time spent updating files changed since indexing before a chat answer or semantic search; the rest finishes in the background and the answer notes the files it may miss. `0` turns automatic updates off (changes are still reported). An index built with a different embedding model is never updated automatically. |
 
 ## Legacy (Ignored) Keys
 

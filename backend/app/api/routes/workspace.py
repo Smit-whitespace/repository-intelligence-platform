@@ -19,7 +19,12 @@ from app.api.response_docs import (
     SERVER_ERROR_RESPONSE,
     VALIDATION_ERROR_RESPONSE,
 )
-from app.dependencies.providers import get_workspace_opener
+from app.dependencies.providers import (
+    get_index_freshness,
+    get_workspace_opener,
+)
+from app.indexing.freshness import IndexFreshness
+from app.indexing.models import FreshnessResult
 from app.workspace.models import (
     FileContent,
     SemanticSearchResult,
@@ -258,7 +263,9 @@ def find_symbols(
     summary="Semantic search",
     description=(
         "Return indexed chunks ranked by semantic similarity to the "
-        "query. Uses the existing index; it does not reindex."
+        "query. Files changed since the last index are updated first, up "
+        "to RIP_INDEXING_REFRESH_SECONDS; the `index` field reports what "
+        "was updated and what is still pending."
     ),
     response_description="Ranked chunks.",
     responses={
@@ -282,10 +289,54 @@ def search_semantic(
     workspace: RepositoryWorkspace = Depends(
         _open_workspace,
     ),
+    index_freshness: IndexFreshness = Depends(
+        get_index_freshness,
+    ),
 ) -> SemanticSearchResult:
     """Return semantically similar chunks."""
 
-    return workspace.search_semantic(
+    # Update changed files first; the workspace itself never indexes.
+    index = index_freshness.refresh(
+        workspace.root,
+    )
+
+    result = workspace.search_semantic(
         query=query,
         limit=limit,
+    )
+
+    return result.model_copy(
+        update={
+            "index": index,
+        },
+    )
+
+
+@router.get(
+    "/index-status",
+    response_model=FreshnessResult,
+    operation_id="getIndexStatus",
+    summary="Index freshness",
+    description=(
+        "Report whether the project's files have changed since they were "
+        "indexed. Reads only; it never updates the index."
+    ),
+    response_description="Freshness of the semantic index.",
+    responses={
+        **_COMMON_RESPONSES,
+        **SERVER_ERROR_RESPONSE,
+    },
+)
+def get_index_status(
+    workspace: RepositoryWorkspace = Depends(
+        _open_workspace,
+    ),
+    index_freshness: IndexFreshness = Depends(
+        get_index_freshness,
+    ),
+) -> FreshnessResult:
+    """Report index freshness without updating."""
+
+    return index_freshness.status(
+        workspace.root,
     )

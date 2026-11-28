@@ -255,6 +255,35 @@ class ChromaVectorStore(VectorStore):
 
         return grouped
 
+    def get_file_hashes(
+        self,
+        where: dict | None = None,
+    ) -> dict[str, str]:
+        """Map ``relative_path`` to the ``sha256`` stored with its chunks."""
+
+        result = cast(
+            dict[str, Any],
+            self._collection.get(
+                where=where,
+                include=[
+                    "metadatas",
+                ],
+            ),
+        )
+
+        hashes: dict[str, str] = {}
+
+        for metadata in result.get("metadatas") or []:
+            path = (metadata or {}).get("relative_path")
+            digest = (metadata or {}).get("sha256")
+
+            if path is None or digest is None:
+                continue
+
+            hashes[str(path)] = str(digest)
+
+        return hashes
+
     def get_chunk_ids(
         self,
         where: dict | None = None,

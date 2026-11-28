@@ -17,6 +17,7 @@ from app.core.config.settings import settings
 from app.core.logging.configuration import configure_logging
 from app.core.storage.locations import is_registered_project
 from app.dependencies.providers import (
+    get_index_freshness,
     get_indexing_service,
     get_project_service,
     get_proposal_service,
@@ -103,6 +104,7 @@ def main(
             arguments.editing,
         ),
         before_call=refresh_model_configuration_if_changed,
+        index_freshness=get_index_freshness(),
     ).run(
         "stdio",
     )

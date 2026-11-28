@@ -96,6 +96,29 @@ export type RepositoryEntry = {
   mime_type: string | null;
 };
 
+export type FreshnessState =
+  | "up_to_date"
+  | "updated"
+  | "partial"
+  | "busy"
+  | "updating"
+  | "off"
+  | "not_indexed"
+  | "incompatible"
+  | "stale"
+  | "failed";
+
+export type FreshnessResult = {
+  state: FreshnessState;
+  changed_files: number;
+  added_files: number;
+  removed_files: number;
+  updated_files: number;
+  pending_files: number;
+  seconds: number;
+  note: string | null;
+};
+
 export type RepositoryIndex = {
   summary: RepositorySummary;
   entries: RepositoryEntry[];

@@ -27,7 +27,8 @@ from app.editing.proposals import (
     ProposalSource,
 )
 from app.indexing.exceptions import IndexingError
-from app.indexing.models import IndexingResult, IndexStatus
+from app.indexing.freshness import IndexFreshness
+from app.indexing.models import FreshnessResult, IndexingResult, IndexStatus
 from app.indexing.service import IndexingService
 from app.mcp_server.models import (
     ProposalDetail,
@@ -62,14 +63,23 @@ Repository Intelligence Platform (RIP): read-only tools for one repository.
 - Results are bounded. When a result says truncated, narrow the query
   (path_glob, a smaller line range) instead of repeating it.
 - search_semantic needs an index. Check index_status first; call reindex
-  if the project is not indexed or the index is incompatible, and after
-  editing files so search sees the new content. Reindexing only embeds
-  changed files, so it is cheap to repeat.
+  if the project is not indexed or the index is incompatible. Once
+  indexed, search_semantic updates the files changed since indexing
+  before it searches (within a time limit; its result says when files
+  were still pending), so there is no need to reindex after editing
+  files. Use reindex to rebuild the whole index, for example after
+  changing the embedding model.
 - Files excluded by the repository's .gitignore are not listed, searched
   or indexed, but read_file can still open them by path.
 - Secret-like files (.env, credentials, private keys) and the .git and
   .rip directories are never readable.
 """
+
+class IndexStatusReport(IndexStatus):
+    """``IndexStatus`` plus whether files changed since indexing."""
+
+    freshness: FreshnessResult | None = None
+
 
 _READ_ONLY = ToolAnnotations(
     read_only_hint=True,
@@ -129,8 +139,9 @@ _EDITING_INSTRUCTIONS = {
 - To change files, call propose_edit with search/replace operations. Each
   'search' must be copied exactly from the current file (read_file it
   first) and occur exactly once. Then apply_proposal writes it and runs
-  the project's validation commands; rollback_proposal undoes it. Call
-  reindex after applying so search sees the change.
+  the project's validation commands; rollback_proposal undoes it. There
+  is no need to reindex after applying: search_semantic updates the
+  changed files itself.
 """,
 }
 
@@ -141,6 +152,7 @@ def build_server(
     proposal_service: ProposalService | None = None,
     editing_mode: EditingMode = EditingMode.OFF,
     before_call: Callable[[], None] | None = None,
+    index_freshness: IndexFreshness | None = None,
 ) -> MCPServer:
     """Create an MCP server exposing tools for one bound workspace.
 
@@ -288,26 +300,56 @@ def build_server(
         project has no index yet (call reindex).
         """
 
-        return await call(
-            lambda: workspace.search_semantic(
+        def search() -> SemanticSearchResult:
+            # Update changed files first; the workspace never indexes.
+            index = (
+                index_freshness.refresh(
+                    root,
+                )
+                if index_freshness is not None
+                else None
+            )
+
+            return workspace.search_semantic(
                 query=query,
                 limit=limit,
-            ),
+            ).model_copy(
+                update={
+                    "index": index,
+                },
+            )
+
+        return await call(
+            search,
         )
 
     @server.tool(
         annotations=_READ_ONLY,
     )
-    async def index_status() -> IndexStatus:
+    async def index_status() -> IndexStatusReport:
         """Report whether the repository is indexed, and with which model.
 
         compatible=false means search_semantic will fail until reindex.
+        freshness says whether files changed since indexing; it is only
+        read here, never updated.
         """
 
+        def report() -> IndexStatusReport:
+            return IndexStatusReport(
+                **indexing_service.status(
+                    root,
+                ).model_dump(),
+                freshness=(
+                    index_freshness.status(
+                        root,
+                    )
+                    if index_freshness is not None
+                    else None
+                ),
+            )
+
         return await call(
-            lambda: indexing_service.status(
-                root,
-            ),
+            report,
         )
 
     @server.tool(
@@ -326,7 +368,7 @@ def build_server(
         first run (or a run after the embedding model changed) embeds
         everything and can take minutes on a large repository. Only RIP's
         own index is written; repository files are never modified. Fails
-        if another process is indexing.
+        if another index update is running for this project.
         """
 
         result = await call(

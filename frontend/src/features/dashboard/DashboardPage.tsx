@@ -3,6 +3,7 @@ import { LoadingState } from "@/components/common/LoadingState";
 import {
   useActiveModel,
   useBackendHealth,
+  useIndexStatus,
   useModels,
   useRepositoryIndex,
   useSystemStatus,
@@ -10,6 +11,7 @@ import {
 } from "@/lib/api/queries";
 import { formatBytes } from "@/lib/utils/format";
 import { useProjectStore } from "@/stores/projectStore";
+import { indexingLabel } from "./indexingLabel";
 
 export function DashboardPage() {
   const health = useBackendHealth();
@@ -19,6 +21,7 @@ export function DashboardPage() {
   const models = useModels();
   const activeProject = useProjectStore((state) => state.activeProject);
   const repository = useRepositoryIndex(activeProject?.root_directory ?? null);
+  const indexStatus = useIndexStatus(activeProject?.root_directory ?? null);
 
   if (health.isLoading || status.isLoading || version.isLoading) {
     return <LoadingState label="Loading dashboard" />;
@@ -71,7 +74,15 @@ export function DashboardPage() {
             />
             <Row
               label="Indexing"
-              value={repository.data ? "available" : status.data?.indexing_state ?? "unknown"}
+              value={
+                !activeProject
+                  ? "No project"
+                  : indexStatus.data
+                    ? indexingLabel(indexStatus.data)
+                    : repository.data
+                      ? "available"
+                      : status.data?.indexing_state ?? "unknown"
+              }
             />
           </dl>
         </Panel>

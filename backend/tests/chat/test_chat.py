@@ -64,9 +64,7 @@ def test_chat() -> None:
         == 200
     )
 
-    assert response.json() == {
-        "content": "Hello from test.",
-    }
+    assert response.json()["content"] == "Hello from test."
 
     assert (
         fake_service.request

@@ -462,9 +462,12 @@ def test_repository_aware_chat_workflow() -> None:
 
     assert response.status_code == 200
 
-    assert response.json() == {
-        "content": "Repository answer.",
-    }
+    body = response.json()
+
+    assert body["content"] == "Repository answer."
+
+    # The real freshness service ran first; this project has no index.
+    assert body["index"]["state"] == "not_indexed"
 
     assert chat_provider.prompt is not None
 

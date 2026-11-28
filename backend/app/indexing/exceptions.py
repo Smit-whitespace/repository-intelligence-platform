@@ -22,5 +22,14 @@ class IndexIncompatibleError(IndexingError):
     """
 
 
+class EmbeddingModelChangedError(IndexingError):
+    """The configured embedding model changed while an update was running.
+
+    Raised before anything is written, so vectors from one model are
+    never stamped as another's.
+    """
+
+
 class IndexingBusyError(IndexingError):
-    """Another process holds the project's index lock (HTTP 409)."""
+    """Another indexing run, in this process or another, holds the
+    project's index lock (HTTP 409)."""

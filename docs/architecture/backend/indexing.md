@@ -83,6 +83,19 @@ sequenceDiagram
 
 ---
 
+## Freshness
+
+`IndexFreshness` (`app/indexing/freshness.py`, ADR-0022) keeps the index in step with the files between full indexing runs. The chat routes, the semantic-search route, the edit-planning route (`POST /editing/proposals/plan`) and the MCP tool `search_semantic` call `refresh(root)` before they answer; `index_status` and `GET /workspace/index-status` call `status(root)`, which updates nothing.
+
+- **Change detection.** Every file indexing would index (not a directory, indexable by name, text) is hashed with SHA-256 and compared with the hash stored in the index. The result is a `ChangeSet`: changed, added (not in the index) and removed (indexed but gone or no longer indexable). Hashes are cached per project in memory and reused while a file's mtime and size are unchanged, so a check with nothing changed hashes nothing. A file edited and then reverted counts as unchanged.
+- **Updating.** `IndexingService.update_files(root, to_index, to_remove, deadline)` drops removed files from the index, then embeds the given files one at a time (most recently modified first), holding the inter-process index lock. No new file is started once the deadline passes; the rest is returned as `remaining`. A failing file keeps its existing chunks: it is `unindexable` when its own content is the cause (a decode or chunking error) and `failed` otherwise (a provider or OS error). The configured embedding model is read once the lock is held; if it changes, or no longer matches the index, no further file is written and the rest is returned as `remaining` with `model_changed`. The indexer also checks the model before and after embedding and stamps the index with the model it expected, so old vectors are never stamped as a new model.
+- **Time limit and background thread.** `refresh` spends at most `RIP_INDEXING_REFRESH_SECONDS` (default 15) on `update_files`. Files left over are finished, with no limit, by one background thread per project root; while it runs, other `refresh` calls for that root report `partial` without touching the lock. After a model change no background thread is started, and the result is `incompatible`.
+- **Files that cannot be indexed.** An `unindexable` file is remembered in the process with the hash detection saw, logged once, and left out of change detection until its content changes, so it is neither retried on every check nor reported as pending; `status` can reach `up_to_date` with it. Its previous chunks, if any, stay. A `failed` file is retried on the next `refresh`. Nothing is remembered across restarts: a new process tries such a file once more.
+- **States** (`FreshnessResult.state`): `up_to_date` (nothing changed), `updated` (everything was updated before answering), `partial` (some files are not in the index yet: still updating, or failed), `busy` (another indexing run, in this process or another, holds the index lock), `updating` (this process is updating; `status` only), `stale` (files changed and nothing is updating them; `status` only), `off` (limit is `0`), `failed` (the update raised; logged), `not_indexed`, `incompatible`. `partial`, `busy`, `off` and `failed` carry a `note` saying how many files may be missing ("1 changed file", "N changed files"); the other states carry none.
+- **What it never does.** It never rebuilds an index (an unindexed project, or one built with a different embedding model, is left alone: use `reindex`), never waits for the index lock, never raises (a failure becomes a `failed` result), never indexes a project nobody asked a question about, and never runs while RIP is idle: there is no file watcher.
+
+---
+
 ## Key Files
 
 ### IndexingService

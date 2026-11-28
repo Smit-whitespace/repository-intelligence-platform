@@ -2,6 +2,7 @@ import type {
   ActiveModelResponse,
   EditProposal,
   EffectiveModelsResponse,
+  FreshnessResult,
   HealthResponse,
   ModelConfigurationView,
   ModelsResponse,
@@ -81,6 +82,12 @@ export const api = {
   projectInfo: (rootDirectory: string) =>
     request<ProjectInfo>(
       pathWithQuery("/projects/info", {
+        root_directory: rootDirectory,
+      }),
+    ),
+  indexStatus: (rootDirectory: string) =>
+    request<FreshnessResult>(
+      pathWithQuery("/workspace/index-status", {
         root_directory: rootDirectory,
       }),
     ),

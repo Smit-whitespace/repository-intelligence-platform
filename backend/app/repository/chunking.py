@@ -10,10 +10,35 @@ from app.repository.models import (
     RepositoryChunk,
     RepositoryChunkMetadata,
     RepositoryDocument,
+    RepositoryEntry,
 )
 from app.repository.python_ast_algorithm import (
     PythonAstChunkAlgorithm,
 )
+
+
+EMPTY_FILE_CHUNK_LANGUAGES = frozenset({"Python"})
+"""Languages whose chunking turns a zero-byte file into one (empty) chunk.
+
+Every other language goes through the line algorithm, which makes no
+chunk from a document without lines. A file with any content, even only
+whitespace, has at least one line and so at least one chunk.
+"""
+
+
+def yields_no_chunks(
+    entry: RepositoryEntry,
+) -> bool:
+    """True when chunking this text file produces no chunks.
+
+    Needs only the entry's fast metadata (size and language), so it costs
+    no read. Keep in step with ``RepositoryChunker``.
+    """
+
+    return (
+        entry.size_bytes == 0
+        and entry.language not in EMPTY_FILE_CHUNK_LANGUAGES
+    )
 
 
 class RepositoryChunker:

@@ -77,7 +77,7 @@ propose (search/replace operations)        plan (instruction -> edit model)
 
 **Search/replace operations** are what both agents (over MCP) and RIP's own edit model produce: `{path, search, replace}`. `search` must be copied exactly from the file and occur exactly once; an empty `search` creates a file. Operations on one file apply in order. A search containing a line break must cover whole lines (start at the beginning of a line), so `"  return x\n"` cannot match inside `"    return x\n"` and quietly break indentation; a search without a line break may match within a line. Every problem (not found, ambiguous, part of a line, file exists or missing) is reported at once, per operation, so the author can fix them in one round. A search written with `\n` also matches a CRLF file, and the replacement keeps CRLF.
 
-**The edit planner** (`planner.py`) sends the named files in full plus semantic-search hits to the `edit.plan` model and parses its edit blocks:
+**The edit planner** (`planner.py`) sends the named files in full plus semantic-search hits to the `edit.plan` model and parses its edit blocks. Before planning, the route `POST /editing/proposals/plan` updates the files changed since indexing (`IndexFreshness.refresh`, ADR-0022), so the hits reflect the current files; the planner itself never indexes:
 
 ```
 <<<<<<< SEARCH path/relative/to/repository

@@ -263,7 +263,9 @@ def find_symbols(
     summary="Semantic search",
     description=(
         "Return indexed chunks ranked by semantic similarity to the "
-        "query. Uses the existing index; it does not reindex."
+        "query. Files changed since the last index are updated first, up "
+        "to RIP_INDEXING_REFRESH_SECONDS; the `index` field reports what "
+        "was updated and what is still pending."
     ),
     response_description="Ranked chunks.",
     responses={

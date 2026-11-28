@@ -9,9 +9,9 @@ import {
   useSystemStatus,
   useSystemVersion,
 } from "@/lib/api/queries";
-import type { FreshnessResult } from "@/types/api";
 import { formatBytes } from "@/lib/utils/format";
 import { useProjectStore } from "@/stores/projectStore";
+import { indexingLabel } from "./indexingLabel";
 
 export function DashboardPage() {
   const health = useBackendHealth();
@@ -117,28 +117,6 @@ export function DashboardPage() {
       </div>
     </section>
   );
-}
-
-function indexingLabel(result: FreshnessResult): string {
-  switch (result.state) {
-    case "up_to_date":
-    case "updated":
-      return "Up to date";
-    case "updating":
-      return "Updating";
-    case "failed":
-      return "Update failed";
-    case "not_indexed":
-      return "Not indexed";
-    case "incompatible":
-      return "Needs reindex (different embedding model)";
-    default: {
-      const n =
-        result.changed_files + result.added_files + result.removed_files;
-
-      return `${n} files changed since indexing`;
-    }
-  }
 }
 
 type MetricProps = {

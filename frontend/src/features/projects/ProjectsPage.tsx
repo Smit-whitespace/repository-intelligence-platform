@@ -47,6 +47,10 @@ export function ProjectsPage() {
     void queryClient.invalidateQueries({
       queryKey: queryKeys.repositoryIndex(project.root_directory),
     });
+    // Opening (re)indexes the project, so its index state has changed.
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.indexStatus(project.root_directory),
+    });
     toast.success("Project opened");
   });
 

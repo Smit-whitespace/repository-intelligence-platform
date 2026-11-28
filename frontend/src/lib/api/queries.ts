@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
+  FreshnessResult,
   OpenProjectRequest,
   PlanEditRequest,
   UpdateModelRequest,
@@ -23,6 +24,7 @@ export const queryKeys = {
     ["projects", "info", rootDirectory] as const,
   repositoryIndex: (rootDirectory: string) =>
     ["repository", "index", rootDirectory] as const,
+  allIndexStatuses: ["workspace", "index-status"] as const,
   indexStatus: (rootDirectory: string) =>
     ["workspace", "index-status", rootDirectory] as const,
 };
@@ -165,6 +167,10 @@ export function useUpdateActiveModel() {
       void queryClient.invalidateQueries({
         queryKey: queryKeys.modelConfiguration,
       });
+      // A different embedding model can make an index incompatible.
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.allIndexStatuses,
+      });
     },
   });
 }
@@ -191,10 +197,23 @@ export function useRepositoryIndex(rootDirectory: string | null) {
   });
 }
 
+/** How often the index status is re-read while this process updates it. */
+export const INDEX_STATUS_POLL_MS = 3_000;
+
+export function indexStatusRefetchInterval(
+  result: FreshnessResult | undefined,
+): number | false {
+  return result?.state === "updating" ? INDEX_STATUS_POLL_MS : false;
+}
+
 export function useIndexStatus(rootDirectory: string | null) {
   return useQuery({
     queryKey: queryKeys.indexStatus(rootDirectory ?? ""),
     queryFn: () => api.indexStatus(rootDirectory ?? ""),
     enabled: Boolean(rootDirectory),
+    // The state changes behind the app's back (a background update, an
+    // edit on disk), so it is never served from the cache as fresh.
+    staleTime: 0,
+    refetchInterval: (query) => indexStatusRefetchInterval(query.state.data),
   });
 }

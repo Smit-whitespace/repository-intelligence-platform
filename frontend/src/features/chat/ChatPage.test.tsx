@@ -21,7 +21,8 @@ vi.mock("@/lib/sse/sseClient", () => ({
   },
 }));
 
-vi.mock("@/lib/api/queries", () => ({
+vi.mock("@/lib/api/queries", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/api/queries")>()),
   useActiveModel: () => ({ data: { active_model: "m" }, isError: false }),
 }));
 
@@ -38,13 +39,26 @@ const partial = JSON.stringify({
   note: NOTE,
 });
 
-function renderPage() {
+function renderPage(client = new QueryClient()) {
   render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <ChatPage />
     </QueryClientProvider>,
   );
+
+  return client;
 }
+
+const updated = JSON.stringify({
+  state: "updated",
+  changed_files: 1,
+  added_files: 0,
+  removed_files: 0,
+  updated_files: 1,
+  pending_files: 0,
+  seconds: 1,
+  note: null,
+});
 
 async function ask() {
   const box = screen.getByLabelText("Chat query");
@@ -80,6 +94,15 @@ describe("ChatPage index updates", () => {
     expect(screen.getByText(NOTE)).toBeInTheDocument();
   });
 
+  it("says 1 file, not 1 files", async () => {
+    renderPage();
+    await ask();
+
+    act(() => mocks.options!.onEvent!("index-progress", '{"files":1}'));
+
+    expect(screen.getByText("Updating index (1 file)…")).toBeInTheDocument();
+  });
+
   it("hides the progress line when the answer starts", async () => {
     renderPage();
     await ask();
@@ -95,21 +118,7 @@ describe("ChatPage index updates", () => {
     await ask();
 
     act(() => mocks.options!.onEvent!("index-progress", '{"files":1}'));
-    act(() =>
-      mocks.options!.onEvent!(
-        "index",
-        JSON.stringify({
-          state: "updated",
-          changed_files: 1,
-          added_files: 0,
-          removed_files: 0,
-          updated_files: 1,
-          pending_files: 0,
-          seconds: 1,
-          note: null,
-        }),
-      ),
-    );
+    act(() => mocks.options!.onEvent!("index", updated));
 
     expect(screen.queryByText(/Updating index/)).not.toBeInTheDocument();
     expect(screen.queryByText(/files/)).not.toBeInTheDocument();
@@ -140,5 +149,32 @@ describe("ChatPage index updates", () => {
     expect(
       screen.getByText("Chat stream failed before a response was received."),
     ).toBeInTheDocument();
+  });
+
+  it("refreshes the index state after a stream that updated the index", async () => {
+    const client = renderPage();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await ask();
+
+    act(() => mocks.options!.onEvent!("index", updated));
+    act(() => mocks.options!.onMessage("Answer"));
+    expect(invalidate).not.toHaveBeenCalled();
+
+    act(() => mocks.options!.onDone!());
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ["workspace", "index-status", "A:/repo"],
+    });
+  });
+
+  it("leaves the index state alone when the stream sent no index event", async () => {
+    const client = renderPage();
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    await ask();
+
+    act(() => mocks.options!.onMessage("Answer"));
+    act(() => mocks.options!.onDone!());
+
+    expect(invalidate).not.toHaveBeenCalled();
   });
 });

@@ -1,12 +1,14 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Copy, Send, Square, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { ApiErrorState } from "@/components/common/ApiErrorState";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Button } from "@/components/ui/Button";
-import { useActiveModel } from "@/lib/api/queries";
+import { queryKeys, useActiveModel } from "@/lib/api/queries";
 import { createSseClient } from "@/lib/sse/sseClient";
 import { cn } from "@/lib/utils/cn";
+import { formatCount } from "@/lib/utils/format";
 import { useProjectStore } from "@/stores/projectStore";
 import { useChatStore, type ChatMessage } from "@/stores/chatStore";
 import { MarkdownMessage } from "./MarkdownMessage";
@@ -14,6 +16,7 @@ import { MarkdownMessage } from "./MarkdownMessage";
 type StreamClient = ReturnType<typeof createSseClient>;
 
 export function ChatPage() {
+  const queryClient = useQueryClient();
   const activeProject = useProjectStore((state) => state.activeProject);
   const activeModel = useActiveModel();
   const messages = useChatStore((state) => state.messages);
@@ -29,6 +32,8 @@ export function ChatPage() {
   const [indexProgress, setIndexProgress] = useState<number | null>(null);
   const streamRef = useRef<StreamClient | null>(null);
   const hadContentRef = useRef(false);
+  // The project whose index this stream reported updating, if any.
+  const indexedRootRef = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -46,10 +51,25 @@ export function ChatPage() {
     [],
   );
 
+  // After a stream that updated the index, the Dashboard's index state
+  // is out of date.
+  function refreshIndexStatus() {
+    const rootDirectory = indexedRootRef.current;
+
+    indexedRootRef.current = null;
+
+    if (rootDirectory) {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.indexStatus(rootDirectory),
+      });
+    }
+  }
+
   function stopStreaming() {
     streamRef.current?.close();
     streamRef.current = null;
     finishStreaming();
+    refreshIndexStatus();
   }
 
   function sendMessage() {
@@ -63,6 +83,7 @@ export function ChatPage() {
     setIndexProgress(null);
     setQuery("");
     hadContentRef.current = false;
+    indexedRootRef.current = null;
     addUserMessage(trimmedQuery);
     const assistantId = startAssistantMessage();
 
@@ -70,8 +91,10 @@ export function ChatPage() {
       query: trimmedQuery,
     };
 
-    if (activeProject?.root_directory) {
-      params.root_directory = activeProject.root_directory;
+    const rootDirectory = activeProject?.root_directory ?? null;
+
+    if (rootDirectory) {
+      params.root_directory = rootDirectory;
     }
 
     streamRef.current = createSseClient(
@@ -84,6 +107,7 @@ export function ChatPage() {
             setIndexProgress(Number(payload?.files ?? 0));
           } else if (event === "index") {
             setIndexProgress(null);
+            indexedRootRef.current = rootDirectory;
 
             if (typeof payload?.note === "string" && payload.note) {
               setAssistantNote(assistantId, payload.note);
@@ -93,6 +117,7 @@ export function ChatPage() {
             streamRef.current = null;
             setIndexProgress(null);
             finishStreaming();
+            refreshIndexStatus();
             setError(
               typeof payload?.detail === "string" && payload.detail
                 ? payload.detail
@@ -109,6 +134,7 @@ export function ChatPage() {
           streamRef.current = null;
           setIndexProgress(null);
           finishStreaming();
+          refreshIndexStatus();
 
           if (!hadContentRef.current) {
             setError("The model returned an empty response.");
@@ -119,6 +145,7 @@ export function ChatPage() {
           streamRef.current = null;
           setIndexProgress(null);
           finishStreaming();
+          refreshIndexStatus();
 
           if (!hadContentRef.current) {
             setError("Chat stream failed before a response was received.");
@@ -177,7 +204,7 @@ export function ChatPage() {
             ))}
             {isStreaming && indexProgress !== null ? (
               <p className="pl-9 text-xs text-[#7A8599]">
-                {`Updating index (${indexProgress} files)…`}
+                {`Updating index (${formatCount(indexProgress, "file")})…`}
               </p>
             ) : null}
             {isStreaming ? (

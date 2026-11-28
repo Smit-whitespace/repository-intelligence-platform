@@ -23,3 +23,8 @@ export function formatDate(value: string | null) {
     timeStyle: "short",
   }).format(new Date(value));
 }
+
+/** "1 file", "3 files": a count with its noun in the right number. */
+export function formatCount(count: number, noun: string) {
+  return `${count} ${count === 1 ? noun : `${noun}s`}`;
+}

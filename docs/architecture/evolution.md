@@ -183,6 +183,23 @@ This document traces how the architecture evolved across major milestones. Each 
 
 ---
 
+## Sprint 15 — Index Freshness
+
+**Objective:** Make every answer and semantic search reflect the files as they are now.
+
+**Introduced:**
+- `IndexFreshness` (`backend/app/indexing/freshness.py`): change detection by content hash with a cache, `refresh` and `status`, one background update per project
+- `IndexingService.update_files`: updates only the given files, up to a deadline, under the existing index lock
+- Freshness at every semantic entry point (chat, semantic search, edit planning, MCP `search_semantic`), with a test that finds them by dependency
+- Named chat stream events (`index-progress`, `index`, `error`) and `GET /workspace/index-status`
+
+**Key Decisions:**
+- Update first at each entry point, up to a time limit; ChatService and RetrievalService still never index ([ADR-0022](../adr/adr-0022-index-freshness.md))
+
+**See:** [Sprint 15 freeze report](../sprints/sprint-15.md)
+
+---
+
 ## Related Documents
 
 | Document | Link |
@@ -193,3 +210,4 @@ This document traces how the architecture evolved across major milestones. Each 
 | Sprint 12.2 | [sprints/sprint-12.2.md](../sprints/sprint-12.2.md) |
 | Sprint 13 | [sprints/sprint-13.md](../sprints/sprint-13.md) |
 | Sprint 14 | [sprints/sprint-14.md](../sprints/sprint-14.md) |
+| Sprint 15 | [sprints/sprint-15.md](../sprints/sprint-15.md) |

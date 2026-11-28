@@ -252,7 +252,7 @@ def test_system_version_returns_rip_branding() -> None:
 
     assert response.json() == {
         "application_name": "Repository Intelligence Platform (RIP)",
-        "application_version": "1.1.0",
+        "application_version": "1.2.0",
         "api_version": "v1",
-        "backend_version": "1.1.0",
+        "backend_version": "1.2.0",
     }

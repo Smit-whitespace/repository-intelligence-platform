@@ -166,9 +166,24 @@ gantt
 
 ---
 
+### Sprint 15 — Index Freshness (v1.2.0)
+
+**Objective:** Make every answer and semantic search reflect the files as they are now.
+
+**Delivered:**
+- Changed files updated before chat, semantic search, edit planning and MCP `search_semantic`, up to `RIP_INDEXING_REFRESH_SECONDS` (default 15), the rest in the background
+- A note on answers that could not include every changed file; the real index state on the Dashboard
+- On a deliberately stale index, held-out coverage 53.9% / 56.7% → 65.6% / 65.0%; 0.12 s when nothing changed
+
+**Key ADRs:** 0022
+
+**See:** [Sprint 15 freeze report](../sprints/sprint-15.md)
+
+---
+
 ## Next Sprints
 
-See [Roadmap](../roadmap/) for planned sprints 14 through 18.
+See [Roadmap](../roadmap/) for planned sprints.
 
 ---
 
@@ -182,4 +197,5 @@ See [Roadmap](../roadmap/) for planned sprints 14 through 18.
 | Sprint 12.2 | [../sprints/sprint-12.2.md](../sprints/sprint-12.2.md) |
 | Sprint 13 | [../sprints/sprint-13.md](../sprints/sprint-13.md) |
 | Sprint 14 | [../sprints/sprint-14.md](../sprints/sprint-14.md) |
+| Sprint 15 | [../sprints/sprint-15.md](../sprints/sprint-15.md) |
 | ADR Index | [../adr/](../adr/README.md) |
